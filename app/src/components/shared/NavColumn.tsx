@@ -10,6 +10,7 @@ import {
   CalenderIcon,
   AnimationIcon,
   PieChartIcon,
+  ChatIcon,
 } from "@/icons";
 
 /* ── Utility icons not in DS icon set (sun/moon/logout/chevron) ── */
@@ -58,6 +59,7 @@ const navItems: { Icon: NavIcon; name: string; path: string }[] = [
   { Icon: GridIcon,         name: "Home",   path: "/"               },
   { Icon: ShootingStarIcon, name: "Start",  path: "/getting-started"},
   { Icon: CalenderIcon,     name: "Tasks",  path: "/calendar"       },
+  { Icon: ChatIcon,         name: "Reply",  path: "/auto-reply"     },
   { Icon: AnimationIcon,    name: "Studio", path: "/content-studio" },
   { Icon: PieChartIcon,     name: "Report", path: "/analytics"      },
 ];

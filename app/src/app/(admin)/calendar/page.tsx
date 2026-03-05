@@ -1386,7 +1386,8 @@ export default function CalendarPage() {
 
       {/* ── Scrollable tasks body ── */}
       <div className="flex-1 overflow-y-auto custom-scrollbar px-3 py-1 pb-3">
-        {/* Status Tabs (Segmented) — task-filter-tabs-refined token */}
+        {/* Status Tabs (Segmented) — hidden on Comments sub-tab */}
+        {subTab !== "comments" && (
         <div
           className="flex items-center pt-3 pb-2"
           style={{
@@ -1432,6 +1433,7 @@ export default function CalendarPage() {
             );
           })}
         </div>
+        )}
 
         {/* Comments tab — Settings (Left Column) */}
         {subTab === "comments" && (

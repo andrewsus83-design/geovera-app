@@ -2164,15 +2164,50 @@ export default function GettingStartedPage() {
         <PlatformPopup itemId={popupItem} onClose={() => setPopupItem(null)} />
       )}
 
-      <div className="flex-1 min-h-0">
-        <ThreeColumnLayout
-          left={leftCol}
-          center={centerCol}
-          right={rightCol}
-          mobileRightOpen={mobileRightOpen}
-          onMobileBack={() => setMRO(false)}
-          mobileBackLabel="Getting Started"
-        />
+      <div
+        className="flex-1 min-h-0 flex overflow-hidden"
+        style={{ background: "var(--gv-color-bg-base)" }}
+      >
+        {/* Left: NavColumn pill (fixed) + checklist panel */}
+        <div className="hidden lg:flex flex-shrink-0 overflow-hidden" style={{ width: 340 }}>
+          {leftCol}
+        </div>
+
+        {/* Gap */}
+        <div className="hidden lg:block flex-shrink-0 w-4" />
+
+        {/* Center column */}
+        <div
+          className="flex flex-col flex-1 min-w-0 overflow-hidden lg:rounded-[32px] my-4"
+          style={{
+            background: "var(--gv-color-bg-surface)",
+            border: "1px solid var(--gv-color-neutral-200)",
+            boxShadow: "var(--gv-shadow-card)",
+          }}
+        >
+          <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0">
+            {centerCol}
+          </div>
+        </div>
+
+        {/* Gap */}
+        <div className="hidden lg:block flex-shrink-0 w-4" />
+
+        {/* Right column */}
+        <div
+          className="hidden lg:flex flex-col flex-shrink-0 overflow-hidden rounded-[32px] my-4"
+          style={{
+            width: "34%",
+            background: "var(--gv-color-bg-surface)",
+            border: "1px solid var(--gv-color-neutral-200)",
+            boxShadow: "var(--gv-shadow-card)",
+          }}
+        >
+          {rightCol}
+        </div>
+
+        {/* Trailing gap */}
+        <div className="hidden lg:block flex-shrink-0 w-4" />
       </div>
     </div>
   );
