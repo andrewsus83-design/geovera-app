@@ -1600,149 +1600,255 @@ export default function GettingStartedPage() {
   const totalCount = ITEMS.length;
   const allDone    = doneCount === totalCount;
 
+  /* ── Platform checklist counts (hoisted — used in both leftCol and rightCol) ── */
+  const PLATFORM_IDS    = ["instagram","tiktok","youtube","linkedin","x_twitter","facebook","pinterest","google_business","reddit","website","connect_all"];
+  const PLATFORM_ITEMS  = ITEMS.filter(i => PLATFORM_IDS.includes(i.id));
+  const platformDone    = PLATFORM_ITEMS.filter(i => done.has(i.id)).length;
+  const platformTotal   = PLATFORM_ITEMS.length;
+  const platformPct     = Math.round((platformDone / platformTotal) * 100);
+  const platformReady   = platformDone === platformTotal;
+
+  /* ── Platform brand colors ── */
+  const PLATFORM_BRAND: Record<string, { bg: string; shadow: string }> = {
+    instagram:       { bg: "linear-gradient(135deg,#E1306C,#F56040,#FCAF45)", shadow: "rgba(225,48,108,0.28)" },
+    tiktok:          { bg: "linear-gradient(135deg,#010101,#2d2d2d)",          shadow: "rgba(0,0,0,0.28)"       },
+    youtube:         { bg: "linear-gradient(135deg,#FF0000,#CC0000)",          shadow: "rgba(255,0,0,0.25)"     },
+    linkedin:        { bg: "linear-gradient(135deg,#0A66C2,#0074B0)",          shadow: "rgba(10,102,194,0.28)"  },
+    x_twitter:       { bg: "linear-gradient(135deg,#14171A,#333)",             shadow: "rgba(0,0,0,0.28)"       },
+    reddit:          { bg: "linear-gradient(135deg,#FF4500,#FF6534)",          shadow: "rgba(255,69,0,0.28)"    },
+    facebook:        { bg: "linear-gradient(135deg,#1877F2,#166FE5)",          shadow: "rgba(24,119,242,0.28)"  },
+    pinterest:       { bg: "linear-gradient(135deg,#E60023,#C8001C)",          shadow: "rgba(230,0,35,0.28)"    },
+    google_business: { bg: "linear-gradient(135deg,#4285F4,#34A853)",          shadow: "rgba(66,133,244,0.25)"  },
+    website:         { bg: "linear-gradient(135deg,var(--gv-color-primary-600),var(--gv-color-primary-400))", shadow: "rgba(61,107,104,0.28)" },
+  };
+
+  /* Platform display names (short) */
+  const PLATFORM_LABEL: Record<string, string> = {
+    instagram: "Instagram", tiktok: "TikTok", youtube: "YouTube",
+    linkedin: "LinkedIn", x_twitter: "X (Twitter)", reddit: "Reddit",
+    facebook: "Facebook", pinterest: "Pinterest",
+    google_business: "Google Business", website: "Website",
+  };
+
   /* ── LEFT COLUMN ── */
   const leftCol = (
     <div className="h-full overflow-y-auto">
       <NavColumn />
 
-      {/* Checklist container */}
-      <div
-        className="ml-[88px] h-full overflow-y-auto p-4 flex flex-col gap-2"
-        style={{ paddingRight: 8 }}
-      >
-        <div className="mb-2 px-1">
-          <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: "var(--gv-color-neutral-400, #9CA3AF)" }}>
+      <div className="ml-[88px] h-full overflow-y-auto flex flex-col" style={{ paddingBottom: 32 }}>
+
+        {/* ── Header + progress bar ── */}
+        <div className="px-5 pt-5 pb-4">
+          <p className="text-[10px] font-bold uppercase tracking-[0.1em]"
+            style={{ color: "var(--gv-color-neutral-400)", fontFamily: "var(--gv-font-body)" }}>
             Getting Started
           </p>
-          <p className="text-[13px] font-semibold mt-1" style={{ color: "var(--gv-color-neutral-700, #374151)" }}>
-            {doneCount} / {totalCount} complete
-          </p>
+          <div className="mt-3 h-[3px] rounded-full overflow-hidden" style={{ background: "var(--gv-color-neutral-100)" }}>
+            <div
+              className="h-full rounded-full transition-all duration-700"
+              style={{ width: `${Math.round((doneCount / totalCount) * 100)}%`, background: "var(--gv-gradient-primary)" }}
+            />
+          </div>
+          <div className="flex items-center justify-between mt-1.5">
+            <p className="text-[11px]" style={{ color: "var(--gv-color-neutral-400)" }}>{doneCount} of {totalCount} completed</p>
+            <p className="text-[11px] font-bold" style={{ color: "var(--gv-color-primary-600)" }}>
+              {Math.round((doneCount / totalCount) * 100)}%
+            </p>
+          </div>
         </div>
 
-        {ITEMS.map((item, idx) => {
-          const isSelected    = selected === item.id;
-          const isDone        = done.has(item.id);
-          const isPlatformItem = PLATFORM_SETUP_IDS.includes(item.id);
-          const isLateAPI      = LATE_API_IDS.includes(item.id);
-          const guide          = PLATFORM_GUIDES[item.id];
+        <div className="px-3 flex flex-col gap-2">
 
-          return (
-            <div
-              key={item.id}
-              className="w-full rounded-[14px] px-3 py-2.5 transition-all"
-              style={{
-                background: isSelected ? "var(--gv-color-primary-50, #F0F9FF)" : "transparent",
-                border: `1.5px solid ${isSelected ? "var(--gv-color-primary-200, #BAE6FD)" : "transparent"}`,
-              }}
-            >
-              {/* Top row: number, icon+title */}
+          {/* ── Brand DNA card ── */}
+          {(() => {
+            const isSelected = selected === "brand_profile";
+            const isDone     = done.has("brand_profile");
+            return (
               <button
-                className="w-full flex items-center gap-3 text-left"
-                onClick={() => { setSelected(item.id); setMRO(true); }}
+                onClick={() => { setSelected("brand_profile"); setMRO(true); }}
+                className="w-full flex items-center gap-3 rounded-[var(--gv-radius-md)] px-4 py-3.5 text-left transition-all"
+                style={{
+                  background: isSelected
+                    ? "linear-gradient(135deg, var(--gv-color-primary-50), #E0F5F2)"
+                    : "var(--gv-color-bg-surface)",
+                  border: `1.5px solid ${isSelected ? "var(--gv-color-primary-200)" : "var(--gv-color-neutral-100)"}`,
+                  boxShadow: isSelected ? "var(--gv-shadow-card)" : "none",
+                }}
               >
-                {/* Number / check */}
                 <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-[12px] font-bold transition-all"
+                  className="w-10 h-10 rounded-[var(--gv-radius-sm)] flex items-center justify-center flex-shrink-0"
                   style={{
-                    background: isDone ? "#DCFCE7" : isSelected ? "var(--gv-color-primary-100, #E0F2FE)" : "var(--gv-color-neutral-100, #F3F4F6)",
-                    color: isDone ? "#16A34A" : isSelected ? "var(--gv-color-primary-700, #0369A1)" : "var(--gv-color-neutral-500, #6B7280)",
+                    background: isDone
+                      ? "linear-gradient(135deg,#DCFCE7,#BBF7D0)"
+                      : "linear-gradient(135deg,var(--gv-color-primary-500),var(--gv-color-primary-400))",
+                    boxShadow: `0 3px 10px ${isDone ? "rgba(34,197,94,0.25)" : "rgba(95,143,139,0.35)"}`,
                   }}
                 >
-                  {isDone ? "✓" : idx + 1}
+                  {isDone
+                    ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                    : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+                  }
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p
-                    className="text-[13px] font-semibold truncate"
-                    style={{ color: isSelected ? "var(--gv-color-primary-700, #0369A1)" : isDone ? "#16A34A" : "var(--gv-color-neutral-700, #374151)" }}
-                  >
-                    {PLATFORM_ID_MAP[item.id]
-                      ? <PlatformIcon id={PLATFORM_ID_MAP[item.id]} size={13} className="inline-block mr-1 align-middle flex-shrink-0" />
-                      : <span className="mr-1">{item.icon}</span>}{item.title}
-                  </p>
-                  <p className="text-[11px] truncate mt-0.5" style={{ color: "var(--gv-color-neutral-400, #9CA3AF)" }}>
-                    {item.subtitle}
-                  </p>
-                </div>
-              </button>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-bold" style={{
+                    color: isSelected ? "var(--gv-color-primary-700)" : "var(--gv-color-neutral-800)",
+                    fontFamily: "var(--gv-font-heading)",
+                  }}>Brand DNA & Profile</p>
+                  <p className="text-[11px] mt-0.5" style={{ color: "var(--gv-color-neutral-400)" }}>Auto-generated by GeoVera AI</p>
 
-              {/* Open + Connect buttons (platform items only) */}
-              {isPlatformItem && (
-                <div className="flex gap-1.5 mt-2 pl-11">
-                  {/* Open button */}
+                </div>
+                <span
+                  className="flex-shrink-0 text-[9px] font-extrabold rounded-full px-2 py-1 tracking-wide"
+                  style={{ background: "linear-gradient(135deg,var(--gv-color-primary-500),var(--gv-color-primary-400))", color: "white" }}
+                >AI</span>
+              </button>
+            );
+          })()}
+
+          {/* ── Section divider ── */}
+          <div className="flex items-center gap-3 px-1 pt-2 pb-1">
+            <div className="h-px flex-1" style={{ background: "var(--gv-color-neutral-100)" }} />
+            <p className="text-[10px] font-bold uppercase tracking-[0.1em]" style={{ color: "var(--gv-color-neutral-400)" }}>
+              Your Platforms
+            </p>
+            <div className="h-px flex-1" style={{ background: "var(--gv-color-neutral-100)" }} />
+          </div>
+
+          {/* ── Platform cards ── */}
+          {PLATFORM_SETUP_IDS.map((platformId) => {
+            const item    = ITEMS.find(i => i.id === platformId);
+            if (!item) return null;
+            const isSelected = selected === platformId;
+            const isDone     = done.has(platformId);
+            const isLateAPI  = LATE_API_IDS.includes(platformId);
+            const guide      = PLATFORM_GUIDES[platformId];
+            const brand      = PLATFORM_BRAND[platformId] ?? { bg: "var(--gv-color-neutral-200)", shadow: "rgba(0,0,0,0.1)" };
+
+            return (
+              <div
+                key={platformId}
+                className="rounded-[var(--gv-radius-md)] px-3.5 py-3 transition-all"
+                style={{
+                  background: isSelected ? "var(--gv-color-primary-50)" : "var(--gv-color-bg-surface)",
+                  border: `1.5px solid ${isSelected ? "var(--gv-color-primary-200)" : "var(--gv-color-neutral-100)"}`,
+                  boxShadow: isSelected ? "var(--gv-shadow-card)" : "none",
+                }}
+              >
+                {/* Row 1: icon + name + status */}
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-9 h-9 rounded-[var(--gv-radius-sm)] flex items-center justify-center flex-shrink-0 text-[16px]"
+                    style={{ background: brand.bg, boxShadow: `0 3px 10px ${brand.shadow}` }}
+                  >
+                    {item.icon}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-semibold truncate" style={{
+                      color: "var(--gv-color-neutral-800)",
+                      fontFamily: "var(--gv-font-heading)",
+                    }}>
+                      {PLATFORM_LABEL[platformId] ?? item.title}
+                    </p>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{
+                        background: isDone ? "#22C55E" : "var(--gv-color-neutral-300)",
+                      }} />
+                      <p className="text-[10px] truncate" style={{
+                        color: isDone ? "#15803D" : "var(--gv-color-neutral-400)",
+                      }}>
+                        {isDone ? "Connected" : "Not connected"}
+                      </p>
+                    </div>
+                  </div>
+                  {isDone && (
+                    <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
+                      style={{ background: "#DCFCE7" }}>
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                    </div>
+                  )}
+                </div>
+
+                {/* Row 2: Open + Connect */}
+                <div className="flex gap-1.5 mt-2.5">
                   <button
-                    onClick={() => setPopupItem(item.id)}
-                    className="flex-1 flex items-center justify-center gap-1 rounded-[8px] px-2 py-1.5 text-[11px] font-semibold transition-all hover:opacity-80"
+                    onClick={() => setPopupItem(platformId)}
+                    className="flex-1 h-7 flex items-center justify-center gap-1.5 rounded-[var(--gv-radius-xs)] text-[11px] font-semibold transition-all hover:opacity-75"
                     style={{
-                      background: guide ? `${guide.color}15` : "var(--gv-color-neutral-100)",
-                      color: guide ? guide.color : "var(--gv-color-neutral-600)",
-                      border: `1px solid ${guide ? `${guide.color}30` : "var(--gv-color-neutral-200)"}`,
+                      background: "var(--gv-color-bg-surface-elevated, #FAFBFC)",
+                      color: "var(--gv-color-neutral-600)",
+                      border: "1px solid var(--gv-color-neutral-150, #E5E7EB)",
                     }}
                   >
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" />
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/>
                     </svg>
                     Open
                   </button>
 
-                  {/* Connect button (Late API platforms only) */}
-                  {isLateAPI && (
+                  {isLateAPI ? (
                     <button
                       onClick={() => {
-                        const lateId = item.id === "x_twitter" ? "twitter" : item.id === "google_business" ? "google" : item.id;
+                        const lateId = platformId === "x_twitter" ? "twitter" : platformId === "google_business" ? "google" : platformId;
                         window.open(`https://app.getlate.io/connect/${lateId}`, "_blank");
+                        // Mark as connected when user initiates OAuth
+                        setDone(prev => {
+                          const next = new Set(prev);
+                          next.add(platformId);
+                          try { localStorage.setItem(LS_KEY, JSON.stringify([...next])); } catch {}
+                          return next;
+                        });
                       }}
-                      className="flex-1 flex items-center justify-center gap-1 rounded-[8px] px-2 py-1.5 text-[11px] font-semibold text-white transition-all hover:opacity-80"
-                      style={{
-                        background: guide ? `linear-gradient(135deg, ${guide.color}, ${guide.color}CC)` : "var(--gv-gradient-primary)",
-                      }}
+                      className="flex-1 h-7 flex items-center justify-center gap-1.5 rounded-[var(--gv-radius-xs)] text-[11px] font-semibold text-white transition-all hover:opacity-80"
+                      style={{ background: guide ? `linear-gradient(135deg,${guide.color},${guide.color}BB)` : "var(--gv-gradient-primary)" }}
                     >
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>
                       </svg>
                       Connect
                     </button>
-                  )}
-
-                  {/* Website: no Connect button, just Open */}
-                  {!isLateAPI && (
+                  ) : (
                     <button
-                      onClick={() => { setSelected(item.id); setMRO(true); }}
-                      className="flex-1 flex items-center justify-center gap-1 rounded-[8px] px-2 py-1.5 text-[11px] font-semibold transition-all hover:opacity-80"
+                      onClick={() => { setSelected(platformId); setMRO(true); }}
+                      className="flex-1 h-7 flex items-center justify-center gap-1.5 rounded-[var(--gv-radius-xs)] text-[11px] font-semibold transition-all hover:opacity-80"
                       style={{
-                        background: "var(--gv-color-neutral-100)",
-                        color: "var(--gv-color-neutral-500)",
-                        border: "1px solid var(--gv-color-neutral-200)",
+                        background: "var(--gv-color-primary-50)",
+                        color: "var(--gv-color-primary-600)",
+                        border: "1px solid var(--gv-color-primary-100)",
                       }}
                     >
-                      View Guide
+                      Guide
                     </button>
                   )}
                 </div>
-              )}
-            </div>
-          );
-        })}
+              </div>
+            );
+          })}
 
-        {/* Deep Research unlock */}
-        {allDone && (
-          <button
-            onClick={() => { setSelected("research"); setMRO(true); }}
-            className="w-full flex items-center gap-3 rounded-[14px] px-3 py-3 text-left mt-2 transition-all"
-            style={{
-              background: selected === "research" ? "linear-gradient(135deg, #F0FDF4, #F0F9FF)" : "linear-gradient(135deg, #3D6B6810, #5F8F8B10)",
-              border: `1.5px solid ${selected === "research" ? "#BBF7D0" : "#3D6B6840"}`,
-            }}
-          >
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-[14px]"
-              style={{ background: "linear-gradient(135deg, #3D6B68, #5F8F8B)" }}>
-              🚀
-            </div>
-            <div>
-              <p className="text-[13px] font-bold" style={{ color: "#3D6B68" }}>Launch Deep Research</p>
-              <p className="text-[11px]" style={{ color: "#9CA3AF" }}>Step 8 — AI brand audit</p>
-            </div>
-          </button>
-        )}
+          {/* ── Deep Research unlock ── */}
+          {platformReady && (
+            <button
+              onClick={() => { setSelected("research"); setMRO(true); }}
+              className="w-full flex items-center gap-3 rounded-[var(--gv-radius-md)] px-4 py-3.5 mt-1 text-left transition-all hover:opacity-90"
+              style={{
+                background: "linear-gradient(135deg,var(--gv-color-primary-700),var(--gv-color-primary-500))",
+                boxShadow: "0 6px 20px rgba(61,107,104,0.32)",
+              }}
+            >
+              <div className="w-9 h-9 rounded-[var(--gv-radius-sm)] flex items-center justify-center flex-shrink-0"
+                style={{ background: "rgba(255,255,255,0.15)" }}>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+                </svg>
+              </div>
+              <div className="flex-1">
+                <p className="text-[13px] font-bold text-white" style={{ fontFamily: "var(--gv-font-heading)" }}>Launch Deep Research</p>
+                <p className="text-[11px]" style={{ color: "rgba(255,255,255,0.6)" }}>AI-powered brand audit is ready</p>
+              </div>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </button>
+          )}
+
+        </div>
       </div>
     </div>
   );
@@ -1808,393 +1914,172 @@ export default function GettingStartedPage() {
     </div>
   );
 
-  /* ── PLATFORM CHECKLIST items (Late API + Website) ── */
-  const PLATFORM_IDS = ["instagram", "tiktok", "youtube", "linkedin", "x_twitter", "facebook", "pinterest", "google_business", "reddit", "website", "connect_all"];
-  const PLATFORM_ITEMS = ITEMS.filter(i => PLATFORM_IDS.includes(i.id));
-  const platformDone  = PLATFORM_ITEMS.filter(i => done.has(i.id)).length;
-  const platformTotal = PLATFORM_ITEMS.length;
-  const platformPct   = Math.round((platformDone / platformTotal) * 100);
-  const platformReady = platformDone === platformTotal;
-
   /* ── RIGHT COLUMN ── */
   const rightCol = (
-    <div className="h-full overflow-y-auto p-5 flex flex-col gap-4">
+    <div className="h-full overflow-y-auto custom-scrollbar">
 
       {/* ═══════════════════════════════════════════════════
-          CARD 0 — PROFILE (user + brand info)
+          CARD 1 — PROGRESS HERO
+
       ═══════════════════════════════════════════════════ */}
-      <div
-        className="rounded-[var(--gv-radius-md)] p-4 flex items-center gap-3"
-        style={{
-          border: "1px solid var(--gv-color-neutral-200)",
-          background: "var(--gv-color-bg-surface)",
-          boxShadow: "var(--gv-shadow-card)",
-        }}
-      >
-        {/* Avatar */}
+      {/* ── Progress Hero ── */}
+      <div className="p-4 pb-0">
         <div
-          className="w-11 h-11 rounded-full flex items-center justify-center text-white text-[14px] font-bold flex-shrink-0"
-          style={{ background: "linear-gradient(135deg,#3D6B68,#5F8F8B)" }}
-        >
-          {(userName || userEmail || "U").slice(0, 1).toUpperCase()}
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-[13px] font-bold truncate" style={{ color: "var(--gv-color-neutral-900)" }}>
-            {userName || userEmail || "Your Account"}
-          </p>
-          {userEmail && userName && (
-            <p className="text-[11px] truncate" style={{ color: "var(--gv-color-neutral-400)" }}>
-              {userEmail}
-            </p>
-          )}
-          {brandName && (
-            <div className="flex items-center gap-1.5 mt-1">
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                style={{ background: "var(--gv-color-primary-50,#EDF5F4)", color: "var(--gv-color-primary-700,#1d4f4a)" }}>
-                🏷️ {brandName}
-              </span>
-              {brandTier && (
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                  style={{ background: "var(--gv-color-neutral-100)", color: "var(--gv-color-neutral-500)" }}>
-                  {brandTier}
-                </span>
-              )}
-            </div>
-          )}
-        </div>
-        <a
-          href="/profile"
-          className="flex-shrink-0 text-[11px] font-semibold px-3 py-1.5 rounded-[8px] transition-colors"
+          className="rounded-[var(--gv-radius-lg)] overflow-hidden relative"
           style={{
-            background: "var(--gv-color-neutral-100)",
-            color: "var(--gv-color-neutral-600)",
+            background: "linear-gradient(145deg,#152f2d 0%,#1e4340 45%,#2d5c58 100%)",
+            boxShadow: "0 12px 40px rgba(21,47,45,0.50)",
           }}
         >
-          Edit
-        </a>
-      </div>
+          {/* Dot-matrix background */}
+          <svg className="absolute inset-0 w-full h-full" style={{ pointerEvents:"none", opacity:0.07 }}>
+            <defs>
+              <pattern id="gv-dots" x="0" y="0" width="16" height="16" patternUnits="userSpaceOnUse">
+                <circle cx="1.5" cy="1.5" r="1.5" fill="white"/>
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#gv-dots)"/>
+          </svg>
+          {/* Radial glow (top-right) */}
+          <div className="absolute pointer-events-none"
+            style={{ top:-60, right:-60, width:220, height:220, borderRadius:"50%", background:"radial-gradient(circle,rgba(95,143,139,0.25) 0%,transparent 70%)" }}
+          />
 
-      {/* ═══════════════════════════════════════════════════
-          CARD 1 — PROGRESS HERO (dark teal, floating bubbles)
-      ═══════════════════════════════════════════════════ */}
-      <div
-        className="rounded-[var(--gv-radius-md)] overflow-hidden relative"
-        style={{
-          background: "linear-gradient(145deg, #1a3835 0%, #274f4c 55%, #3D6B68 100%)",
-          boxShadow: "0 8px 32px rgba(61,107,104,0.40)",
-          minHeight: 160,
-        }}
-      >
-        {/* Dot-grid decoration */}
-        <svg className="absolute inset-0 w-full h-full" style={{ pointerEvents: "none", opacity: 0.08 }}>
-          <defs>
-            <pattern id="rc-dots" x="0" y="0" width="18" height="18" patternUnits="userSpaceOnUse">
-              <circle cx="2" cy="2" r="1.4" fill="white" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#rc-dots)" />
-        </svg>
-
-        {/* Concentric ring decoration (top-right) */}
-        <svg className="absolute" style={{ top: -40, right: -40, width: 160, height: 160, opacity: 0.08, pointerEvents: "none" }}>
-          <circle cx="80" cy="80" r="60" fill="none" stroke="white" strokeWidth="1.5" />
-          <circle cx="80" cy="80" r="40" fill="none" stroke="white" strokeWidth="1" />
-          <circle cx="80" cy="80" r="20" fill="none" stroke="white" strokeWidth="0.8" />
-        </svg>
-
-        <div className="relative z-10 p-5">
-          {/* Floating platform bubble row */}
-          <div className="flex items-center gap-1.5 mb-4">
-            {[
-              { ico: "📸", bg: "linear-gradient(135deg,#E1306C,#F56040)" },
-              { ico: "🎵", bg: "#111" },
-              { ico: "▶️", bg: "#FF0000" },
-              { ico: "💼", bg: "#0077B5" },
-              { ico: "𝕏",  bg: "#000" },
-              { ico: "📘", bg: "#1877F2" },
-            ].map((p, i) => (
-              <div
-                key={i}
-                className="w-7 h-7 rounded-full flex items-center justify-center text-[13px] flex-shrink-0"
-                style={{
-                  background: p.bg,
-                  boxShadow: "0 2px 6px rgba(0,0,0,0.25)",
-                  border: "1.5px solid rgba(255,255,255,0.12)",
-                }}
-              >
-                {p.ico}
-              </div>
-            ))}
-            <div
-              className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0"
-              style={{ background: "rgba(255,255,255,0.15)", border: "1.5px solid rgba(255,255,255,0.2)" }}
-            >
-              +4
-            </div>
-            <div className="flex-1" />
-            <span
-              className="text-[10px] font-bold rounded-full px-2 py-0.5"
-              style={{
-                background: platformReady ? "#22C55E22" : "rgba(255,255,255,0.1)",
-                color: platformReady ? "#86EFAC" : "rgba(255,255,255,0.5)",
-                border: `1px solid ${platformReady ? "#22C55E44" : "rgba(255,255,255,0.15)"}`,
-              }}
-            >
-              {platformDone}/{platformTotal} aktif
-            </span>
-          </div>
-
-          {/* Ring + stats row */}
-          <div className="flex items-center gap-4">
-            <div className="flex-shrink-0">
-              <ProgressRing done={doneCount} total={totalCount} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[15px] font-bold text-white leading-tight">
-                {allDone ? "Setup Selesai! 🎉" : "Setup Progress"}
-              </p>
-              <p className="text-[11px] mt-0.5" style={{ color: "rgba(255,255,255,0.6)" }}>
-                {doneCount} dari {totalCount} langkah selesai
-              </p>
-              {/* Platform bar */}
-              <div className="mt-2.5 h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.15)" }}>
-                <div
-                  className="h-full rounded-full transition-all duration-700"
-                  style={{
-                    width: `${platformPct}%`,
-                    background: platformReady
-                      ? "linear-gradient(90deg,#22C55E,#86EFAC)"
-                      : "linear-gradient(90deg,rgba(255,255,255,0.75),rgba(255,255,255,0.5))",
-                  }}
-                />
-              </div>
-              <p className="text-[10px] mt-1" style={{ color: "rgba(255,255,255,0.45)" }}>
-                {platformPct}% platform setup{platformReady ? " — Deep Research unlocked ✓" : ""}
-              </p>
-            </div>
-          </div>
-
-          {/* CTA: unlock button */}
-          {allDone ? (
-            <button
-              onClick={() => { setSelected("research"); setMRO(true); }}
-              className="w-full mt-4 py-2.5 rounded-[10px] font-bold text-[13px] transition-all hover:opacity-90 flex items-center justify-center gap-2"
-              style={{ background: "linear-gradient(135deg,#22C55E,#16A34A)", color: "white", boxShadow: "0 4px 16px rgba(34,197,94,0.4)" }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M5 12h14M12 5l7 7-7 7" />
-              </svg>
-              Launch Very Deep Research
-            </button>
-          ) : (
-            <div className="mt-4 flex items-center gap-2 rounded-[10px] px-3 py-2"
-              style={{ background: "rgba(255,255,255,0.07)", border: "1px dashed rgba(255,255,255,0.2)" }}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2" strokeLinecap="round">
-                <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
-              </svg>
-              <p className="text-[11px]" style={{ color: "rgba(255,255,255,0.45)" }}>
-                Selesaikan semua platform untuk unlock Deep Research
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ═══════════════════════════════════════════════════
-          CARD 2 — WHY MULTI-PLATFORM (illustrated SVG icons)
-      ═══════════════════════════════════════════════════ */}
-      <div className="rounded-[var(--gv-radius-md)] overflow-hidden"
-        style={{ border: "1px solid var(--gv-color-neutral-200)", background: "var(--gv-color-bg-surface)", boxShadow: "var(--gv-shadow-card)" }}>
-
-        {/* Header */}
-        <div className="px-4 py-3 flex items-center gap-3" style={{ borderBottom: "1px solid var(--gv-color-neutral-100)" }}>
-          <div
-            className="w-9 h-9 rounded-[12px] flex items-center justify-center flex-shrink-0"
-            style={{ background: "linear-gradient(135deg,#3D6B68,#5F8F8B)", boxShadow: "0 3px 10px rgba(61,107,104,0.3)" }}
-          >
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round">
-              <circle cx="12" cy="12" r="10" />
-              <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
-            </svg>
-          </div>
-          <div>
-            <p className="text-[13px] font-bold" style={{ color: "var(--gv-color-neutral-800)" }}>Mengapa Semua Platform?</p>
-            <p className="text-[11px]" style={{ color: "var(--gv-color-neutral-400)" }}>Strategi multi-channel = dominasi market</p>
-          </div>
-        </div>
-
-        <div className="p-4 flex flex-col gap-3">
-          {([
-            {
-              svg: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>,
-              color: "#3D6B68", bg: "#E8F5F4",
-              title: "Jangkauan Lebih Luas",
-              desc: "Audiens berbeda di setiap platform. Hadir di semua = tidak ada peluang yang terlewat.",
-            },
-            {
-              svg: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>,
-              color: "#0EA5E9", bg: "#E0F2FE",
-              title: "Authority & SEO",
-              desc: "Presence aktif di banyak platform = dominasi halaman pertama Google.",
-            },
-            {
-              svg: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
-              color: "#7C3AED", bg: "#EDE9FE",
-              title: "Brand Protection",
-              desc: "Claim nama brand Anda sekarang, sebelum orang lain melakukannya.",
-            },
-            {
-              svg: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>,
-              color: "#D97706", bg: "#FEF3C7",
-              title: "Traffic Berlapis",
-              desc: "Lebih banyak saluran = lebih banyak pelanggan, tanpa bergantung satu platform.",
-            },
-          ] as { svg: React.ReactNode; color: string; bg: string; title: string; desc: string }[]).map((tip, i) => (
-            <div key={i} className="flex items-start gap-3">
-              <div
-                className="w-8 h-8 rounded-[10px] flex items-center justify-center flex-shrink-0"
-                style={{ background: tip.bg, color: tip.color, flexShrink: 0 }}
-              >
-                {tip.svg}
-              </div>
-              <div>
-                <p className="text-[12px] font-semibold" style={{ color: "var(--gv-color-neutral-800)" }}>{tip.title}</p>
-                <p className="text-[11px] leading-relaxed mt-0.5" style={{ color: "var(--gv-color-neutral-500)" }}>{tip.desc}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ═══════════════════════════════════════════════════
-          CARD 3 — GEOVERA HUB (dark, SVG spoke illustration)
-      ═══════════════════════════════════════════════════ */}
-      <div
-        className="rounded-[var(--gv-radius-md)] overflow-hidden relative"
-        style={{
-          background: "linear-gradient(160deg, #0D1F1E 0%, #1a3835 60%, #243f3c 100%)",
-          border: "1px solid rgba(61,107,104,0.4)",
-          boxShadow: "var(--gv-shadow-card)",
-        }}
-      >
-        {/* Subtle grid lines */}
-        <svg className="absolute inset-0 w-full h-full" style={{ pointerEvents: "none", opacity: 0.05 }}>
-          <defs>
-            <pattern id="rc-grid" x="0" y="0" width="32" height="32" patternUnits="userSpaceOnUse">
-              <path d="M32 0L0 0 0 32" fill="none" stroke="white" strokeWidth="0.5" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#rc-grid)" />
-        </svg>
-
-        <div className="relative z-10 p-5">
-          {/* Hub spoke illustration */}
-          <div className="relative mx-auto mb-4" style={{ width: "100%", height: 110 }}>
-            <svg viewBox="0 0 280 110" className="absolute inset-0 w-full h-full" preserveAspectRatio="xMidYMid meet">
-              {/* Spoke lines from center (140,55) to each satellite */}
-              {[
-                [30, 18], [90, 8], [140, 0], [190, 8], [250, 18],
-                [30, 90], [90, 100], [190, 100], [250, 90],
-              ].map(([x, y], i) => (
-                <line key={i} x1={x} y1={y} x2={140} y2={55}
-                  stroke="#3D6B68" strokeWidth="1.2" strokeDasharray="4 3" opacity="0.65" />
+          <div className="relative z-10 p-5">
+            {/* Platform strip */}
+            <div className="flex items-center gap-1.5 mb-5">
+              {([
+                { e:"📸", b:"linear-gradient(135deg,#E1306C,#F56040,#FCAF45)" },
+                { e:"🎵", b:"linear-gradient(135deg,#010101,#2d2d2d)" },
+                { e:"▶️", b:"#FF0000" },
+                { e:"💼", b:"#0A66C2" },
+                { e:"𝕏",  b:"#14171A" },
+                { e:"📘", b:"#1877F2" },
+                { e:"📌", b:"#E60023" },
+                { e:"📍", b:"#4285F4" },
+              ]).map((p,i)=>(
+                <div key={i} className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] flex-shrink-0"
+                  style={{ background:p.b, border:"1.5px solid rgba(255,255,255,0.12)", boxShadow:"0 2px 6px rgba(0,0,0,0.25)" }}>
+                  {p.e}
+                </div>
               ))}
-              {/* Outer glow ring */}
-              <circle cx="140" cy="55" r="26" fill="none" stroke="rgba(61,107,104,0.35)" strokeWidth="1.5" />
-              <circle cx="140" cy="55" r="36" fill="none" stroke="rgba(61,107,104,0.18)" strokeWidth="1" strokeDasharray="4 4" />
-            </svg>
-
-            {/* Center GeoVera hub */}
-            <div
-              className="absolute flex items-center justify-center font-bold text-white text-[18px]"
-              style={{
-                left: "50%", top: "50%",
-                transform: "translate(-50%,-50%)",
-                width: 48, height: 48,
-                borderRadius: "50%",
-                background: "linear-gradient(135deg,#3D6B68,#5F8F8B)",
-                boxShadow: "0 0 28px rgba(61,107,104,0.7), 0 0 8px rgba(61,107,104,0.5)",
-                border: "2px solid rgba(255,255,255,0.15)",
-                zIndex: 10,
-              }}
-            >
-              G
+              <div className="flex-1"/>
+              <span className="text-[10px] font-semibold rounded-full px-2.5 py-1"
+                style={{
+                  background: platformReady ? "rgba(34,197,94,0.18)" : "rgba(255,255,255,0.1)",
+                  color: platformReady ? "#86EFAC" : "rgba(255,255,255,0.55)",
+                  border: `1px solid ${platformReady ? "rgba(34,197,94,0.3)" : "rgba(255,255,255,0.12)"}`,
+                }}>
+                {platformDone}/{platformTotal} active
+              </span>
             </div>
 
-            {/* Satellite platform bubbles — top row */}
-            {[
-              { ico: "📸", bg: "linear-gradient(135deg,#E1306C,#F56040)", x: "3%",  y: "5%"  },
-              { ico: "🎵", bg: "#111",                                      x: "26%", y: "0%"  },
-              { ico: "▶️", bg: "#FF0000",                                   x: "50%", y: "-4%", tx: "-50%" },
-              { ico: "💼", bg: "#0077B5",                                   x: "auto", y: "0%", r: "26%" },
-              { ico: "𝕏",  bg: "#111",                                      x: "auto", y: "5%", r: "3%"  },
-            ].map((p, i) => (
-              <div
-                key={i}
-                className="absolute w-7 h-7 rounded-full flex items-center justify-center text-[12px]"
-                style={{
-                  background: p.bg,
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
-                  border: "1.5px solid rgba(255,255,255,0.1)",
-                  left: p.x !== "auto" ? p.x : undefined,
-                  right: p.r,
-                  top: p.y,
-                  transform: p.tx ? `translateX(${p.tx})` : undefined,
-                }}
-              >
-                {p.ico}
+            {/* Ring + text */}
+            <div className="flex items-center gap-4 mb-4">
+              <div className="flex-shrink-0"><ProgressRing done={doneCount} total={totalCount} /></div>
+              <div className="flex-1">
+                <p className="text-[22px] font-extrabold text-white leading-none" style={{ fontFamily:"var(--gv-font-heading)" }}>
+                  {Math.round((doneCount/totalCount)*100)}%
+                </p>
+                <p className="text-[12px] mt-0.5" style={{ color:"rgba(255,255,255,0.55)" }}>Brand Launch Progress</p>
+                <div className="mt-2.5 h-[3px] rounded-full overflow-hidden" style={{ background:"rgba(255,255,255,0.12)" }}>
+                  <div className="h-full rounded-full transition-all duration-700"
+                    style={{
+                      width:`${platformPct}%`,
+                      background: platformReady ? "linear-gradient(90deg,#22C55E,#86EFAC)" : "rgba(255,255,255,0.7)",
+                    }}/>
+                </div>
+                <p className="text-[10px] mt-1.5" style={{ color:"rgba(255,255,255,0.38)" }}>
+                  {platformDone} of {platformTotal} platforms active{platformReady ? " · Deep Research unlocked ✓" : ""}
+                </p>
               </div>
-            ))}
+            </div>
 
-            {/* Satellite platform bubbles — bottom row */}
-            {[
-              { ico: "📘", bg: "#1877F2", x: "3%",  b: "5%"  },
-              { ico: "📌", bg: "#BD081C", x: "26%", b: "0%"  },
-              { ico: "🔴", bg: "#FF4500", x: "auto",b: "0%",  r: "26%" },
-              { ico: "📍", bg: "#4285F4", x: "auto",b: "5%",  r: "3%"  },
-            ].map((p, i) => (
-              <div
-                key={i}
-                className="absolute w-7 h-7 rounded-full flex items-center justify-center text-[12px]"
-                style={{
-                  background: p.bg,
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
-                  border: "1.5px solid rgba(255,255,255,0.1)",
-                  left: p.x !== "auto" ? p.x : undefined,
-                  right: p.r,
-                  bottom: p.b,
-                }}
-              >
-                {p.ico}
+            {/* CTA */}
+            {allDone ? (
+              <button onClick={()=>{ setSelected("research"); setMRO(true); }}
+                className="w-full py-2.5 rounded-[var(--gv-radius-sm)] font-bold text-[13px] transition-all hover:opacity-90 flex items-center justify-center gap-2"
+                style={{ background:"linear-gradient(135deg,#22C55E,#16A34A)", color:"white", boxShadow:"0 6px 20px rgba(34,197,94,0.38)" }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                Launch Deep Research
+              </button>
+            ) : (
+              <div className="flex items-center gap-2.5 rounded-[var(--gv-radius-sm)] px-3.5 py-2.5"
+                style={{ background:"rgba(255,255,255,0.06)", border:"1px dashed rgba(255,255,255,0.16)" }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.38)" strokeWidth="2" strokeLinecap="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+                </svg>
+                <p className="text-[11px] leading-snug" style={{ color:"rgba(255,255,255,0.42)" }}>
+                  Complete all platforms to unlock Deep Research
+                </p>
               </div>
-            ))}
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════
+          CARD 2 — WHY EVERY PLATFORM MATTERS
+      ═══════════════════════════════════════════════════ */}
+      <div className="p-4 pb-0">
+        <div className="rounded-[var(--gv-radius-lg)] overflow-hidden"
+          style={{ background:"var(--gv-color-bg-surface)", border:"1px solid var(--gv-color-neutral-100)", boxShadow:"var(--gv-shadow-card)" }}>
+
+          {/* Section header */}
+          <div className="px-5 py-4 flex items-center gap-3.5"
+            style={{ borderBottom:"1px solid var(--gv-color-neutral-100)" }}>
+            <div className="w-9 h-9 rounded-[var(--gv-radius-sm)] flex items-center justify-center flex-shrink-0"
+              style={{ background:"linear-gradient(135deg,var(--gv-color-primary-500),var(--gv-color-primary-400))", boxShadow:"0 4px 12px rgba(95,143,139,0.35)" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round">
+                <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+              </svg>
+            </div>
+            <div>
+              <p className="text-[14px] font-bold" style={{ color:"var(--gv-color-neutral-900)", fontFamily:"var(--gv-font-heading)" }}>
+                Why Every Platform Matters
+              </p>
+              <p className="text-[11px]" style={{ color:"var(--gv-color-neutral-400)" }}>
+                The science behind multi-channel brand dominance
+              </p>
+            </div>
           </div>
 
-          {/* Title */}
-          <p className="text-[14px] font-bold text-white text-center">GeoVera: Satu Hub, Semua Channel</p>
-          <p className="text-[11px] text-center mt-0.5 mb-4" style={{ color: "rgba(255,255,255,0.5)" }}>
-            Hubungkan semua akun — kelola dari satu dashboard AI
-          </p>
-
-          {/* Feature pills */}
-          <div className="flex flex-col gap-1.5">
-            {[
-              { ico: "📅", txt: "Jadwalkan & publish ke semua platform sekaligus" },
-              { ico: "💬", txt: "Auto-reply komentar & DM dengan AI brand voice" },
-              { ico: "📊", txt: "Analitik terpadu — semua platform, satu view" },
-              { ico: "🤖", txt: "Deep Research AI — brand, kompetitor & tren otomatis" },
-              { ico: "🎯", txt: "Rekomendasi konten dari data real-time" },
-            ].map((f, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-2.5 rounded-[9px] px-3 py-2"
-                style={{
-                  background: "rgba(255,255,255,0.06)",
-                  border: "1px solid rgba(255,255,255,0.07)",
-                }}
-              >
-                <span className="text-[14px] flex-shrink-0">{f.ico}</span>
-                <p className="text-[11px] leading-snug" style={{ color: "rgba(255,255,255,0.72)" }}>{f.txt}</p>
+          <div className="p-5 flex flex-col gap-4">
+            {([
+              {
+                icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>,
+                c:"var(--gv-color-primary-600)", bg:"var(--gv-color-primary-50)",
+                title:"Reach Every Audience Segment",
+                desc:"Each platform serves a distinct demographic. Instagram drives visual discovery, LinkedIn powers B2B decisions, TikTok commands Gen-Z attention, Reddit owns niche authority. Omnipresence means zero missed opportunity.",
+              },
+              {
+                icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>,
+                c:"#0284C7", bg:"#F0F9FF",
+                title:"Dominate Search & AI Discovery",
+                desc:"Google's E-E-A-T signals favor brands with consistent cross-platform presence. Active social accounts combined with a verified Google Business Profile dramatically improve local SEO rankings and visibility in AI search engines like Perplexity and Gemini.",
+              },
+              {
+                icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
+                c:"#7C3AED", bg:"#F5F3FF",
+                title:"Secure Your Brand Identity",
+                desc:"Claiming your handle across every platform is a non-negotiable defensive strategy. Unclaimed names are vulnerable to squatters and impersonators. Establishing your presence now locks in your identity before competitors can exploit the gap.",
+              },
+              {
+                icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>,
+                c:"#B45309", bg:"#FFFBEB",
+                title:"Build Compounding Traffic",
+                desc:"Multi-channel distribution creates overlapping acquisition streams that reinforce one another. Rather than depending on a single algorithm, your brand benefits from diversified traffic sources — reducing platform risk while maximizing total reach.",
+              },
+            ] as {icon:React.ReactNode;c:string;bg:string;title:string;desc:string}[]).map((t,i)=>(
+              <div key={i} className="flex gap-3.5">
+                <div className="w-8 h-8 rounded-[var(--gv-radius-sm)] flex items-center justify-center flex-shrink-0 mt-0.5"
+                  style={{ background:t.bg, color:t.c }}>
+                  {t.icon}
+                </div>
+                <div>
+                  <p className="text-[13px] font-semibold" style={{ color:"var(--gv-color-neutral-800)", fontFamily:"var(--gv-font-heading)" }}>{t.title}</p>
+                  <p className="text-[12px] leading-relaxed mt-1" style={{ color:"var(--gv-color-neutral-500)", lineHeight:"1.65" }}>{t.desc}</p>
+                </div>
               </div>
             ))}
           </div>
@@ -2202,51 +2087,159 @@ export default function GettingStartedPage() {
       </div>
 
       {/* ═══════════════════════════════════════════════════
-          CARD 4 — TIPS & TRICKS (colorful numbered tiles)
+          CARD 3 — GEOVERA HUB (dark, SVG spoke diagram)
       ═══════════════════════════════════════════════════ */}
-      <div className="rounded-[var(--gv-radius-md)] overflow-hidden"
-        style={{ border: "1px solid var(--gv-color-neutral-200)", background: "var(--gv-color-bg-surface)", boxShadow: "var(--gv-shadow-card)" }}>
+      <div className="p-4 pb-0">
+        <div className="rounded-[var(--gv-radius-lg)] overflow-hidden relative"
+          style={{ background:"linear-gradient(155deg,#0D1F1E 0%,#1C3B38 55%,#264E4A 100%)", border:"1px solid rgba(95,143,139,0.22)", boxShadow:"var(--gv-shadow-card)" }}>
 
-        {/* Header */}
-        <div className="px-4 py-3 flex items-center gap-3" style={{ borderBottom: "1px solid var(--gv-color-neutral-100)" }}>
-          <div
-            className="w-9 h-9 rounded-[12px] flex items-center justify-center flex-shrink-0"
-            style={{ background: "linear-gradient(135deg,#F59E0B,#FBBF24)", boxShadow: "0 3px 10px rgba(245,158,11,0.35)" }}
-          >
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-            </svg>
-          </div>
-          <div>
-            <p className="text-[13px] font-bold" style={{ color: "var(--gv-color-neutral-800)" }}>Tips & Tricks</p>
-            <p className="text-[11px]" style={{ color: "var(--gv-color-neutral-400)" }}>Shortcut menuju brand yang kuat</p>
+          {/* Grid texture */}
+          <svg className="absolute inset-0 w-full h-full" style={{ opacity:0.04, pointerEvents:"none" }}>
+            <defs><pattern id="gv-grid" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
+              <path d="M24 0H0V24" fill="none" stroke="white" strokeWidth="0.5"/>
+            </pattern></defs>
+            <rect width="100%" height="100%" fill="url(#gv-grid)"/>
+          </svg>
+
+          <div className="relative z-10 p-5">
+            {/* Hub SVG diagram */}
+            <div className="relative mb-5" style={{ height:116 }}>
+              <svg viewBox="0 0 300 116" className="absolute inset-0 w-full h-full" preserveAspectRatio="xMidYMid meet">
+                {([[26,14],[86,4],[150,0],[214,4],[274,14],[26,102],[86,112],[214,112],[274,102]] as number[][]).map(([x,y],i)=>(
+                  <line key={i} x1={x} y1={y} x2={150} y2={58} stroke="rgba(95,143,139,0.55)" strokeWidth="1.1" strokeDasharray="4 4"/>
+                ))}
+                <circle cx="150" cy="58" r="28" fill="rgba(95,143,139,0.08)" stroke="rgba(95,143,139,0.3)" strokeWidth="1.5"/>
+                <circle cx="150" cy="58" r="40" fill="none" stroke="rgba(95,143,139,0.12)" strokeWidth="1" strokeDasharray="3 6"/>
+              </svg>
+
+              {/* Center Hub */}
+              <div className="absolute flex items-center justify-center font-extrabold text-white text-[19px]"
+                style={{
+                  left:"50%", top:"50%", transform:"translate(-50%,-50%)",
+                  width:52, height:52, borderRadius:"50%",
+                  background:"linear-gradient(135deg,var(--gv-color-primary-600),var(--gv-color-primary-400))",
+                  boxShadow:"0 0 30px rgba(95,143,139,0.65), 0 0 8px rgba(95,143,139,0.4)",
+                  border:"2px solid rgba(255,255,255,0.14)",
+                  fontFamily:"var(--gv-font-heading)", zIndex:10,
+                }}>G</div>
+
+              {/* Top satellites */}
+              {[
+                { e:"📸", b:"linear-gradient(135deg,#E1306C,#F56040)", l:"3%",  t:"6%"  },
+                { e:"🎵", b:"#111",                                    l:"24%", t:"0%"  },
+                { e:"▶️", b:"#FF0000",                                 l:"50%", t:"-3%", tx:"-50%" },
+                { e:"💼", b:"#0A66C2",                                 r:"24%", t:"0%"  },
+                { e:"𝕏",  b:"#14171A",                                 r:"3%",  t:"6%"  },
+              ].map((p,i)=>(
+                <div key={i} className="absolute w-7 h-7 rounded-full flex items-center justify-center text-[12px]"
+                  style={{ background:p.b, boxShadow:"0 2px 10px rgba(0,0,0,0.45)", border:"1.5px solid rgba(255,255,255,0.1)",
+                    left:(p as any).l, right:(p as any).r, top:(p as any).t,
+                    transform:(p as any).tx ? `translateX(${(p as any).tx})` : undefined }}>
+                  {p.e}
+                </div>
+              ))}
+              {/* Bottom satellites */}
+              {[
+                { e:"📘", b:"#1877F2", l:"3%",  b2:"6%"  },
+                { e:"📌", b:"#E60023", l:"24%", b2:"0%"  },
+                { e:"🔴", b:"#FF4500", r:"24%", b2:"0%"  },
+                { e:"📍", b:"#4285F4", r:"3%",  b2:"6%"  },
+              ].map((p,i)=>(
+                <div key={i} className="absolute w-7 h-7 rounded-full flex items-center justify-center text-[12px]"
+                  style={{ background:p.b, boxShadow:"0 2px 10px rgba(0,0,0,0.45)", border:"1.5px solid rgba(255,255,255,0.1)",
+                    left:(p as any).l, right:(p as any).r, bottom:(p as any).b2 }}>
+                  {p.e}
+                </div>
+              ))}
+            </div>
+
+            <p className="text-[15px] font-bold text-white text-center" style={{ fontFamily:"var(--gv-font-heading)" }}>
+              One Platform. Every Channel.
+            </p>
+            <p className="text-[12px] text-center mt-1 mb-5" style={{ color:"rgba(255,255,255,0.48)" }}>
+              GeoVera unifies all your accounts into a single AI-powered workspace.
+            </p>
+
+            {/* Feature rows */}
+            <div className="flex flex-col gap-1.5">
+              {[
+                { ico:"📅", t:"Unified Publishing",       d:"Schedule and publish to every platform simultaneously from one composer." },
+                { ico:"💬", t:"AI Comment Management",    d:"Auto-reply to comments and DMs in your brand's authentic voice." },
+                { ico:"📊", t:"Cross-Channel Analytics",  d:"One consolidated dashboard for all platform performance metrics." },
+                { ico:"🤖", t:"Deep Research Engine",     d:"Automated brand, competitor, and trend intelligence — weekly." },
+                { ico:"🎯", t:"AI Content Strategy",      d:"Data-driven content recommendations tailored to each channel." },
+              ].map((f,i)=>(
+                <div key={i} className="flex items-start gap-3 rounded-[var(--gv-radius-xs)] px-3.5 py-2.5"
+                  style={{ background:"rgba(255,255,255,0.055)", border:"1px solid rgba(255,255,255,0.07)" }}>
+                  <span className="text-[14px] flex-shrink-0 mt-0.5">{f.ico}</span>
+                  <div>
+                    <p className="text-[12px] font-semibold" style={{ color:"rgba(255,255,255,0.88)", fontFamily:"var(--gv-font-heading)" }}>{f.t}</p>
+                    <p className="text-[11px] leading-snug mt-0.5" style={{ color:"rgba(255,255,255,0.42)" }}>{f.d}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
+      </div>
 
-        {/* Decorative wave strip */}
-        <div style={{ height: 6, background: "linear-gradient(90deg,#3D6B68,#0EA5E9,#7C3AED,#D97706,#DC2626)", opacity: 0.7 }} />
+      {/* ═══════════════════════════════════════════════════
+          CARD 4 — PROFESSIONAL QUICK-START GUIDE
+      ═══════════════════════════════════════════════════ */}
+      <div className="p-4">
+        <div className="rounded-[var(--gv-radius-lg)] overflow-hidden"
+          style={{ background:"var(--gv-color-bg-surface)", border:"1px solid var(--gv-color-neutral-100)", boxShadow:"var(--gv-shadow-card)" }}>
 
-        <div className="p-4 flex flex-col gap-3">
-          {[
-            { num: "01", color: "#3D6B68", bg: "#E8F5F4", title: "Nama yang sama di semua platform", desc: "Konsistensi username = mudah dicari, mudah diingat, susah ditiru." },
-            { num: "02", color: "#0EA5E9", bg: "#E0F2FE", title: "Foto profil & logo konsisten", desc: "Logo sama di setiap platform meningkatkan brand recall 3× lebih cepat." },
-            { num: "03", color: "#7C3AED", bg: "#EDE9FE", title: "Connect dulu, optimalkan nanti", desc: "Terhubung ke GeoVera dulu — AI bantu optimasi konten secara bertahap." },
-            { num: "04", color: "#D97706", bg: "#FEF3C7", title: "Google Business = wajib lokal", desc: "Bisnis dengan GBP mendapat 7× lebih banyak klik dari Google Search & Maps." },
-            { num: "05", color: "#DC2626", bg: "#FEE2E2", title: "Website = aset permanen", desc: "Platform bisa tutup, algoritma berubah — website 100% milik Anda selamanya." },
-          ].map((tip, i) => (
-            <div key={i} className="flex items-start gap-3">
-              <div
-                className="flex-shrink-0 w-9 h-9 rounded-[10px] flex items-center justify-center text-[11px] font-extrabold"
-                style={{ background: tip.bg, color: tip.color }}
-              >
-                {tip.num}
-              </div>
-              <div className="pt-0.5">
-                <p className="text-[12px] font-semibold leading-tight" style={{ color: "var(--gv-color-neutral-800)" }}>{tip.title}</p>
-                <p className="text-[11px] leading-relaxed mt-0.5" style={{ color: "var(--gv-color-neutral-500)" }}>{tip.desc}</p>
-              </div>
+          {/* Header */}
+          <div className="px-5 py-4 flex items-center gap-3.5"
+            style={{ borderBottom:"1px solid var(--gv-color-neutral-100)" }}>
+            <div className="w-9 h-9 rounded-[var(--gv-radius-sm)] flex items-center justify-center flex-shrink-0"
+              style={{ background:"linear-gradient(135deg,#F59E0B,#FBBF24)", boxShadow:"0 4px 12px rgba(245,158,11,0.35)" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+              </svg>
             </div>
-          ))}
+            <div>
+              <p className="text-[14px] font-bold" style={{ color:"var(--gv-color-neutral-900)", fontFamily:"var(--gv-font-heading)" }}>
+                Professional Quick-Start Guide
+              </p>
+              <p className="text-[11px]" style={{ color:"var(--gv-color-neutral-400)" }}>
+                5 principles for a powerful brand launch
+              </p>
+            </div>
+          </div>
+
+          {/* Rainbow accent bar */}
+          <div style={{ height:3, background:"linear-gradient(90deg,var(--gv-color-primary-500),#0284C7,#7C3AED,#B45309,#DC2626)" }}/>
+
+          <div className="p-5 flex flex-col gap-4">
+            {[
+              { n:"01", c:"var(--gv-color-primary-600)", bg:"var(--gv-color-primary-50)",
+                t:"Establish a Consistent Brand Identity",
+                d:"Use the same username, logo, and bio across every platform. Consistency signals credibility to both users and search algorithms, and makes your brand immediately recognizable at every touchpoint." },
+              { n:"02", c:"#0284C7", bg:"#F0F9FF",
+                t:"Connect First, Optimize Gradually",
+                d:"Don't wait for perfect content before connecting. Link all accounts to GeoVera first — the AI will guide progressive content optimization based on real performance data from day one." },
+              { n:"03", c:"#7C3AED", bg:"#F5F3FF",
+                t:"Prioritize Google Business Profile",
+                d:"Businesses with a verified Google Business Profile receive 7× more clicks from Google Search and Maps. It delivers the highest ROI of any single setup step, especially for local and service-based businesses." },
+              { n:"04", c:"#B45309", bg:"#FFFBEB",
+                t:"Let AI Handle the Heavy Lifting",
+                d:"Once connected, GeoVera's Deep Research engine automatically analyzes your brand positioning, competitor landscape, and content opportunities — delivering a complete strategic roadmap without manual research." },
+              { n:"05", c:"#DC2626", bg:"#FFF5F5",
+                t:"Own Your Digital Real Estate",
+                d:"Social platforms are rented channels — algorithms change, policies shift. Your website is the only digital asset you truly own. Build it as the permanent, algorithm-proof hub of your entire brand presence." },
+            ].map((tip,i)=>(
+              <div key={i} className="flex gap-3.5">
+                <div className="flex-shrink-0 w-9 h-9 rounded-[var(--gv-radius-sm)] flex items-center justify-center text-[12px] font-extrabold"
+                  style={{ background:tip.bg, color:tip.c }}>{tip.n}</div>
+                <div className="pt-0.5">
+                  <p className="text-[13px] font-semibold leading-tight" style={{ color:"var(--gv-color-neutral-800)", fontFamily:"var(--gv-font-heading)" }}>{tip.t}</p>
+                  <p className="text-[12px] leading-relaxed mt-1" style={{ color:"var(--gv-color-neutral-500)", lineHeight:"1.65" }}>{tip.d}</p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
