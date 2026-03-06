@@ -5,7 +5,6 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import {
-  GridIcon,
   ShootingStarIcon,
   CalenderIcon,
   AnimationIcon,
@@ -56,7 +55,6 @@ const ChevronIcon = ({ className }: { className?: string }) => (
 type NavIcon = React.FC<React.SVGProps<SVGSVGElement>>;
 
 const navItems: { Icon: NavIcon; name: string; path: string }[] = [
-  { Icon: GridIcon,         name: "Home",   path: "/"               },
   { Icon: ShootingStarIcon, name: "Start",  path: "/getting-started"},
   { Icon: CalenderIcon,     name: "Tasks",  path: "/calendar"       },
   { Icon: ChatIcon,         name: "Reply",  path: "/auto-reply"     },
@@ -228,6 +226,49 @@ export default function NavColumn({ children: _children }: { children?: React.Re
                   {DEMO_USER.role}
                 </p>
               </div>
+              {/* Billing */}
+              <Link
+                href="/billing"
+                onClick={() => setShowUserMenu(false)}
+                className="flex w-full items-center gap-2 px-3 py-2.5 text-[13px] transition-colors duration-200"
+                style={{ color: "var(--gv-color-neutral-700)" }}
+                onMouseEnter={(e) =>
+                  ((e.currentTarget as HTMLElement).style.background =
+                    "var(--gv-color-neutral-50)")
+                }
+                onMouseLeave={(e) =>
+                  ((e.currentTarget as HTMLElement).style.background = "transparent")
+                }
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <rect x="2" y="5" width="20" height="14" rx="2" />
+                  <line x1="2" y1="10" x2="22" y2="10" />
+                </svg>
+                Billing
+              </Link>
+
+              {/* Security */}
+              <Link
+                href="/profile"
+                onClick={() => setShowUserMenu(false)}
+                className="flex w-full items-center gap-2 px-3 py-2.5 text-[13px] transition-colors duration-200"
+                style={{ color: "var(--gv-color-neutral-700)", borderBottom: "1px solid var(--gv-color-neutral-100)" }}
+                onMouseEnter={(e) =>
+                  ((e.currentTarget as HTMLElement).style.background =
+                    "var(--gv-color-neutral-50)")
+                }
+                onMouseLeave={(e) =>
+                  ((e.currentTarget as HTMLElement).style.background = "transparent")
+                }
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+                Security
+              </Link>
+
               <button
                 onClick={handleLogout}
                 className="flex w-full items-center gap-2 px-3 py-2.5 text-[13px] transition-colors duration-200"

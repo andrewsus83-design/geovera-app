@@ -1524,12 +1524,42 @@ export default function GettingStartedPage() {
   const [faqProduct, setFaqProduct] = useState<FAQPair[]>([{ q: "", a: "" }]);
   const [faqGeo, setFaqGeo]         = useState<FAQPair[]>([{ q: "", a: "" }]);
 
+  // User profile state
+  const [userEmail, setUserEmail]   = useState<string>("");
+  const [userName, setUserName]     = useState<string>("");
+  const [brandName, setBrandName]   = useState<string>("");
+  const [brandTier, setBrandTier]   = useState<string>("");
+
   // Load persisted done state from localStorage + connected platform count
   useEffect(() => {
     try {
       const saved = localStorage.getItem(LS_KEY);
       if (saved) setDone(new Set(JSON.parse(saved)));
     } catch {}
+
+    // Load brand name from onboarding localStorage
+    try {
+      const ob = JSON.parse(localStorage.getItem("gv_onboarding") || "{}");
+      if (ob.brand_name) setBrandName(ob.brand_name);
+    } catch {}
+
+    // Fetch user + brand data from Supabase
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        setUserEmail(user.email || "");
+        setUserName(user.user_metadata?.full_name || user.user_metadata?.name || "");
+      }
+    });
+
+    supabase
+      .from("gv_brands")
+      .select("name, subscription_tier")
+      .eq("id", FALLBACK_BRAND_ID)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.name) setBrandName(data.name);
+        if (data?.subscription_tier) setBrandTier(data.subscription_tier);
+      });
 
     // Fetch connected platform count from Supabase
     supabase
@@ -1777,6 +1807,60 @@ export default function GettingStartedPage() {
   /* ── RIGHT COLUMN ── */
   const rightCol = (
     <div className="h-full overflow-y-auto p-5 flex flex-col gap-4">
+
+      {/* ═══════════════════════════════════════════════════
+          CARD 0 — PROFILE (user + brand info)
+      ═══════════════════════════════════════════════════ */}
+      <div
+        className="rounded-[var(--gv-radius-md)] p-4 flex items-center gap-3"
+        style={{
+          border: "1px solid var(--gv-color-neutral-200)",
+          background: "var(--gv-color-bg-surface)",
+          boxShadow: "var(--gv-shadow-card)",
+        }}
+      >
+        {/* Avatar */}
+        <div
+          className="w-11 h-11 rounded-full flex items-center justify-center text-white text-[14px] font-bold flex-shrink-0"
+          style={{ background: "linear-gradient(135deg,#3D6B68,#5F8F8B)" }}
+        >
+          {(userName || userEmail || "U").slice(0, 1).toUpperCase()}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[13px] font-bold truncate" style={{ color: "var(--gv-color-neutral-900)" }}>
+            {userName || userEmail || "Your Account"}
+          </p>
+          {userEmail && userName && (
+            <p className="text-[11px] truncate" style={{ color: "var(--gv-color-neutral-400)" }}>
+              {userEmail}
+            </p>
+          )}
+          {brandName && (
+            <div className="flex items-center gap-1.5 mt-1">
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                style={{ background: "var(--gv-color-primary-50,#EDF5F4)", color: "var(--gv-color-primary-700,#1d4f4a)" }}>
+                🏷️ {brandName}
+              </span>
+              {brandTier && (
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                  style={{ background: "var(--gv-color-neutral-100)", color: "var(--gv-color-neutral-500)" }}>
+                  {brandTier}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+        <a
+          href="/profile"
+          className="flex-shrink-0 text-[11px] font-semibold px-3 py-1.5 rounded-[8px] transition-colors"
+          style={{
+            background: "var(--gv-color-neutral-100)",
+            color: "var(--gv-color-neutral-600)",
+          }}
+        >
+          Edit
+        </a>
+      </div>
 
       {/* ═══════════════════════════════════════════════════
           CARD 1 — PROGRESS HERO (dark teal, floating bubbles)
