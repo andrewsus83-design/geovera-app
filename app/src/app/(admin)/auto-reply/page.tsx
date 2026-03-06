@@ -657,13 +657,13 @@ export default function AutoReplyPage() {
   );
 
   /* ════════════════════════════════════════════════════════════
-     RIGHT COLUMN — Settings + Sticky bottom mode switcher
+     RIGHT COLUMN — Settings only (mode switcher moved to bottom bar)
   ════════════════════════════════════════════════════════════ */
   const right = (
     <div className="flex flex-col h-full">
 
       {/* Settings content — scrollable */}
-      <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-5" style={{ minHeight: 0 }}>
+      <div className="overflow-y-auto p-5 flex flex-col gap-5 h-full">
         <p className="text-[11px] font-bold uppercase tracking-[0.1em]" style={{ color: "var(--gv-color-neutral-400)" }}>
           Settings
         </p>
@@ -797,70 +797,6 @@ export default function AutoReplyPage() {
         )}
       </div>
 
-      {/* ─── Sticky bottom: Manual Reply | AI Auto Reply — Tasks style ─── */}
-      <div
-        className="flex-shrink-0 px-4 pb-4 pt-3"
-        style={{ borderTop: "1px solid var(--gv-color-neutral-100)", background: "var(--gv-color-bg-surface)" }}
-      >
-        <div
-          className="flex items-center"
-          style={{
-            background: "#F3F4F6",
-            borderRadius: "var(--gv-radius-full)",
-            padding: 4,
-            gap: 4,
-            height: 50,
-          }}
-        >
-          {([
-            {
-              key: "manual" as ReplyMode,
-              label: "Manual Reply",
-              icon: (
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                </svg>
-              ),
-            },
-            {
-              key: "ai" as ReplyMode,
-              label: "AI Auto Reply",
-              icon: (
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <path d="M12 2a2 2 0 012 2v0a2 2 0 01-2 2 2 2 0 01-2-2 2 2 0 012-2z"/>
-                  <path d="M12 18a2 2 0 012 2v0a2 2 0 01-2 2 2 2 0 01-2-2 2 2 0 012-2z"/>
-                  <path d="M4.93 4.93a2 2 0 012.83 0 2 2 0 010 2.83 2 2 0 01-2.83 0 2 2 0 010-2.83z"/>
-                  <path d="M16.24 16.24a2 2 0 012.83 0 2 2 0 010 2.83 2 2 0 01-2.83 0 2 2 0 010-2.83z"/>
-                  <path d="M2 12a2 2 0 012-2h0a2 2 0 012 2 2 2 0 01-2 2 2 2 0 01-2-2z"/>
-                  <path d="M18 12a2 2 0 012-2h0a2 2 0 012 2 2 2 0 01-2 2 2 2 0 01-2-2z"/>
-                </svg>
-              ),
-            },
-          ]).map(mode => {
-            const isActive = replyMode === mode.key;
-            return (
-              <button
-                key={mode.key}
-                onClick={() => setReplyMode(mode.key)}
-                className="flex-1 flex items-center justify-center gap-1.5 text-[13px] font-semibold transition-all duration-200"
-                style={{
-                  borderRadius: "var(--gv-radius-full)",
-                  padding: "10px 16px",
-                  background: isActive ? "var(--gv-color-bg-surface)" : "transparent",
-                  color: isActive ? "var(--gv-color-neutral-900)" : "var(--gv-color-neutral-400)",
-                  fontFamily: "var(--gv-font-body)",
-                  cursor: "pointer",
-                  border: "none",
-                  boxShadow: isActive ? "0 1px 6px rgba(0,0,0,0.1)" : "none",
-                }}
-              >
-                {mode.icon}
-                {mode.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
     </div>
   );
 
@@ -876,6 +812,68 @@ export default function AutoReplyPage() {
           mobileBackLabel="Reply"
         />
       </div>
+
+      {/* ── Bottom mode bar — outside columns, floating glass pill, same as Studio ── */}
+      <nav
+        className="flex-shrink-0 flex justify-center pt-0 pb-4"
+        style={{ background: "var(--gv-color-bg-base)" }}
+      >
+        <div
+          className="overflow-hidden"
+          style={{
+            borderRadius: "var(--gv-radius-2xl)",
+            border: "1px solid var(--gv-color-glass-border)",
+            background: "var(--gv-color-glass-bg)",
+            backdropFilter: "blur(var(--gv-blur-lg))",
+            WebkitBackdropFilter: "blur(var(--gv-blur-lg))",
+            boxShadow: "var(--gv-shadow-sidebar)",
+          }}
+        >
+          <div className="flex items-center px-3 py-2 gap-1">
+            {([
+              {
+                key: "manual" as ReplyMode,
+                label: "Manual Reply",
+                icon: (
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                ),
+              },
+              {
+                key: "ai" as ReplyMode,
+                label: "AI Auto Reply",
+                icon: (
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2 L14 10 L22 12 L14 14 L12 22 L10 14 L2 12 L10 10 Z" />
+                  </svg>
+                ),
+              },
+            ]).map((mode) => {
+              const isActive = replyMode === mode.key;
+              return (
+                <button
+                  key={mode.key}
+                  onClick={() => setReplyMode(mode.key)}
+                  className="flex items-center gap-2 h-10 px-4 transition-all duration-200"
+                  style={{
+                    borderRadius: "var(--gv-radius-full)",
+                    background: isActive ? "var(--gv-color-primary-50)" : "transparent",
+                    color: isActive ? "var(--gv-color-primary-500)" : "var(--gv-color-neutral-700)",
+                    border: isActive ? "1px solid rgba(95,143,139,0.3)" : "1px solid transparent",
+                  }}
+                >
+                  <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center">
+                    {mode.icon}
+                  </span>
+                  <span className="text-[13px] font-[550] whitespace-nowrap leading-none">{mode.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </nav>
     </div>
   );
 }
