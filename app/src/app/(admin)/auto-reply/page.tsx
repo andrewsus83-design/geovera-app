@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import ThreeColumnLayout from "@/components/shared/ThreeColumnLayout";
 import NavColumn from "@/components/shared/NavColumn";
 import PlatformIcon from "@/components/shared/PlatformIcon";
+import MiniCalendar from "@/components/calendar/MiniCalendar";
 
 /* ══════════════════════════════════════════════════════════════════════════
    /auto-reply — GeoVera Auto-Reply Dashboard
@@ -160,14 +161,11 @@ export default function AutoReplyPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  /* ── Calendar: last 7 days ── */
-  const calendarDays = useMemo(() => {
-    const today = new Date();
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(today);
-      d.setDate(today.getDate() - (6 - i));
-      return d.toISOString().slice(0, 10);
-    });
+  /* ── minDate: 30 days back ── */
+  const thirtyDaysAgo = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().slice(0, 10);
   }, []);
 
   const countByDate = useMemo(() => {
@@ -201,91 +199,25 @@ export default function AutoReplyPage() {
   const left = <NavColumn />;
 
   /* ════════════════════════════════════════════════════════════
-     CENTER COLUMN — Calendar header + [Comment list | Reply compose] + Bottom submenu
+     CENTER COLUMN — [MiniCalendar + Comment list] | [Header + Reply compose + Submenu]
   ════════════════════════════════════════════════════════════ */
   const center = (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full">
 
-      {/* ── Top: header + calendar strip (full width) ── */}
-      <div className="flex-shrink-0 px-5 pt-5 pb-0">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h1 className="text-[22px] font-bold" style={{ color: "var(--gv-color-neutral-900)", fontFamily: "Georgia, serif" }}>
-              Reply
-            </h1>
-            <p className="text-[12px] mt-0.5" style={{ color: "var(--gv-color-neutral-400)" }}>
-              {todayCount} comments today · {pendingCount} in AI queue · {unreadCount} need review
-            </p>
-          </div>
-          <button onClick={fetchData}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-[10px] text-[12px] font-semibold hover:opacity-80 transition-all"
-            style={{ background: "var(--gv-color-neutral-100)", color: "var(--gv-color-neutral-600)" }}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-            </svg>
-            Refresh
-          </button>
+      {/* ─── LEFT sub-panel: MiniCalendar + filter tabs + comment list ─── */}
+      <div className="flex flex-col flex-shrink-0 border-r overflow-hidden" style={{ width: 272, borderColor: "var(--gv-color-neutral-100)" }}>
+        {/* MiniCalendar */}
+        <div className="flex-shrink-0 p-3">
+          <MiniCalendar
+            taskDates={comments.map(c => c.created_at)}
+            onDateSelect={setSDK}
+            selectedDate={selectedDateKey}
+            minDate={thirtyDaysAgo}
+            maxDate={todayDateKey}
+          />
         </div>
-
-        {/* Calendar date strip */}
-        <div className="overflow-x-auto pb-1 -mx-1 px-1">
-          <div className="flex gap-1.5" style={{ minWidth: "max-content" }}>
-            {calendarDays.map(dateKey => {
-              const d        = new Date(dateKey + "T12:00:00");
-              const isToday  = dateKey === todayDateKey;
-              const isActive = dateKey === selectedDateKey;
-              const cnt      = countByDate[dateKey] || 0;
-              const dayName  = d.toLocaleString("en", { weekday: "short" });
-              const dayNum   = d.getDate();
-              return (
-                <button
-                  key={dateKey}
-                  onClick={() => setSDK(dateKey)}
-                  className="flex flex-col items-center rounded-[12px] px-3 py-2 transition-all flex-shrink-0"
-                  style={{
-                    background: isActive
-                      ? "var(--gv-color-primary-600)"
-                      : isToday
-                      ? "var(--gv-color-primary-50)"
-                      : "var(--gv-color-bg-surface)",
-                    border: `1.5px solid ${isActive ? "var(--gv-color-primary-600)" : isToday ? "var(--gv-color-primary-200)" : "var(--gv-color-neutral-100)"}`,
-                    minWidth: 52,
-                  }}
-                >
-                  <span className="text-[10px] font-semibold" style={{ color: isActive ? "rgba(255,255,255,0.7)" : "var(--gv-color-neutral-400)" }}>
-                    {dayName}
-                  </span>
-                  <span className="text-[16px] font-bold leading-tight" style={{ color: isActive ? "white" : isToday ? "var(--gv-color-primary-700)" : "var(--gv-color-neutral-800)" }}>
-                    {dayNum}
-                  </span>
-                  {cnt > 0 ? (
-                    <span className="text-[10px] font-bold mt-0.5 rounded-full px-1.5 py-0.5 leading-none"
-                      style={{
-                        background: isActive ? "rgba(255,255,255,0.25)" : "var(--gv-color-primary-100)",
-                        color: isActive ? "white" : "var(--gv-color-primary-700)",
-                      }}>
-                      {cnt}
-                    </span>
-                  ) : (
-                    <span className="h-[18px] w-1 mt-0.5" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Divider */}
-        <div className="mt-3 h-px" style={{ background: "var(--gv-color-neutral-100)" }} />
-      </div>
-
-      {/* ── Body: horizontal split — comment list | reply compose ── */}
-      <div className="flex flex-1 min-h-0">
-
-        {/* ─── LEFT sub-panel: comment list ─── */}
-        <div className="flex flex-col flex-shrink-0 border-r" style={{ width: 256, borderColor: "var(--gv-color-neutral-100)" }}>
-          {/* Filter tabs */}
-          <div className="px-3 pt-3 pb-2 flex-shrink-0 flex gap-1">
+        {/* Filter tabs */}
+        <div className="px-3 pb-2 flex-shrink-0 flex gap-1">
             {([
               { key: "all",       label: "All" },
               { key: "queue",     label: "AI Queue" },
@@ -368,8 +300,25 @@ export default function AutoReplyPage() {
           </div>
         </div>
 
-        {/* ─── RIGHT sub-panel: reply compose ─── */}
+        {/* ─── RIGHT sub-panel: header + reply compose + submenu ─── */}
         <div className="flex flex-col flex-1 min-w-0">
+          {/* Header */}
+          <div className="flex-shrink-0 px-5 pt-5 pb-3 flex items-center justify-between border-b" style={{ borderColor: "var(--gv-color-neutral-100)" }}>
+            <div>
+              <h1 className="text-[22px] font-bold" style={{ color: "var(--gv-color-neutral-900)", fontFamily: "Georgia, serif" }}>Reply</h1>
+              <p className="text-[12px] mt-0.5" style={{ color: "var(--gv-color-neutral-400)" }}>
+                {todayCount} comments today · {pendingCount} in AI queue · {unreadCount} need review
+              </p>
+            </div>
+            <button onClick={fetchData}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-[10px] text-[12px] font-semibold hover:opacity-80 transition-all"
+              style={{ background: "var(--gv-color-neutral-100)", color: "var(--gv-color-neutral-600)" }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+              </svg>
+              Refresh
+            </button>
+          </div>
           {/* Compose body */}
           <div className="flex-1 overflow-y-auto px-5 py-4 min-h-0">
         {!selectedComment ? (
@@ -569,11 +518,10 @@ export default function AutoReplyPage() {
         </div>
         {/* end bottom submenu */}
         </div>
-        {/* end right sub-panel */}
+      {/* end right sub-panel */}
       </div>
-      {/* end body split */}
+    {/* end outer flex */}
     </div>
-  </div>
 );
 
   /* ════════════════════════════════════════════════════════════
