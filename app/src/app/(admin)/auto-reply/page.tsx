@@ -160,12 +160,12 @@ export default function AutoReplyPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  /* ── Calendar: last 14 days ── */
+  /* ── Calendar: last 7 days ── */
   const calendarDays = useMemo(() => {
     const today = new Date();
-    return Array.from({ length: 14 }, (_, i) => {
+    return Array.from({ length: 7 }, (_, i) => {
       const d = new Date(today);
-      d.setDate(today.getDate() - (13 - i));
+      d.setDate(today.getDate() - (6 - i));
       return d.toISOString().slice(0, 10);
     });
   }, []);
