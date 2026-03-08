@@ -114,7 +114,7 @@ export default function AutoReplyPage() {
   const [manualReply, setManualReply]   = useState("");
   const [aiEnabled, setAIEnabled]       = useState(true);
   const [aiTone, setAITone]             = useState<"professional" | "friendly" | "casual">("friendly");
-  const [filter, setFilter]             = useState<"all" | "replied">("all");
+  const [filter, setFilter]             = useState<"all" | "unreplied" | "replied">("unreplied");
   const [sending, setSending]           = useState(false);
   const [repliedComments, setReplied]   = useState<CommentItem[]>([]);
 
@@ -193,18 +193,19 @@ export default function AutoReplyPage() {
 
   const countByDate = useMemo(() => {
     const map: Record<string, number> = {};
-    for (const c of comments) {
+    for (const c of [...comments, ...repliedComments]) {
       const key = toDateKey(c.created_at);
       map[key] = (map[key] || 0) + 1;
     }
     return map;
-  }, [comments]);
+  }, [comments, repliedComments]);
 
   const filteredComments = useMemo(() => {
-    if (filter === "replied") {
-      return repliedComments.filter(c => toDateKey(c.created_at) === selectedDateKey);
-    }
-    return comments.filter(c => toDateKey(c.created_at) === selectedDateKey);
+    const byDate = (arr: CommentItem[]) => arr.filter(c => toDateKey(c.created_at) === selectedDateKey);
+    if (filter === "unreplied") return byDate(comments);
+    if (filter === "replied")   return byDate(repliedComments);
+    return [...byDate(comments), ...byDate(repliedComments)]
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }, [comments, repliedComments, selectedDateKey, filter]);
 
   const selectedComment = [...comments, ...repliedComments].find(c => c.id === selectedId) ?? null;
@@ -212,8 +213,9 @@ export default function AutoReplyPage() {
   const todayDateKey = new Date().toISOString().slice(0, 10);
 
   /* ── Tab counts ── */
-  const countAll     = useMemo(() => comments.filter(c => toDateKey(c.created_at) === selectedDateKey).length, [comments, selectedDateKey]);
-  const countReplied = useMemo(() => repliedComments.filter(c => toDateKey(c.created_at) === selectedDateKey).length, [repliedComments, selectedDateKey]);
+  const countUnreplied = useMemo(() => comments.filter(c => toDateKey(c.created_at) === selectedDateKey).length, [comments, selectedDateKey]);
+  const countReplied   = useMemo(() => repliedComments.filter(c => toDateKey(c.created_at) === selectedDateKey).length, [repliedComments, selectedDateKey]);
+  const countAll       = countUnreplied + countReplied;
 
   /* ── Send AI reply ── */
   const handleSendAI = useCallback(async () => {
@@ -403,8 +405,9 @@ export default function AutoReplyPage() {
           }}
         >
           {([
-            { key: "all",     label: "All",     count: countAll },
-            { key: "replied", label: "Replied", count: countReplied },
+            { key: "all",       label: "All",       count: countAll },
+            { key: "unreplied", label: "Unreplied",  count: countUnreplied },
+            { key: "replied",   label: "Replied",   count: countReplied },
           ] as { key: typeof filter; label: string; count: number }[]).map(f => {
             const isActive = filter === f.key;
             return (
@@ -451,12 +454,14 @@ export default function AutoReplyPage() {
           <div className="flex flex-col items-center py-10 text-center">
             <span className="text-[24px] mb-2">💬</span>
             <p className="text-[12px] font-semibold" style={{ color: "var(--gv-color-neutral-600)" }}>
-              {filter === "replied" ? "No replied comments" : "No comments"}
+              {filter === "replied" ? "No replied comments" : filter === "unreplied" ? "No unreplied comments" : "No comments"}
             </p>
             <p className="text-[10px] mt-1" style={{ color: "var(--gv-color-neutral-400)" }}>
               {filter === "replied"
                 ? "Sent & skipped replies will appear here"
-                : selectedDateKey === todayDateKey ? "No comments today yet" : "No comments on this date"}
+                : filter === "unreplied"
+                ? (selectedDateKey === todayDateKey ? "All comments today have been replied to" : "No pending comments on this date")
+                : (selectedDateKey === todayDateKey ? "No comments today yet" : "No comments on this date")}
             </p>
           </div>
         ) : (
@@ -493,6 +498,17 @@ export default function AutoReplyPage() {
                       {item.urgency === "high" && (
                         <span className="text-[9px] font-bold rounded px-1.5 py-0.5 flex-shrink-0"
                           style={{ background: "#FEE2E2", color: "#DC2626" }}>!</span>
+                      )}
+                      {filter === "all" && (
+                        <span className="text-[9px] font-bold rounded px-1.5 py-0.5 flex-shrink-0" style={
+                          item.status === "sent"
+                            ? { background: "#DCFCE7", color: "#16A34A" }
+                            : item.status === "skipped" || item.is_resolved
+                            ? { background: "#F3F4F6", color: "#6B7280" }
+                            : { background: "#FEF3C7", color: "#D97706" }
+                        }>
+                          {item.status === "sent" ? "Replied" : item.status === "skipped" || item.is_resolved ? "Skipped" : "Unreplied"}
+                        </span>
                       )}
                     </div>
                     <p className="text-[11px] leading-relaxed line-clamp-2" style={{ color: "var(--gv-color-neutral-500)" }}>
