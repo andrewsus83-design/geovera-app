@@ -68,17 +68,17 @@ const QUOTA_FIELDS: Array<{ key: keyof PlanQuota; label: string; section: string
   { key: "ai_chat_messages_per_day",   label: "AI Chat messages / day",     section: "AI Chat" },
   { key: "suggested_prompts_per_day",  label: "Suggested prompts / day",    section: "AI Chat" },
   // Content
-  { key: "content_articles_per_month", label: "Articles / month",    section: "Content" },
-  { key: "content_images_per_month",   label: "Images / month",      section: "Content" },
-  { key: "content_videos_per_month",   label: "Videos / month",      section: "Content" },
+  { key: "content_articles_per_month", label: "Articles / day",    section: "Content" },
+  { key: "content_images_per_month",   label: "Images / day",      section: "Content" },
+  { key: "content_videos_per_month",   label: "Videos / day",      section: "Content" },
   // QA
   { key: "qa_tier",              label: "QA tier",               section: "QA", type: "select" },
   { key: "qa_runs_per_cycle",    label: "QA runs / biweek cycle", section: "QA" },
-  { key: "qa_probes_total",      label: "Total QA probes",        section: "QA" },
+  { key: "qa_probes_total",      label: "Total QA probes (URLs audited per cycle)", section: "QA" },
   // Report
   { key: "reports_per_month",    label: "Reports / month",        section: "Report" },
   // Reply / Chronicle
-  { key: "auto_reply_per_day",          label: "Auto replies / day",       section: "Reply" },
+  { key: "auto_reply_per_day",          label: "Auto replies / 5 min",     section: "Reply" },
   { key: "auto_publish_per_month",      label: "Auto publishes / month",   section: "Reply" },
   { key: "chronicle_runs_per_cycle",    label: "Chronicle runs / 14D",     section: "Chronicle" },
 ];
