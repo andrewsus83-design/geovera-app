@@ -5,6 +5,12 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+import {
+  getBrandContext,
+  buildBrandContextBlock,
+  buildBrandSignature,
+  buildChannelGoals,
+} from '../_shared/brandContext.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
@@ -192,16 +198,9 @@ Return comprehensive JSON with rankings and actionable insights.`;
 async function analyzeBrandOpportunities(brandId: string, categoryId: string) {
   console.log(`[Step 3.2] Analyzing opportunities for brand: ${brandId}`);
 
-  // Get brand details
-  const { data: brand, error: brandError } = await supabase
-    .from('gv_brands')
-    .select('*')
-    .eq('id', brandId)
-    .single();
-
-  if (brandError || !brand) {
-    throw new Error(`Failed to fetch brand: ${brandError?.message}`);
-  }
+  // Get full brand context (DNA, voice, chronicle, connections)
+  const ctx = await getBrandContext(supabase, brandId);
+  const brand = ctx.brand;
 
   // Get category analysis (from Step 3.1)
   const { data: categoryAnalysis, error: analysisError } = await supabase
@@ -230,8 +229,15 @@ async function analyzeBrandOpportunities(brandId: string, categoryId: string) {
   }
 
   // Perplexity: Brand-specific opportunity analysis
-  const opportunityPrompt = `Brand: ${brand.name}
-Industry: ${brand.industry || 'Not specified'}
+  const contextBlock = buildBrandContextBlock(ctx);
+  const signature    = buildBrandSignature(ctx);
+  const socialGoals  = buildChannelGoals(ctx, 'social');
+  const brandName    = brand.brand_name;
+
+  const opportunityPrompt = `${contextBlock}
+
+${socialGoals}
+
 Category: ${categoryId}
 
 I have:
@@ -240,7 +246,7 @@ I have:
 - Keyword opportunities: ${JSON.stringify(categoryAnalysis?.keyword_opportunities?.slice(0, 30))}
 - Competitive landscape: ${JSON.stringify(categoryAnalysis?.competitive_landscape)}
 
-YOUR TASK: Conduct deep research specific to "${brand.name}" and provide:
+YOUR TASK: Conduct deep research specific to "${brandName}" (${signature}) and provide:
 
 1. **COMPETITOR ANALYSIS** (Rank top 10 competitors):
    - Who are direct competitors in this space?
@@ -250,13 +256,13 @@ YOUR TASK: Conduct deep research specific to "${brand.name}" and provide:
    - Rank by threat level + market share
 
 2. **CREATOR FIT ANALYSIS** (Rank creators 1-${creators.length}):
-   - Which creators best fit "${brand.name}"?
+   - Which creators best fit "${brandName}"?
    - Match based on: audience fit, content themes, brand alignment, engagement
    - Score each creator 0-100 for brand fit
    - Rank by fit score
 
 3. **CONTENT OPPORTUNITIES** (Rank 1-50):
-   - What content angles should "${brand.name}" pursue?
+   - What content angles should "${brandName}" pursue?
    - What narratives resonate with target audience?
    - What trending topics align with brand values?
    - Rank by relevance + engagement potential
@@ -269,7 +275,7 @@ YOUR TASK: Conduct deep research specific to "${brand.name}" and provide:
    - Rank by ROI potential
 
 5. **KEYWORD STRATEGY** (Rank 1-100):
-   - What keywords should "${brand.name}" target?
+   - What keywords should "${brandName}" target?
    - SEO keywords for brand discovery
    - Social hashtags for visibility
    - Search queries potential customers use
@@ -278,7 +284,7 @@ YOUR TASK: Conduct deep research specific to "${brand.name}" and provide:
 6. **MARKET GAPS** (Prioritized list):
    - What opportunities are competitors missing?
    - What underserved audiences exist?
-   - What content gaps can "${brand.name}" fill?
+   - What content gaps can "${brandName}" fill?
    - What differentiation strategies are available?
 
 Return comprehensive JSON with all rankings and actionable strategies.`;
@@ -328,10 +334,10 @@ Return comprehensive JSON with all rankings and actionable strategies.`;
   return {
     success: true,
     brand_id: brandId,
-    brand_name: brand.name,
+    brand_name: brand.brand_name,
     opportunities: opportunities,
     cost: 0.05, // Perplexity API call
-    message: `Opportunities analyzed for ${brand.name}`,
+    message: `Opportunities analyzed for ${brand.brand_name}`,
   };
 }
 

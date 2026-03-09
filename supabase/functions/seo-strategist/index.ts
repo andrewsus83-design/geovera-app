@@ -12,6 +12,12 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  getBrandContext,
+  buildBrandContextBlock,
+  buildChannelGoals,
+  type BrandContext,
+} from "../_shared/brandContext.ts";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 const CF_ANTHROPIC      = Deno.env.get("CF_AI_GATEWAY_ANTHROPIC")!;  // CF cached
@@ -293,8 +299,13 @@ async function reverseEngineerWithClaude(
   domain:      string,
   keywords:    string[],
   clientData:  Awaited<ReturnType<typeof loadClientData>>,
-  competitors: Competitor[]
+  competitors: Competitor[],
+  ctx:         BrandContext | null
 ): Promise<Omit<SEOStrategy, "domain" | "clientId" | "competitors" | "cachedAt" | "expiresAt" | "source">> {
+
+  const brandContextSection = ctx
+    ? `\n${buildBrandContextBlock(ctx)}\n\n${buildChannelGoals(ctx, "seo")}\n`
+    : "";
 
   const competitorSection = competitors.map(c => `
 ### COMPETITOR: ${c.domain}
@@ -314,7 +325,7 @@ ${p.contentExcerpt}
 `).join("\n---\n");
 
   const prompt = `You are a world-class SEO strategist performing deep competitive reverse engineering.
-
+${brandContextSection}
 ## TARGET DOMAIN: ${domain}
 Target keywords: ${keywords.length ? keywords.join(", ") : "Not specified — infer from content"}
 
@@ -508,9 +519,12 @@ serve(async (req) => {
 
     console.log(`[seo-strategist] 🔄 Full reverse engineering: ${domain}`);
 
-    // ── Step 1: Load client's existing Supabase data ───────────────────────
+    // ── Step 1: Load client's existing Supabase data + brand context ──────
     console.log("[seo-strategist] Step 1: Loading client data...");
-    const clientData = await loadClientData(domain, clientId);
+    const [clientData, brandCtx] = await Promise.all([
+      loadClientData(domain, clientId),
+      getBrandContext(supabase, clientId).catch(() => null),
+    ]);
     console.log(`[seo-strategist] Found ${clientData.totalPages} pages, avg score ${clientData.avgScore}`);
 
     // ── Step 2: Perplexity finds competitors ───────────────────────────────
@@ -526,7 +540,7 @@ serve(async (req) => {
 
     // ── Step 4: Claude reverse engineering ────────────────────────────────
     console.log("[seo-strategist] Step 4: Claude reverse engineering...");
-    const strategy = await reverseEngineerWithClaude(domain, keywords, clientData, competitors);
+    const strategy = await reverseEngineerWithClaude(domain, keywords, clientData, competitors, brandCtx);
 
     const now     = new Date();
     const expires = new Date(now.getTime() + CACHE_TTL_DAYS * 86400000);

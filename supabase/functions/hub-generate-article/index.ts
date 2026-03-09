@@ -1,5 +1,10 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import {
+  getBrandContext,
+  buildBrandContextBlock,
+  buildVoiceGuardrails,
+} from "../_shared/brandContext.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -138,7 +143,9 @@ async function generateArticleWithOpenAI(
   topic: string,
   analysis: ContentAnalysis,
   articleType: string,
-  targetWords: number = 350
+  targetWords: number = 350,
+  brandContextBlock?: string,
+  voiceGuardrails?: string
 ): Promise<{ title: string; content: string; cost: number }> {
   if (!OPENAI_API_KEY) {
     throw new Error("OPENAI_API_KEY not set");
@@ -151,7 +158,10 @@ async function generateArticleWithOpenAI(
     nice_to_know: "Write in a conversational, insightful tone. Share surprising facts. Make it feel like insider knowledge.",
   };
 
-  const systemPrompt = `You are an expert content writer for Indonesian audiences.
+  const brandSection = brandContextBlock ? `\n\n${brandContextBlock}` : "";
+  const guardrailsSection = voiceGuardrails ? `\n\n${voiceGuardrails}` : "";
+
+  const systemPrompt = `You are an expert content writer for Indonesian audiences.${brandSection}
 
 Write a ${targetWords}-word article about: ${topic}
 
@@ -171,7 +181,7 @@ Structure:
 4. Conclusion (1-2 sentences)
 
 Key insights to incorporate: ${analysis.key_insights.join(", ")}
-
+${guardrailsSection}
 Return ONLY valid JSON:
 {
   "title": "Article title (5-10 words)",
@@ -283,6 +293,24 @@ async function generateArticle(
 
   let totalCost = 0;
 
+  // Step 0: Load brand context from collection
+  let brandContextBlock: string | undefined;
+  let voiceGuardrails: string | undefined;
+  try {
+    const { data: collection } = await supabase
+      .from("gv_hub_collections")
+      .select("brand_id")
+      .eq("id", collectionId)
+      .maybeSingle();
+    if (collection?.brand_id) {
+      const ctx = await getBrandContext(supabase, collection.brand_id);
+      brandContextBlock = buildBrandContextBlock(ctx);
+      voiceGuardrails   = buildVoiceGuardrails(ctx) || undefined;
+    }
+  } catch (e) {
+    console.warn("[hub-generate-article] Could not load brand context:", e);
+  }
+
   // Step 1: Fetch content
   const { data: contents, error } = await supabase
     .from("gv_creator_content")
@@ -300,13 +328,15 @@ async function generateArticle(
   totalCost += claudeCost;
   console.log(`Claude analysis complete. Cost: $${claudeCost.toFixed(4)}`);
 
-  // Step 3: Generate article with OpenAI
+  // Step 3: Generate article with OpenAI (brand-aware)
   const topic = analysis.themes[0] || "Indonesian Social Media Trends";
   const { title, content, cost: openaiCost } = await generateArticleWithOpenAI(
     topic,
     analysis,
     articleType,
-    targetWords
+    targetWords,
+    brandContextBlock,
+    voiceGuardrails
   );
   totalCost += openaiCost;
   console.log(`OpenAI generation complete. Cost: $${openaiCost.toFixed(4)}`);

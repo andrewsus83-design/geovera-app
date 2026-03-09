@@ -3,6 +3,12 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+import {
+  getBrandContext,
+  buildBrandContextBlock,
+  buildChannelGoals,
+  buildVoiceGuardrails,
+} from '../_shared/brandContext.ts';
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') || '';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
@@ -18,17 +24,14 @@ serve(async (req) => {
       throw new Error('brand_id, topic, and rank_one_competitor required');
     }
 
-    // Get brand details
-    const { data: brand } = await supabase
-      .from('gv_brands')
-      .select('name, website, industry')
-      .eq('id', brand_id)
-      .single();
-
-    if (!brand) throw new Error('Brand not found');
+    // Get full brand context (DNA, voice, chronicle, connections)
+    const ctx = await getBrandContext(supabase, brand_id);
+    if (ctx.brand.brand_name === 'Unknown Brand') {
+      throw new Error('Brand not found');
+    }
 
     // Reverse engineer the #1 competitor
-    const analysis = await reverseEngineer(topic, rank_one_competitor, brand);
+    const analysis = await reverseEngineer(topic, rank_one_competitor, ctx);
 
     // Save analysis
     await supabase.from('gv_geo_reverse_engineering').insert({
@@ -53,13 +56,21 @@ serve(async (req) => {
   }
 });
 
-async function reverseEngineer(topic: string, competitor: string, brand: any) {
+async function reverseEngineer(
+  topic: string,
+  competitor: string,
+  ctx: Awaited<ReturnType<typeof getBrandContext>>
+) {
+  const brandName    = ctx.brand.brand_name;
+  const contextBlock = buildBrandContextBlock(ctx);
+  const geoGoals     = buildChannelGoals(ctx, 'geo');
+  const guardrails   = buildVoiceGuardrails(ctx);
+
   const prompt = `You are an expert SEO and GEO strategist. Reverse engineer HOW "${competitor}" achieved rank #1 for the topic "${topic}".
 
-**Brand Context**:
-- Name: ${brand.name}
-- Website: ${brand.website}
-- Industry: ${brand.industry}
+${contextBlock}
+
+${geoGoals}
 
 **Your Task**:
 Analyze in extreme detail:
@@ -100,15 +111,15 @@ Analyze in extreme detail:
    - Credibility signals (studies, statistics, sources)
 
 6. **Competitive Advantages**:
-   - What do they have that ${brand.name} doesn't?
+   - What do they have that ${brandName} doesn't?
    - Unique value propositions
    - First-mover advantages
    - Strategic partnerships
-
+${guardrails ? `\n${guardrails}\n` : ''}
 **CRITICAL**: For each factor, provide:
 - Current state analysis of competitor
-- Gap analysis vs ${brand.name}
-- SPECIFIC, ACTIONABLE steps ${brand.name} must take
+- Gap analysis vs ${brandName}
+- SPECIFIC, ACTIONABLE steps ${brandName} must take
 - Priority level (Critical/High/Medium/Low)
 - Estimated timeline to implement
 - Expected impact on rankings
@@ -131,8 +142,7 @@ Return comprehensive JSON with:
       "resources_needed": ["List of resources"],
       "estimated_cost": "$X-Y",
       "success_metrics": ["How to measure success"]
-    },
-    ...
+    }
   ],
   "quick_wins": ["3-5 actions with immediate impact"],
   "long_term_strategy": "Overall strategic direction"
@@ -166,9 +176,9 @@ Return comprehensive JSON with:
 
   // Add metadata
   analysis.analyzed_at = new Date().toISOString();
-  analysis.competitor = competitor;
-  analysis.topic = topic;
-  analysis.model_used = 'claude-3-5-sonnet';
+  analysis.competitor   = competitor;
+  analysis.topic        = topic;
+  analysis.model_used   = 'claude-3-5-sonnet';
 
   console.log(`[Reverse Engineering] Completed for ${competitor} on topic: ${topic}`);
 
