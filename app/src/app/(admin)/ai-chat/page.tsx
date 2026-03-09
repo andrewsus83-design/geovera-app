@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import NavColumn from "@/components/shared/NavColumn";
 import ThreeColumnLayout from "@/components/shared/ThreeColumnLayout";
 import { supabase } from "@/lib/supabase";
+import { useUserQuota } from "@/hooks/useUserQuota";
+import FeatureGate from "@/components/shared/FeatureGate";
 
 /* ══════════════════════════════════════════════════════════════════════
    GeoVera AI Chat — DS v7.0
@@ -104,18 +106,6 @@ const MODES: Record<ChatMode, {
   },
 };
 
-const TIER_CONFIG: Record<string, { dailyCap: number; suggestedCount: number; label: string }> = {
-  partner:   { dailyCap: 1.20, suggestedCount: 20, label: "Partner"   },
-  premium:   { dailyCap: 0.80, suggestedCount: 10, label: "Premium"   },
-  basic:     { dailyCap: 0.30, suggestedCount: 5,  label: "Basic"     },
-  essential: { dailyCap: 0.30, suggestedCount: 5,  label: "Essential" },
-  starter:   { dailyCap: 0.15, suggestedCount: 3,  label: "Starter"   },
-  free:      { dailyCap: 0.10, suggestedCount: 3,  label: "Free"      },
-};
-
-function getTierConfig(tier: string | null) {
-  return TIER_CONFIG[tier ?? "basic"] ?? TIER_CONFIG.basic;
-}
 
 function fmtCost(usd: number) {
   return usd < 0.01 ? `$${(usd * 100).toFixed(3)}¢` : `$${usd.toFixed(4)}`;
@@ -219,6 +209,7 @@ function SuggestedChip({
 
 export default function AIChatPage() {
   const router = useRouter();
+  const { quota, loading: quotaLoading } = useUserQuota();
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [brand,           setBrand]           = useState<BrandInfo | null>(null);
@@ -239,10 +230,12 @@ export default function AIChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef       = useRef<HTMLTextAreaElement>(null);
 
-  const tierConfig = getTierConfig(brand?.subscription_tier ?? null);
-  const capRemain  = Math.max(0, tierConfig.dailyCap - dailySpend);
-  const capPct     = Math.min(100, (dailySpend / tierConfig.dailyCap) * 100);
-  const capColor   = capPct >= 90 ? "#EF4444" : capPct >= 70 ? "#F59E0B" : "#5F8F8B";
+  // Daily message limit from plan_quotas (replaces cost-based cap)
+  const dailyMsgLimit = quota.ai_chat_messages_per_day;
+  const suggestedCount = quota.suggested_prompts_per_day;
+  const capRemain  = Math.max(0, dailyMsgLimit);
+  const capPct     = 0; // cost tracking removed; use message count from usage tracking
+  const capColor   = "#5F8F8B";
 
   // ── Init ───────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -303,11 +296,11 @@ export default function AIChatPage() {
 
       if (data && data.length > 0) {
         const shuffled = shuffle(data as SuggestedPrompt[]);
-        setSuggested(shuffled.slice(0, tierConfig.suggestedCount));
+        setSuggested(shuffled.slice(0, suggestedCount));
       }
     }
     loadSuggested();
-  }, [brand, tierConfig.suggestedCount]);
+  }, [brand, suggestedCount]);
 
   // ── Daily spend check ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -516,7 +509,7 @@ export default function AIChatPage() {
             >
               <div className="flex flex-col items-end gap-0.5">
                 <span className="text-[10px] font-semibold" style={{ color: capColor }}>
-                  {fmtCost(capRemain)} left
+                  {capRemain} msg left
                 </span>
                 <div className="w-20 h-1 rounded-full overflow-hidden" style={{ background: "var(--gv-color-neutral-200)" }}>
                   <div
@@ -591,7 +584,7 @@ export default function AIChatPage() {
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-wide mb-3"
                   style={{ color: "var(--gv-color-neutral-400)" }}>
-                  Suggested for you · {tierConfig.label}
+                  Suggested for you · {quota.plan_name}
                 </p>
                 <div className="flex flex-col gap-2">
                   {suggested.map((p, i) => (
@@ -645,7 +638,7 @@ export default function AIChatPage() {
             className="mb-3 px-4 py-2.5 rounded-[12px] text-[12px] font-medium text-center"
             style={{ background: "var(--gv-color-danger-50)", color: "var(--gv-color-danger-700)", border: "1px solid #FECACA" }}
           >
-            Daily limit reached ({tierConfig.label}: {fmtCost(tierConfig.dailyCap)}/day). Resets at midnight.
+            Batas harian tercapai ({quota.plan_name}: {dailyMsgLimit} pesan/hari). Reset tengah malam.
           </div>
         )}
 
@@ -765,7 +758,7 @@ export default function AIChatPage() {
                   Daily budget
                 </span>
                 <span className="text-[10px] font-semibold" style={{ color: capColor }}>
-                  {fmtCost(dailySpend)} / {fmtCost(tierConfig.dailyCap)}
+                  {dailyMsgLimit} pesan/hari
                 </span>
               </div>
               <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: "var(--gv-color-neutral-200)" }}>
@@ -856,6 +849,16 @@ export default function AIChatPage() {
       )}
     </div>
   );
+
+  if (!quotaLoading && !quota.feature_ai_chat_enabled) {
+    return (
+      <ThreeColumnLayout left={<NavColumn />} center={
+        <FeatureGate enabled={false} featureName="AI Chat">
+          <div style={{ height: 400 }} />
+        </FeatureGate>
+      } right={<div />} />
+    );
+  }
 
   return (
     <ThreeColumnLayout

@@ -9,17 +9,11 @@ import {
   BrandIcon, BoxTapped, CreatorIcon, FolderIcon, AnimationIcon,
 } from "@/icons";
 import VisualPipelineWizard from "@/components/studio/VisualPipelineWizard";
+import { useUserQuota } from "@/hooks/useUserQuota";
+import FeatureGate from "@/components/shared/FeatureGate";
 
 const FALLBACK_BRAND_ID =
   process.env.NEXT_PUBLIC_DEMO_BRAND_ID || "a37dee82-5ed5-4ba4-991a-4d93dde9ff7a";
-
-// ── Constants ─────────────────────────────────────────────────────────────────
-const IMAGE_DAILY_LIMITS: Record<string, number> = { basic: 10, premium: 15, partner: 30 };
-const VIDEO_DAILY_LIMITS: Record<string, number> = { basic: 0, premium: 1, partner: 2 };
-const VIDEO_MAX_DURATION: Record<string, number> = { basic: 0, premium: 10, partner: 25 };
-const TRAINING_LIMITS: Record<string, number>    = { basic: 5, premium: 10, partner: 20 };
-// All paid tiers: 1 avatar video/week (60s via HeyGen)
-const VIDEO_AVATAR_WEEKLY: Record<string, number> = { basic: 0, premium: 0, partner: 1 };
 
 const VIDEO_TOPICS = [
   { id: "podcast",        label: "🎙️ Podcast",               desc: "Conversational, interview style" },
@@ -266,14 +260,14 @@ function GeneratingPopup({ onClose }: { onClose: () => void }) {
 // TRAINING WIZARD
 // ══════════════════════════════════════════════════════════════════════════════
 function TrainingWizard({
-  brandId, trainingType, currentTier, totalModelCount, pastDatasets, onDone,
+  brandId, trainingType, trainingLimit, totalModelCount, pastDatasets, onDone,
 }: {
   brandId: string; trainingType: "product" | "character";
-  currentTier: string; totalModelCount: number;
+  trainingLimit: number; totalModelCount: number;
   pastDatasets: TrainedModel[];
   onDone: (m: TrainedModel) => void;
 }) {
-  const limit = TRAINING_LIMITS[currentTier] ?? 5;
+  const limit = trainingLimit;
   const atLimit = totalModelCount >= limit;
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -426,7 +420,7 @@ function TrainingWizard({
         <p className="text-2xl mb-2">⚠️</p>
         <p className="text-sm font-semibold" style={{ color: "var(--gv-color-warning-700)" }}>Training Quota Reached</p>
         <p className="text-xs mt-1" style={{ color: "var(--gv-color-warning-700)" }}>
-          {currentTier} plan: max {limit} trained models. Upgrade to train more.
+          Max {limit} trained models on your current plan. Upgrade to train more.
         </p>
       </div>
     );
@@ -631,13 +625,13 @@ function TrainingWizard({
 // GENERATE IMAGE WIZARD
 // ══════════════════════════════════════════════════════════════════════════════
 function GenerateImageWizard({
-  brandId, currentTier, imagesUsedToday, trainedModels, onResult, onUsed, onGenerateStart,
+  brandId, imageLimit, imagesUsedToday, trainedModels, onResult, onUsed, onGenerateStart,
 }: {
-  brandId: string; currentTier: string; imagesUsedToday: number;
+  brandId: string; imageLimit: number; imagesUsedToday: number;
   trainedModels: TrainedModel[]; onResult: (img: GeneratedImage) => void; onUsed: () => void;
   onGenerateStart?: () => void;
 }) {
-  const limit = IMAGE_DAILY_LIMITS[currentTier] ?? 3;
+  const limit = imageLimit;
   const atLimit = imagesUsedToday >= limit;
 
   const [step, setStep] = useState<1 | 2>(1);
@@ -881,18 +875,19 @@ function GenerateImageWizard({
 // GENERATE VIDEO WIZARD
 // ══════════════════════════════════════════════════════════════════════════════
 function GenerateVideoWizard({
-  brandId, currentTier, videosUsedToday, avatarsUsedThisWeek, trainedModels, historyImages, onResult, onUsed, onGenerateStart,
+  brandId, videoLimit, videoMaxDuration, videoAvatarWeeklyLimit, videosUsedToday, avatarsUsedThisWeek, trainedModels, historyImages, onResult, onUsed, onGenerateStart,
 }: {
-  brandId: string; currentTier: string; videosUsedToday: number; avatarsUsedThisWeek: number;
+  brandId: string; videoLimit: number; videoMaxDuration: number; videoAvatarWeeklyLimit: number;
+  videosUsedToday: number; avatarsUsedThisWeek: number;
   trainedModels: TrainedModel[]; historyImages: GeneratedImage[];
   onResult: (v: GeneratedVideo) => void; onUsed: () => void;
   onGenerateStart?: () => void;
 }) {
-  const isPartner = currentTier === "partner";
-  const avatarWeeklyLimit = VIDEO_AVATAR_WEEKLY[currentTier] ?? 0;
+  const isPartner = videoAvatarWeeklyLimit > 0;
+  const avatarWeeklyLimit = videoAvatarWeeklyLimit;
 
-  const limit = VIDEO_DAILY_LIMITS[currentTier] ?? 1;
-  const maxDuration = VIDEO_MAX_DURATION[currentTier] ?? 8;
+  const limit = videoLimit;
+  const maxDuration = videoMaxDuration;
   const atLimit = videosUsedToday >= limit;
   const atAvatarLimit = avatarsUsedThisWeek >= avatarWeeklyLimit;
 
@@ -1264,7 +1259,7 @@ function GenerateVideoWizard({
                   <span className="text-[9px]" style={{ color: "var(--gv-color-neutral-400)" }}>1s</span>
                   <span className="text-[9px]" style={{ color: "var(--gv-color-neutral-400)" }}>{maxDuration}s max</span>
                 </div>
-                {currentTier !== "partner" && <p className="text-[9px] mt-0.5" style={{ color: "var(--gv-color-neutral-400)" }}>{currentTier === "basic" ? "Upgrade for up to 25s" : "Partner: up to 25s"}</p>}
+                {maxDuration < 25 && <p className="text-[9px] mt-0.5" style={{ color: "var(--gv-color-neutral-400)" }}>Upgrade for up to 25s</p>}
               </div>
               <div>
                 <label className="text-xs font-medium mb-1 block" style={{ color: "var(--gv-color-neutral-500)" }}>Aspect Ratio</label>
@@ -1967,8 +1962,8 @@ function HistoryRight({ brandId, historyKey, activeSection, onSelect }: {
 // MAIN PAGE
 // ══════════════════════════════════════════════════════════════════════════════
 export default function ContentStudioPage() {
+  const { quota, loading: quotaLoading } = useUserQuota();
   const [brandId, setBrandId] = useState(FALLBACK_BRAND_ID);
-  const [currentTier, setCurrentTier] = useState("basic");
   const [activeSection, setActiveSection] = useState<StudioSection>("visual_pipeline");
   const [assetSubSection, setAssetSubSection] = useState<AssetSubSection | null>(null);
   const [trainedModels, setTrainedModels] = useState<TrainedModel[]>([]);
@@ -1989,14 +1984,8 @@ export default function ContentStudioPage() {
     });
   }, []);
 
-  // Subscription tier
-  useEffect(() => {
-    if (!brandId) return;
-    fetch("/api/payment", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "get_subscription", brand_id: brandId }),
-    }).then((r) => r.json()).then((d) => { if (d?.subscription?.plan) setCurrentTier(d.subscription.plan); });
-  }, [brandId]);
+  // currentTier is now derived from plan_quotas via useUserQuota
+  const currentTier = quota.plan_name;
 
   // Daily usage
   const refreshUsage = useCallback(() => {
@@ -2047,7 +2036,7 @@ export default function ContentStudioPage() {
       case "generate_image":
         return (
           <GenerateImageWizard
-            brandId={brandId} currentTier={currentTier} imagesUsedToday={imagesUsedToday}
+            brandId={brandId} imageLimit={quota.content_images_per_month} imagesUsedToday={imagesUsedToday}
             trainedModels={completedModels}
             onResult={(img) => { setHistoryImages((p) => [img, ...p]); setHistoryKey((k) => k + 1); }}
             onUsed={() => setImagesUsedToday((c) => c + 1)}
@@ -2057,7 +2046,11 @@ export default function ContentStudioPage() {
       case "generate_video":
         return (
           <GenerateVideoWizard
-            brandId={brandId} currentTier={currentTier} videosUsedToday={videosUsedToday}
+            brandId={brandId}
+            videoLimit={quota.content_videos_per_month}
+            videoMaxDuration={quota.content_videos_per_month > 0 ? 25 : 0}
+            videoAvatarWeeklyLimit={0}
+            videosUsedToday={videosUsedToday}
             avatarsUsedThisWeek={avatarsUsedThisWeek}
             trainedModels={completedModels} historyImages={historyImages}
             onResult={() => setHistoryKey((k) => k + 1)}
@@ -2118,7 +2111,7 @@ export default function ContentStudioPage() {
             <TrainingWizard
               brandId={brandId}
               trainingType={assetSubSection === "product" ? "product" : "character"}
-              currentTier={currentTier}
+              trainingLimit={quota.onboarding_runs_limit}
               totalModelCount={totalModelCount}
               pastDatasets={trainedModels}
               onDone={(m) => { setTrainedModels((p) => [...p, m]); setHistoryKey((k) => k + 1); }}
@@ -2134,6 +2127,7 @@ export default function ContentStudioPage() {
   const activeTabLabel = STUDIO_TABS.find((t) => t.id === activeSection)?.label ?? "Studio";
 
   return (
+    <FeatureGate enabled={quotaLoading || quota.feature_content_enabled} featureName="Content Studio">
     <div className="flex flex-col h-full">
       {/* ── Three-column layout — shrinks to fit above nav ── */}
       <div className="flex-1 min-h-0">
@@ -2213,5 +2207,6 @@ export default function ContentStudioPage() {
       {/* Generating popup */}
       {showGeneratingPopup && <GeneratingPopup onClose={() => setShowGeneratingPopup(false)} />}
     </div>
+    </FeatureGate>
   );
 }

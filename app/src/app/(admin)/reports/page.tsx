@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useCallback } from "react";
 import NavColumn from "@/components/shared/NavColumn";
 import { supabase } from "@/lib/supabase";
+import { useUserQuota } from "@/hooks/useUserQuota";
+import FeatureGate from "@/components/shared/FeatureGate";
 
 const BRAND_ID = process.env.NEXT_PUBLIC_brandId || "a37dee82-5ed5-4ba4-991a-4d93dde9ff7a";
 
@@ -38,6 +40,7 @@ interface BiweeklyBrief {
 }
 
 export default function ReportsPage() {
+  const { quota, loading: quotaLoading } = useUserQuota();
   const [reports, setReports] = useState<Report[]>([]);
   const [briefs, setBriefs] = useState<BiweeklyBrief[]>([]);
   const [selected, setSelected] = useState<Report | null>(null);
@@ -104,6 +107,7 @@ export default function ReportsPage() {
   };
 
   return (
+    <FeatureGate enabled={quotaLoading || quota.feature_report_enabled} featureName="Reports">
     <div className="flex h-full overflow-hidden" style={{ background: "var(--gv-color-bg-base)" }}>
       <div className="hidden lg:block flex-shrink-0 w-[88px]"><NavColumn /></div>
       <div className="hidden lg:block flex-shrink-0 w-4" />
@@ -427,5 +431,6 @@ export default function ReportsPage() {
 
       <div className="hidden lg:block flex-shrink-0 w-4" />
     </div>
+    </FeatureGate>
   );
 }
