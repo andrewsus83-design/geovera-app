@@ -58,7 +58,7 @@ export default function BackendLayout({ children }: { children: React.ReactNode 
 
       const isAdminByEmail = session.user.email === "andrewsus83@gmail.com";
       if (!profile?.is_admin && !isAdminByEmail) { router.replace("/getting-started"); return; }
-      setAdminName(profile.full_name || session.user.email || "Admin");
+      setAdminName(profile?.full_name || session.user.email || "Admin");
       setChecking(false);
     }
     check();
