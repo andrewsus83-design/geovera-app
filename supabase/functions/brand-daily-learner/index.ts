@@ -330,7 +330,44 @@ REQUIREMENTS:
     const tasks = (dailyInsights.tasks as unknown[]) ?? [];
     const suggestedPrompts = (dailyInsights.suggested_prompts as unknown[]) ?? [];
     const contentPlan = (dailyInsights.content_plan as Record<string, unknown>)?.this_week as unknown[] ?? [];
-    const presenceScore = (dailyInsights.brand_presence_analytics as Record<string, unknown>)?.overall_score ?? 0;
+
+    // Use qa_score from qa_analytics when available (measured data > inference)
+    const qaScore = qaData ? (qaData.analysis as Record<string, unknown>)?.qa_score as Record<string, unknown> : null;
+    const presenceAnalytics = dailyInsights.brand_presence_analytics as Record<string, unknown> ?? {};
+    const presenceScore = qaScore
+      ? Number((qaScore.overall as number) ?? presenceAnalytics.overall_score ?? 0)
+      : Number(presenceAnalytics.overall_score ?? 0);
+
+    // Append to brand_analytics_history (trend tracking — one row per 72H run)
+    const seoA = (presenceAnalytics.seo as Record<string, unknown>) ?? {};
+    const geoA = (presenceAnalytics.geo as Record<string, unknown>) ?? {};
+    const socialA = (presenceAnalytics.social_search as Record<string, unknown>) ?? {};
+    const geoScoreH = (qaScore?.geo as Record<string, unknown>) ?? {};
+    const socialScoreH = (qaScore?.social_search as Record<string, unknown>) ?? {};
+    const seoScoreH = (qaScore?.seo as Record<string, unknown>) ?? {};
+
+    supabase.from("brand_analytics_history").insert({
+      brand_profile_id,
+      user_id,
+      recorded_at: new Date().toISOString(),
+      overall_score: presenceScore,
+      seo_visibility: Number(qaScore ? (seoScoreH.visibility ?? seoA.visibility_score) : seoA.visibility_score ?? 0),
+      seo_discovery: Number(qaScore ? (seoScoreH.discovery ?? seoA.discovery_score) : seoA.discovery_score ?? 0),
+      seo_authority: Number(qaScore ? (seoScoreH.authority ?? seoA.authority_score) : seoA.authority_score ?? 0),
+      geo_visibility: Number(qaScore ? (geoScoreH.visibility ?? geoA.visibility_score) : geoA.visibility_score ?? 0),
+      geo_discovery: Number(qaScore ? (geoScoreH.discovery ?? geoA.discovery_score) : geoA.discovery_score ?? 0),
+      geo_authority: Number(qaScore ? (geoScoreH.authority ?? geoA.authority_score) : geoA.authority_score ?? 0),
+      social_visibility: Number(qaScore ? (socialScoreH.visibility ?? socialA.visibility_score) : socialA.visibility_score ?? 0),
+      social_discovery: Number(qaScore ? (socialScoreH.discovery ?? socialA.discovery_score) : socialA.discovery_score ?? 0),
+      social_authority: Number(qaScore ? (socialScoreH.authority ?? socialA.authority_score) : socialA.authority_score ?? 0),
+      qa_score: qaScore ? Number(qaScore.overall ?? 0) : null,
+      tasks_generated: tasks.length,
+      content_items: contentPlan.length,
+      suggested_prompts: suggestedPrompts.length,
+      weekly_focus: String(dailyInsights.weekly_focus ?? ""),
+      top_keywords: (presenceAnalytics.seo as Record<string, unknown>)?.top_ranking_keywords as string[] ?? [],
+      top_topics: (presenceAnalytics.seo as Record<string, unknown>)?.top_topics as string[] ?? [],
+    }).catch((e: Error) => console.warn(`[brand-learner] analytics history insert failed (non-fatal): ${e.message}`));
 
     console.log(`[brand-learner] Done: ${profile.brand_name} — ${tasks.length} tasks, ${suggestedPrompts.length} prompts, ${contentPlan.length} content items, presence score: ${presenceScore}`);
 

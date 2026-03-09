@@ -13,8 +13,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
    Vector ID format: {research_hash}_{brand_profile_id}
    → unique per brand per biweek; safe to re-upsert (idempotent)
 
-   Embedding model: @cf/baai/bge-base-en-v1.5 (768 dimensions)
+   Embedding model: @cf/baai/bge-m3 (1024 dimensions, multilingual: 100+ languages incl. Indonesian)
    Index dimensions must match — index is auto-created on first run.
+   Index name: geovera-brand-intelligence-v2 (v2 due to dimension change from 768 → 1024)
 
    Loop learning: each biweekly refresh adds a new vector, so Vectorize
    accumulates the brand's evolution history. Query by namespace to get
@@ -25,9 +26,9 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const CF_ACCOUNT_ID = Deno.env.get("CLOUDFLARE_ACCOUNT_ID")!;
 const CF_API_TOKEN = Deno.env.get("CLOUDFLARE_API_TOKEN")!;
-const CF_INDEX_NAME = Deno.env.get("CLOUDFLARE_VECTORIZE_INDEX") || "geovera-brand-intelligence";
-const CF_AI_MODEL = "@cf/baai/bge-base-en-v1.5";
-const VECTOR_DIMENSIONS = 768;
+const CF_INDEX_NAME = Deno.env.get("CLOUDFLARE_VECTORIZE_INDEX") || "geovera-brand-intelligence-v2";
+const CF_AI_MODEL = "@cf/baai/bge-m3"; // Multilingual: 100+ languages incl. Indonesian, 1024 dims
+const VECTOR_DIMENSIONS = 1024;
 
 const CF_BASE = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}`;
 const CF_HEADERS = {

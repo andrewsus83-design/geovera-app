@@ -178,6 +178,10 @@ Deno.serve(async (req: Request) => {
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
+  // Declare outside try so error handler can reference them
+  let brand_profile_id = "";
+  let _user_id = "";
+
   try {
     const body = await req.json() as {
       brand_profile_id: string;
@@ -186,7 +190,9 @@ Deno.serve(async (req: Request) => {
       source?: string;
     };
 
-    const { brand_profile_id, user_id, partial = false, source = "unknown" } = body;
+    const { brand_profile_id: bpId, user_id, partial = false, source = "unknown" } = body;
+    brand_profile_id = bpId;
+    _user_id = user_id;
 
     if (!brand_profile_id || !user_id) {
       return new Response(JSON.stringify({ error: "brand_profile_id and user_id required" }), {
@@ -228,10 +234,21 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Update status to consolidating
-    await supabase.from("brand_profiles")
+    // Optimistic lock: only update to 'consolidating' if NOT already consolidating
+    // This prevents race conditions when multiple research tools finish simultaneously
+    const { data: lockAcquired } = await supabase
+      .from("brand_profiles")
       .update({ research_status: "consolidating" })
-      .eq("id", brand_profile_id);
+      .eq("id", brand_profile_id)
+      .neq("research_status", "consolidating")
+      .select("id");
+
+    if (!lockAcquired || lockAcquired.length === 0) {
+      console.log(`[brand-consolidator] ${profile.brand_name}: already consolidating — skipping concurrent run`);
+      return new Response(JSON.stringify({ success: true, skipped: true, reason: "already_consolidating" }), {
+        status: 200, headers: { "Content-Type": "application/json" },
+      });
+    }
 
     // Build research summary for Claude
     const researchSummary = summarizeResearchData(profile as unknown as Record<string, unknown>, sources);
@@ -445,6 +462,17 @@ OUTPUT this exact JSON structure (no other text):
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[brand-consolidator] ERROR: ${message}`);
+
+    // Update status to 'failed' with error details — enables dashboard visibility + manual retry
+    if (brand_profile_id) {
+      supabase.from("brand_profiles").update({
+        research_status: "failed",
+        error_details: { message, step: "brand-consolidator", timestamp: new Date().toISOString() },
+        error_at: new Date().toISOString(),
+        error_step: "brand-consolidator",
+      }).eq("id", brand_profile_id).catch(() => {});
+    }
+
     return new Response(JSON.stringify({ error: message }), {
       status: 500, headers: { "Content-Type": "application/json" },
     });
