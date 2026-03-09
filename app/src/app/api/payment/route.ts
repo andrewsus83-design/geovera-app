@@ -18,7 +18,10 @@ const ALLOWED_ACTIONS = new Set([
   "request_subscription",
   "get_subscription",
   "activate_free_tier",
+  "send_approval_email",
 ]);
+
+const ADMIN_ONLY_ACTIONS = new Set(["send_approval_email"]);
 
 export async function POST(request: NextRequest) {
   try {
@@ -45,6 +48,11 @@ export async function POST(request: NextRequest) {
         { error: "Invalid or missing action" },
         { status: 400, headers: cors }
       );
+    }
+
+    // Admin-only actions require the caller to be the admin account
+    if (ADMIN_ONLY_ACTIONS.has(body.action) && user.email !== "andrewsus83@gmail.com") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403, headers: cors });
     }
 
     // Override user_id with the server-verified value — never trust client-supplied ID
