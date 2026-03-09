@@ -71,8 +71,9 @@ export default function SignInForm() {
           .select("onboarding_completed, status")
           .eq("id", session.user.id)
           .single();
-        // Admin goes straight to backend
-        if (session.user.email === "andrewsus83@gmail.com") { router.push("/backend"); return; }
+        // Admin: only redirect to /backend if on backend domain
+        const isBackendDomain = typeof window !== "undefined" && window.location.hostname.includes("backend");
+        if (session.user.email === "andrewsus83@gmail.com" && isBackendDomain) { router.push("/backend"); return; }
         if (profile?.status === "active") { router.push("/getting-started"); return; }
         if (!profile?.onboarding_completed) { router.push("/onboarding"); return; }
       }
