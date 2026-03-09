@@ -933,6 +933,7 @@ function ImageVideoWizard({
     onGenerateStart?.();
     let artPrompt = topic || "professional commercial content";
     let negativePrompt = "blurry, low quality, watermark, text overlay";
+    let recommendedDuration = 32; // default 32s for video
 
     try {
       const promptRes = await studioFetch({
@@ -949,6 +950,9 @@ function ImageVideoWizard({
       if (promptRes.success && promptRes.prompt) {
         artPrompt = promptRes.prompt;
         negativePrompt = promptRes.negative_prompt ?? negativePrompt;
+        if (mediaMode === "video" && typeof promptRes.recommended_duration === "number") {
+          recommendedDuration = Math.min(64, Math.max(16, promptRes.recommended_duration));
+        }
       }
     } catch { /* use topic as fallback */ }
     setGeneratingPrompt(false);
@@ -956,11 +960,10 @@ function ImageVideoWizard({
 
     try {
       if (mediaMode === "image") {
-        // Generate batch of images with art-directed prompt
+        // Generate batch of images with art-directed prompt via Flux Schnell (Modal/fal.ai)
         const res = await studioFetch({
           action: "generate_image", brand_id: brandId,
           prompt: artPrompt, aspect_ratio: ratio,
-          model: "flux-schnell",
           batch_size: batchSize,
           score_with_claude: true,
         });
@@ -968,7 +971,7 @@ function ImageVideoWizard({
           const imgs: GeneratedImage[] = Array.isArray(res.images) ? res.images : [{
             id: res.db_id ?? Date.now().toString(), prompt_text: artPrompt,
             image_url: res.image_url, thumbnail_url: res.image_url,
-            status: res.status ?? "completed", ai_model: "flux-schnell",
+            status: res.status ?? "completed", ai_model: res.ai_model ?? "flux-schnell",
             target_platform: ratio === "9:16" ? "instagram" : ratio === "16:9" ? "youtube" : "instagram",
             style_preset: null, created_at: new Date().toISOString(),
           }];
@@ -976,9 +979,10 @@ function ImageVideoWizard({
           onUsed();
         } else { setError(res.error ?? "Image generation failed"); }
       } else {
+        // Generate video via Runway Gen 4 Turbo with Claude-determined duration (16-64s)
         const res = await studioFetch({
           action: "generate_video", brand_id: brandId,
-          prompt: artPrompt, duration: 8, aspect_ratio: ratio, model: "kling-v2", mode: "standard",
+          prompt: artPrompt, duration: recommendedDuration, aspect_ratio: ratio,
           ...(refs[0]?.url ? { image_url: refs[0].url } : {}),
         });
         if (res.success) {
@@ -1186,7 +1190,7 @@ function ImageVideoWizard({
               ) : mediaMode === "image" ? (
                 `🎨 Generate Images (${batchSize} candidates)`
               ) : (
-                "🎬 Generate Video"
+                "🎬 Generate Video (Runway Gen 4)"
               )}
             </button>
           </>

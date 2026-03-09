@@ -12,6 +12,14 @@ const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") ?? "";
 const HEYGEN_API_KEY = Deno.env.get("HEYGEN_API_KEY") ?? "";
 const HEYGEN_BASE = "https://api.heygen.com";
 
+// ── Runway Gen 4 Turbo (video generation) ────────────────────────────────────
+const RUNWAY_API_SECRET = Deno.env.get("RUNWAY_API_SECRET") ?? "";
+const RUNWAY_BASE = "https://api.runwayml.com";
+
+// ── fal.ai / Modal (Flux Schnell batch image generation) ─────────────────────
+const FAL_API_KEY = Deno.env.get("FAL_API_KEY") ?? "";
+const MODAL_FLUX_URL = Deno.env.get("MODAL_FLUX_SCHNELL_URL") ?? ""; // Custom Modal endpoint (optional)
+
 // Cloudflare Workers AI (Llama) — for training prompt engineering
 const CF_ACCOUNT_ID = Deno.env.get("CLOUDFLARE_ACCOUNT_ID") ?? "";
 const CF_API_TOKEN = Deno.env.get("CLOUDFLARE_API_TOKEN") ?? "";
@@ -39,6 +47,111 @@ async function kieGet(path: string) {
   const res = await fetch(`${KIE_BASE}${path}`, { headers: kieHeaders() });
   if (!res.ok) throw new Error(`KIE API error ${res.status}: ${await res.text()}`);
   return res.json();
+}
+
+// ── Runway Gen 4 Turbo helpers ────────────────────────────────────────────────
+function runwayHeaders() {
+  return {
+    "Authorization": `Bearer ${RUNWAY_API_SECRET}`,
+    "Content-Type": "application/json",
+    "X-Runway-Version": "2024-11-06",
+  };
+}
+
+async function runwayCreateTask(params: {
+  prompt: string; imageUrl?: string | null; duration: 5 | 10; ratio: string;
+}): Promise<{ id: string; status: string }> {
+  const body: Record<string, unknown> = {
+    model: "gen4_turbo",
+    promptText: params.prompt,
+    duration: params.duration,
+    ratio: params.ratio,
+  };
+  if (params.imageUrl) body.promptImage = params.imageUrl;
+  const path = params.imageUrl ? "/v1/image_to_video" : "/v1/text_to_video";
+  const res = await fetch(`${RUNWAY_BASE}${path}`, {
+    method: "POST", headers: runwayHeaders(), body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Runway API error ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
+async function runwayPollTask(taskId: string): Promise<{ status: string; video_url: string | null }> {
+  const res = await fetch(`${RUNWAY_BASE}/v1/tasks/${taskId}`, { headers: runwayHeaders() });
+  if (!res.ok) throw new Error(`Runway poll error ${res.status}`);
+  const d = await res.json();
+  const rawStatus = (d.status ?? "PENDING") as string;
+  return {
+    status: rawStatus === "SUCCEEDED" ? "completed" : rawStatus === "FAILED" ? "failed" : "processing",
+    video_url: d.output?.[0] ?? null,
+  };
+}
+
+// ── fal.ai Flux Schnell (batch image generation) ──────────────────────────────
+const FAL_RATIO_MAP: Record<string, string> = {
+  "1:1": "square_hd", "9:16": "portrait_16_9", "16:9": "landscape_16_9", "4:5": "portrait_4_3",
+};
+
+async function falFluxSchnell(prompt: string, aspectRatio: string, numImages: number): Promise<string[]> {
+  const imageSize = FAL_RATIO_MAP[aspectRatio] ?? "square_hd";
+  const res = await fetch("https://fal.run/fal-ai/flux/schnell", {
+    method: "POST",
+    headers: { "Authorization": `Key ${FAL_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt, image_size: imageSize, num_images: numImages, num_inference_steps: 4, enable_safety_checker: false }),
+  });
+  if (!res.ok) throw new Error(`fal.ai Flux error ${res.status}: ${await res.text()}`);
+  const d = await res.json();
+  return (d.images ?? []).map((img: { url: string }) => img.url).filter(Boolean);
+}
+
+async function modalFluxGenerate(prompt: string, aspectRatio: string, numImages: number): Promise<string[]> {
+  const res = await fetch(MODAL_FLUX_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt, aspect_ratio: aspectRatio, num_images: numImages }),
+  });
+  if (!res.ok) throw new Error(`Modal Flux error ${res.status}: ${await res.text()}`);
+  const d = await res.json();
+  if (Array.isArray(d.images)) return d.images.map((img: { url?: string } | string) => typeof img === "string" ? img : (img.url ?? "")).filter(Boolean);
+  if (Array.isArray(d.urls)) return d.urls;
+  if (d.url) return [d.url];
+  return [];
+}
+
+// ── Claude image scoring (returns top 15%) ────────────────────────────────────
+async function claudeScoreImages(imageUrls: string[], prompt: string, anthropicKey: string): Promise<string[]> {
+  if (imageUrls.length <= 1) return imageUrls;
+  const threshold = Math.max(1, Math.ceil(imageUrls.length * 0.15));
+  try {
+    const imageContent = imageUrls.flatMap((url, i) => ([
+      { type: "text" as const, text: `Image ${i + 1}:` },
+      { type: "image" as const, source: { type: "url" as const, url } },
+    ]));
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": anthropicKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 512,
+        messages: [{ role: "user", content: [
+          ...imageContent,
+          { type: "text", text: `Score each image 1-10: commercial quality, composition, clarity, relevance to "${prompt}". Return JSON only: {"scores":[n,n,...]}` },
+        ]}],
+      }),
+    });
+    if (!res.ok) return imageUrls.slice(0, threshold);
+    const d = await res.json();
+    const raw = d.content?.[0]?.text ?? "{}";
+    const match = raw.match(/\{[\s\S]*\}/);
+    const scores: number[] = match ? (JSON.parse(match[0]).scores ?? []) : [];
+    return imageUrls
+      .map((url, i) => ({ url, score: scores[i] ?? 5 }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, threshold)
+      .map(x => x.url);
+  } catch {
+    return imageUrls.slice(0, threshold);
+  }
 }
 
 // OpenAI Sora-2 — video generation for long durations (> 10s)
@@ -460,84 +573,151 @@ Return ONLY a valid JSON array of ${count} prompt strings. No explanation, no ma
 
     // ── GENERATE IMAGE ───────────────────────────────────────────────────────
     if (action === "generate_image") {
-      const { prompt, aspect_ratio = "1:1", model = "kie-flux", negative_prompt = "", lora_model = "" } = data;
+      const {
+        prompt, aspect_ratio = "1:1", negative_prompt = "",
+        batch_size = 1, score_with_claude = false, lora_model = "",
+      } = data;
       if (!prompt) return json({ error: "prompt is required" }, 400);
+      const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
+      const numImages = Math.min(Number(batch_size) || 1, 30);
 
-      const payload: Record<string, unknown> = { prompt, negative_prompt, aspect_ratio, model, num_images: 1 };
-      if (lora_model) payload.lora_model = lora_model;
+      let imageUrls: string[] = [];
+      let aiProvider = "kie";
+      let aiModel = "flux-schnell";
 
-      const kieRes = await kiePost("/image/generate", payload);
+      try {
+        if (MODAL_FLUX_URL) {
+          imageUrls = await modalFluxGenerate(String(prompt), String(aspect_ratio), numImages);
+          aiProvider = "modal"; aiModel = "flux-schnell-modal";
+        } else if (FAL_API_KEY) {
+          imageUrls = await falFluxSchnell(String(prompt), String(aspect_ratio), numImages);
+          aiProvider = "fal"; aiModel = "flux-schnell-fal";
+        } else {
+          const kieRes = await kiePost("/image/generate", {
+            prompt, negative_prompt, aspect_ratio, model: "flux-schnell",
+            num_images: 1, ...(lora_model ? { lora_model } : {}),
+          });
+          const url = kieRes.image_url ?? kieRes.url;
+          if (url) imageUrls = [url];
+          aiModel = kieRes.model ?? "flux-schnell";
+        }
+      } catch (e) {
+        console.error("Primary image provider failed, falling back to KIE:", e);
+        try {
+          const kieRes = await kiePost("/image/generate", { prompt, negative_prompt, aspect_ratio, model: "flux-schnell", num_images: 1 });
+          const url = kieRes.image_url ?? kieRes.url;
+          if (url) { imageUrls = [url]; aiProvider = "kie"; aiModel = "flux-schnell"; }
+        } catch (e2) { console.error("KIE fallback also failed:", e2); }
+      }
 
-      const { data: inserted, error: insertErr } = await supabase.from("gv_image_generations").insert({
-        brand_id,
-        prompt_text: prompt,
-        negative_prompt,
-        aspect_ratio,
-        ai_provider: "kie",
-        ai_model: kieRes.model ?? model,
-        image_url: kieRes.image_url ?? kieRes.url ?? null,
-        thumbnail_url: kieRes.thumbnail_url ?? null,
-        status: kieRes.status ?? "completed",
-        target_platform: data.platform ?? "instagram",
-        style_preset: lora_model || null,
-      }).select("id").single();
-      if (insertErr) console.error("generate_image DB insert failed:", insertErr.message);
+      if (imageUrls.length === 0) return json({ error: "Image generation failed — no images returned" }, 500);
+
+      // Claude scoring: top 15% of batch
+      let approvedUrls = imageUrls;
+      if (score_with_claude && imageUrls.length > 1 && ANTHROPIC_KEY) {
+        approvedUrls = await claudeScoreImages(imageUrls, String(prompt), ANTHROPIC_KEY);
+      }
+
+      // Save all approved images to DB
+      const platform = data.platform as string ?? (aspect_ratio === "9:16" ? "instagram" : aspect_ratio === "16:9" ? "youtube" : "instagram");
+      const savedImages = await Promise.all(approvedUrls.map(async (url) => {
+        const { data: ins } = await supabase.from("gv_image_generations").insert({
+          brand_id, prompt_text: prompt, negative_prompt, aspect_ratio,
+          ai_provider: aiProvider, ai_model: aiModel,
+          image_url: url, thumbnail_url: url, status: "completed",
+          target_platform: platform, style_preset: lora_model || null,
+        }).select("id").single();
+        return { id: ins?.id ?? null, prompt_text: prompt, image_url: url, thumbnail_url: url, status: "completed", ai_model: aiModel, target_platform: platform, style_preset: lora_model || null, created_at: new Date().toISOString() };
+      }));
 
       return json({
         success: true,
-        task_id: kieRes.task_id ?? kieRes.id ?? null,
-        image_url: kieRes.image_url ?? kieRes.url ?? null,
-        status: kieRes.status ?? "completed",
-        db_id: inserted?.id ?? null,
-        raw: kieRes,
+        images: savedImages,
+        image_url: savedImages[0]?.image_url ?? null,
+        db_id: savedImages[0]?.id ?? null,
+        status: "completed",
+        total_generated: imageUrls.length,
+        total_approved: approvedUrls.length,
       });
     }
 
-    // ── GENERATE VIDEO ───────────────────────────────────────────────────────
-    // Routing: duration > 10s → OpenAI Sora-2, otherwise → Kie API
+    // ── GENERATE VIDEO (Runway Gen 4 Turbo, 16–64s total via clips) ──────────
     if (action === "generate_video") {
-      const { prompt, duration = 8, aspect_ratio = "9:16", model = "kling-v1", image_url = "" } = data;
+      const { prompt, duration = 32, aspect_ratio = "9:16", image_url = "" } = data;
       if (!prompt) return json({ error: "prompt is required" }, 400);
 
-      const useOpenAI = Number(duration) > 10;
+      // Duration range: 16–64s as set by Claude's art direction
+      const totalDuration = Math.min(64, Math.max(16, Number(duration)));
+      const clipDuration = 10 as const; // Runway Gen 4 max per clip
+      const numClips = Math.max(1, Math.min(7, Math.ceil(totalDuration / clipDuration)));
+
+      // Map aspect ratio to Runway format
+      const ratioMap: Record<string, string> = { "9:16": "720:1280", "1:1": "1280:1280", "16:9": "1280:720" };
+      const runwayRatio = ratioMap[String(aspect_ratio)] ?? "720:1280";
+      const platform = data.platform as string ?? (aspect_ratio === "9:16" ? "tiktok" : "youtube");
+
       let task_id: string | null = null;
       let video_url: string | null = null;
       let status = "processing";
-      let ai_model = model;
+      let ai_model = "runway-gen4-turbo";
+      let generation_mode = "runway";
+      let extra_task_ids: string[] = [];
 
-      if (useOpenAI) {
-        // OpenAI Sora-2 for long-duration videos (11–25s)
-        const soraRes = await openAISoraGenerate(prompt, Number(duration), aspect_ratio);
-        task_id = soraRes.job_id;
-        status = soraRes.status;
-        ai_model = "sora-2";
+      if (RUNWAY_API_SECRET) {
+        try {
+          // Generate all clips in parallel (each up to 10s)
+          const tasks = await Promise.all(
+            Array.from({ length: numClips }, (_, i) => {
+              const clipPrompt = numClips === 1
+                ? String(prompt)
+                : `${prompt}, scene ${i + 1} of ${numClips}, smooth continuation`;
+              return runwayCreateTask({
+                prompt: clipPrompt,
+                imageUrl: i === 0 && image_url ? String(image_url) : null,
+                duration: clipDuration,
+                ratio: runwayRatio,
+              });
+            })
+          );
+          task_id = tasks[0].id;
+          extra_task_ids = tasks.slice(1).map(t => t.id);
+          status = "processing";
+        } catch (e) {
+          console.error("Runway generation failed, falling back to KIE:", e);
+          generation_mode = "kie"; ai_model = "kling-v2";
+          const kiePayload: Record<string, unknown> = { prompt, duration: 8, aspect_ratio, model: "kling-v2", mode: "standard" };
+          if (image_url) kiePayload.image_url = image_url;
+          const kieRes = await kiePost("/video/generate", kiePayload);
+          task_id = kieRes.task_id ?? kieRes.id ?? null;
+          video_url = kieRes.video_url ?? null;
+          status = kieRes.status ?? "processing";
+          ai_model = kieRes.model ?? "kling-v2";
+        }
       } else {
-        // Kie API for short videos (≤ 10s)
-        const payload: Record<string, unknown> = { prompt, duration, aspect_ratio, model, mode: data.mode ?? "standard" };
-        if (image_url) payload.image_url = image_url;
-        const kieRes = await kiePost("/video/generate", payload);
+        // KIE fallback when RUNWAY_API_SECRET not configured
+        generation_mode = "kie"; ai_model = "kling-v2";
+        const kiePayload: Record<string, unknown> = { prompt, duration: 8, aspect_ratio, model: "kling-v2", mode: "standard" };
+        if (image_url) kiePayload.image_url = image_url;
+        const kieRes = await kiePost("/video/generate", kiePayload);
         task_id = kieRes.task_id ?? kieRes.id ?? null;
         video_url = kieRes.video_url ?? null;
         status = kieRes.status ?? "processing";
-        ai_model = kieRes.model ?? model;
+        ai_model = kieRes.model ?? "kling-v2";
       }
 
       const { data: inserted, error: insertErr } = await supabase.from("gv_video_generations").insert({
-        brand_id,
-        target_platform: data.platform ?? "tiktok",
-        hook: prompt,
-        ai_model,
-        status,
-        generation_mode: useOpenAI ? "openai" : "kie",
-        runway_task_id: task_id,
-        video_url,
-        video_thumbnail_url: null,
-        video_aspect_ratio: aspect_ratio,
-        video_status: status,
+        brand_id, target_platform: platform, hook: prompt,
+        ai_model, status, generation_mode,
+        runway_task_id: task_id, video_url,
+        video_thumbnail_url: null, video_aspect_ratio: aspect_ratio, video_status: status,
+        metadata: extra_task_ids.length > 0 ? { extra_task_ids, num_clips: numClips, total_duration: totalDuration } : null,
       }).select("id").single();
       if (insertErr) console.error("generate_video DB insert failed:", insertErr.message);
 
-      return json({ success: true, task_id, video_url, status, db_id: inserted?.id ?? null });
+      return json({
+        success: true, task_id, extra_task_ids, num_clips: numClips, total_duration: totalDuration,
+        video_url, status, db_id: inserted?.id ?? null, ai_model,
+      });
     }
 
     // ── LIST HEYGEN AVATARS ───────────────────────────────────────────────────
@@ -644,11 +824,14 @@ Return ONLY a valid JSON array of ${count} prompt strings. No explanation, no ma
       let video_url: string | null = null;
       let thumbnail_url: string | null = null;
 
-      if (generation_mode === "openai") {
+      if (generation_mode === "runway") {
+        const pollRes = await runwayPollTask(String(task_id));
+        status = pollRes.status;
+        video_url = pollRes.video_url;
+      } else if (generation_mode === "openai") {
         const pollRes = await openAISoraPoll(String(task_id));
         status = pollRes.status;
         video_url = pollRes.video_url;
-        // Normalize OpenAI statuses
         if (status === "succeeded") status = "completed";
         if (status === "failed") status = "failed";
       } else if (generation_mode === "heygen") {
@@ -874,7 +1057,7 @@ Return ONLY the JSON, no explanation.`,
       const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
       if (!ANTHROPIC_API_KEY) return json({ error: "ANTHROPIC_API_KEY not configured" }, 500);
 
-      const generator = media_type === "video" ? "Kling AI v2 (best-in-class video generation model)" : "Flux 2 Pro (highest quality image generation model)";
+      const generator = media_type === "video" ? "Runway Gen 4 Turbo (cinematic AI video generation model)" : "Flux Schnell (ultra-fast, high-quality image generation model)";
       const ratioDesc = ratio === "9:16" ? "9:16 vertical (TikTok/Instagram Reels/Stories)" : ratio === "16:9" ? "16:9 horizontal (YouTube/Landscape)" : "1:1 square (Instagram Feed/LinkedIn)";
 
       const systemPrompt = `You are a world-class creative director, senior photographer, cinematographer, and AI prompt engineer.
@@ -907,13 +1090,15 @@ ${media_type === "image" ? `- Lighting setup (natural/studio/golden hour/dramati
 - Lighting and atmosphere transitions
 - Pacing and rhythm
 - Sound/music mood suggestion
-- Platform-specific editing style (TikTok punchy cuts, YouTube cinematic, Reels trending format)`}
+- Platform-specific editing style (TikTok punchy cuts, YouTube cinematic, Reels trending format)
+- Recommended total duration (16–64 seconds): choose based on content complexity — 16s for simple ads, 32s for storytelling, 64s for documentaries/deep content`}
 
 Return ONLY valid JSON:
 {
   "prompt": "the complete optimized generation prompt",
   "negative_prompt": "what to avoid (for image models)",
-  "style_notes": "2-sentence creative direction"
+  "style_notes": "2-sentence creative direction"${media_type === "video" ? `,
+  "recommended_duration": <integer 16-64, total seconds based on content complexity and objective>` : ""}
 }`;
 
       const promptResp = await fetch("https://api.anthropic.com/v1/messages", {
