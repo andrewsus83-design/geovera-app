@@ -36,6 +36,7 @@ export default function PricingPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [invoiceCreated, setInvoiceCreated] = useState<{ invoice_number: string; plan: Plan } | null>(null);
+  const [existingStatus, setExistingStatus] = useState<string | null>(null);
 
   useEffect(() => {
     async function init() {
@@ -46,6 +47,19 @@ export default function PricingPage() {
         email: session.user.email || "",
         full_name: session.user.user_metadata?.full_name,
       });
+
+      // Check existing subscription
+      const { data: existingSub } = await supabase
+        .from("subscriptions")
+        .select("status, invoice_number, plan_id")
+        .eq("user_id", session.user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+
+      if (existingSub?.status === "active") { router.replace("/getting-started"); return; }
+      if (existingSub?.status === "proof_uploaded") { setExistingStatus("proof_uploaded"); }
+      if (existingSub?.status === "pending_payment") { setExistingStatus("pending_payment"); }
 
       // Fetch plans and bank settings in parallel
       const [{ data: plansData }, { data: settingsData }] = await Promise.all([
@@ -110,20 +124,33 @@ export default function PricingPage() {
 
   if (loading) {
     return (
-      <div style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "var(--gv-color-bg-base)",
-      }}>
-        <div style={{
-          width: 36, height: 36,
-          borderRadius: "50%",
-          border: "3px solid var(--gv-color-neutral-200)",
-          borderTopColor: "var(--gv-color-primary-500)",
-          animation: "gv-spin 0.8s linear infinite",
-        }} />
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--gv-color-bg-base)" }}>
+        <div style={{ width: 36, height: 36, borderRadius: "50%", border: "3px solid var(--gv-color-neutral-200)", borderTopColor: "var(--gv-color-primary-500)", animation: "gv-spin 0.8s linear infinite" }} />
+      </div>
+    );
+  }
+
+  // Waiting for approval screen
+  if (existingStatus === "proof_uploaded") {
+    return (
+      <div style={{ minHeight: "100vh", background: "var(--gv-color-bg-base)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <div style={{ maxWidth: 480, width: "100%", background: "var(--gv-color-bg-surface)", borderRadius: "var(--gv-radius-xl)", boxShadow: "var(--gv-shadow-modal)", padding: "48px 40px", textAlign: "center" }}>
+          <div style={{ width: 64, height: 64, borderRadius: "50%", background: "var(--gv-color-primary-50)", border: "2px solid var(--gv-color-primary-300)", display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
+            <svg width="28" height="28" viewBox="0 0 28 28" fill="none"><circle cx="14" cy="14" r="10" stroke="var(--gv-color-primary-500)" strokeWidth="2"/><path d="M14 9v5l3 3" stroke="var(--gv-color-primary-500)" strokeWidth="2" strokeLinecap="round"/></svg>
+          </div>
+          <h2 style={{ fontFamily: "var(--gv-font-heading)", fontSize: 22, fontWeight: 700, color: "var(--gv-color-neutral-900)", margin: "0 0 12px" }}>
+            Bukti Transfer Sedang Diverifikasi
+          </h2>
+          <p style={{ fontSize: 15, color: "var(--gv-color-neutral-500)", fontFamily: "var(--gv-font-body)", lineHeight: 1.6, margin: 0 }}>
+            Tim GeoVera akan memverifikasi pembayaranmu dalam <strong>1×24 jam</strong>. Kamu akan mendapat notifikasi email saat akun diaktifkan.
+          </p>
+          <button
+            onClick={() => { supabase.auth.signOut(); router.replace("/signin"); }}
+            style={{ marginTop: 28, padding: "10px 24px", borderRadius: 8, border: "1px solid var(--gv-color-neutral-300)", background: "white", cursor: "pointer", fontSize: 14, fontFamily: "var(--gv-font-body)", color: "var(--gv-color-neutral-600)" }}
+          >
+            Keluar
+          </button>
+        </div>
       </div>
     );
   }
