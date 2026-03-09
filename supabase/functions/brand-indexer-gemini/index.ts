@@ -456,22 +456,29 @@ Deno.serve(async (req: Request) => {
       console.log(`[brand-indexer-gemini] Delta: ${delta.new_discoveries?.length ?? 0} new, ${delta.changed?.length ?? 0} changed`);
     }
 
-    // 8. Auto-chain → perplexity-research (fire-and-forget)
+    // 8. Auto-chain → 4 parallel deep research tools (fire-and-forget)
     const researchSeeds = (geminiOutput.research_seeds as Record<string, unknown>) ?? {};
-    supabase.functions.invoke("perplexity-research", {
-      body: {
-        brand_profile_id: brandProfileId,
-        brand_name: profile.brand_name,
-        country: profile.country,
-        research_seeds: researchSeeds,
-        research_hash: newHash,
-        research_version: nextVersion,
-      },
-    }).then(() => {
-      console.log(`[brand-indexer-gemini] Chained to perplexity-research v${nextVersion}`);
-    }).catch((e: Error) => {
-      console.error(`[brand-indexer-gemini] perplexity chain failed: ${e.message}`);
-    });
+    const researchPayload = {
+      brand_profile_id: brandProfileId,
+      user_id: userId,
+      research_seeds: researchSeeds,
+      brand_name: profile.brand_name,
+      country: profile.country,
+      research_hash: newHash,
+    };
+
+    // Fire all 4 in parallel — each stores its own data column, then calls brand-consolidator
+    const chainFns = ["brand-perplexity-deep", "brand-apify-research", "brand-serpapi-research", "brand-firecrawl-research"];
+    for (const fn of chainFns) {
+      supabase.functions.invoke(fn, { body: researchPayload })
+        .then(() => console.log(`[brand-indexer-gemini] Chained to ${fn} v${nextVersion}`))
+        .catch((e: Error) => console.error(`[brand-indexer-gemini] ${fn} chain failed: ${e.message}`));
+    }
+
+    // Update status to researching_deep
+    await supabase.from("brand_profiles")
+      .update({ research_status: "researching_deep" })
+      .eq("id", brandProfileId);
 
     // 9. Auto-chain → brand-vectorize (fire-and-forget)
     // Embeds research_data into Cloudflare Vectorize with brand isolation.

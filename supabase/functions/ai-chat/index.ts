@@ -11,6 +11,10 @@ const corsHeaders = {
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const OPENAI_MODEL = Deno.env.get("OPENAI_MODEL") || "gpt-3.5-turbo";
 
+// Anthropic API configuration (brand mode)
+const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
+const CLAUDE_MODEL = "claude-sonnet-4-6";
+
 // Token costs per 1K tokens (USD)
 const TOKEN_COSTS: Record<string, { input: number; output: number }> = {
   "gpt-3.5-turbo": { input: 0.0015, output: 0.002 },
@@ -22,7 +26,8 @@ interface ChatRequest {
   brand_id: string;
   session_id?: string;
   message: string;
-  chat_mode?: "seo" | "geo" | "social" | "general"; // Specialized chat modes
+  chat_mode?: "seo" | "geo" | "social" | "general" | "brand"; // Specialized chat modes
+  brand_sub_mode?: "strategy" | "content" | "competitive" | "reverse_engineering" | "general";
 }
 
 interface ChatSession {
@@ -90,7 +95,7 @@ Deno.serve(async (req: Request) => {
 
     // Parse request body
     const body: ChatRequest = await req.json();
-    const { brand_id, session_id, message, chat_mode } = body;
+    const { brand_id, session_id, message, chat_mode, brand_sub_mode } = body;
 
     // Validate required fields
     if (!brand_id || !message) {
@@ -277,6 +282,154 @@ If user asks specific questions about SEO, GEO, or Social Search, suggest they s
     };
 
     const systemPrompt = systemPrompts[mode as keyof typeof systemPrompts] || systemPrompts.general;
+
+    // ── BRAND MODE: use Claude Sonnet 4.6 with Source of Truth ──────────────────
+    if (mode === "brand") {
+      if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY not set");
+
+      // Fetch brand's source_of_truth from brand_profiles
+      const { data: brandProfile, error: profileErr } = await supabase
+        .from("brand_profiles")
+        .select("brand_name, source_of_truth, research_status")
+        .eq("user_id", userId)
+        .single();
+
+      if (profileErr || !brandProfile) {
+        return new Response(JSON.stringify({ error: "Brand profile not found. Complete onboarding first." }), {
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (!brandProfile.source_of_truth) {
+        return new Response(JSON.stringify({
+          error: "Brand intelligence not ready yet. Please wait for research to complete.",
+          research_status: brandProfile.research_status ?? "unknown",
+        }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      const sot = brandProfile.source_of_truth as Record<string, unknown>;
+      const subMode = brand_sub_mode ?? "general";
+
+      const subModeInstructions: Record<string, string> = {
+        strategy: "Focus on strategic recommendations, market positioning, and growth opportunities. Be specific and actionable.",
+        content: "Focus on content strategy, content ideas, platform-specific recommendations, and SEO/GEO optimization tips.",
+        competitive: "Focus on competitive analysis, competitor weaknesses, differentiation opportunities, and how to outperform rivals.",
+        reverse_engineering: "Analyze the brand data deeply. Break down what's working, what's not, and generate a clear action plan with prioritized tasks.",
+        general: "Answer the user's questions thoughtfully using all available brand intelligence.",
+      };
+
+      const brandSystemPrompt = `You are a senior Brand Intelligence AI advisor for GeoVera platform, analyzing the brand "${brandProfile.brand_name}".
+
+You have access to a comprehensive Brand Source of Truth built from:
+- Deep market research (Perplexity AI)
+- Live social media data (Instagram, TikTok, Google Maps)
+- SERP rankings and keyword intelligence (SerpAPI)
+- Website content analysis (Firecrawl)
+- Brand DNA and positioning (Gemini AI)
+
+**YOUR CURRENT FOCUS**: ${subModeInstructions[subMode] || subModeInstructions.general}
+
+**BRAND SOURCE OF TRUTH**:
+${JSON.stringify(sot, null, 2).slice(0, 12000)}
+
+**HOW TO RESPOND**:
+- Be direct, specific, and actionable — no generic advice
+- Reference actual data from the Source of Truth (rankings, topics, competitors, keywords)
+- Use simple language — the user may not be a marketing expert
+- Prioritize insights by impact: what will move the needle most?
+- When suggesting content, give concrete examples with titles and angles
+- When discussing competitors, name them and explain what to do differently
+- End responses with 2-3 clear "Next Steps" the user can take today`;
+
+      // Build Claude messages
+      const claudeMessages = [
+        ...(conversationHistory || []).map((msg: { role: string; message: string }) => ({
+          role: msg.role as "user" | "assistant",
+          content: msg.message,
+        })),
+        { role: "user" as const, content: message },
+      ];
+
+      const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": ANTHROPIC_API_KEY,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: CLAUDE_MODEL,
+          max_tokens: 2048,
+          system: brandSystemPrompt,
+          messages: claudeMessages,
+        }),
+      });
+
+      if (!claudeRes.ok) {
+        const err = await claudeRes.text();
+        throw new Error(`Claude API error: ${err.slice(0, 200)}`);
+      }
+
+      const claudeData = await claudeRes.json() as {
+        content: Array<{ type: string; text: string }>;
+        usage: { input_tokens: number; output_tokens: number };
+      };
+
+      const aiResponse = claudeData.content[0]?.text ?? "";
+      const inputTokens = claudeData.usage?.input_tokens ?? 0;
+      const outputTokens = claudeData.usage?.output_tokens ?? 0;
+      const tokensUsed = inputTokens + outputTokens;
+      // Claude Sonnet 4.6 pricing: $3/$15 per 1M tokens
+      const costUsd = (inputTokens / 1_000_000) * 3 + (outputTokens / 1_000_000) * 15;
+
+      // Store AI response
+      const { data: aiMsg } = await supabase
+        .from("gv_ai_conversations")
+        .insert({
+          brand_id,
+          user_id: userId,
+          session_id: chatSession.id,
+          message: aiResponse,
+          role: "assistant",
+          ai_provider: "anthropic",
+          model_used: CLAUDE_MODEL,
+          conversation_type: `brand_${subMode}`,
+          tokens_used: tokensUsed,
+          cost_usd: costUsd,
+          parent_message_id: userMessage.id,
+        })
+        .select()
+        .single();
+
+      // Update session stats
+      await supabase
+        .from("gv_ai_chat_sessions")
+        .update({
+          message_count: (chatSession.message_count || 0) + 2,
+          total_tokens: (chatSession.total_tokens || 0) + tokensUsed,
+          total_cost_usd: (chatSession.total_cost_usd || 0) + costUsd,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", chatSession.id);
+
+      return new Response(JSON.stringify({
+        success: true,
+        session_id: chatSession.id,
+        message_id: aiMsg?.id || null,
+        response: aiResponse,
+        chat_mode: "brand",
+        brand_sub_mode: subMode,
+        metadata: {
+          ai_provider: "anthropic",
+          model_used: CLAUDE_MODEL,
+          tokens_used: tokensUsed,
+          cost_usd: parseFloat(costUsd.toFixed(6)),
+          prompt_tokens: inputTokens,
+          completion_tokens: outputTokens,
+        },
+      }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    // ── END BRAND MODE ──────────────────────────────────────────────────────────
 
     // Build messages for OpenAI
     const messages = [
