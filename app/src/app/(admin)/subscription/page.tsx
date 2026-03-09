@@ -274,7 +274,7 @@ export default function SubscriptionPage() {
       });
       const data = await res.json();
       if (data.success) {
-        router.push("/getting-started");
+        router.push("/analytics");
       } else {
         setError(data.error || "Gagal aktivasi free trial.");
       }

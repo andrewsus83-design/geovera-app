@@ -28,9 +28,9 @@ export default function AuthCallbackPage() {
       // Admin bypasses onboarding and goes straight to backend
       if (session.user.email === "andrewsus83@gmail.com") { router.replace("/backend"); return; }
 
-      if (profile?.status === "active") { router.replace("/getting-started"); return; }
-      if (!profile?.onboarding_completed) { router.replace("/onboarding"); return; }
-      router.replace("/pricing");
+      if (profile?.status === "active") { window.location.href = "https://app.geovera.xyz/analytics"; return; }
+      if (!profile?.onboarding_completed) { window.location.href = "https://app.geovera.xyz/onboarding"; return; }
+      window.location.href = "https://app.geovera.xyz/pricing";
     });
   }, [router]);
 

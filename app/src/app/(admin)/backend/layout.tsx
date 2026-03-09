@@ -62,7 +62,7 @@ export default function BackendLayout({ children }: { children: React.ReactNode 
         .eq("id", session.user.id)
         .single();
 
-      if (session.user.email !== "andrewsus83@gmail.com") { router.replace("/getting-started"); return; }
+      if (session.user.email !== "andrewsus83@gmail.com") { window.location.href = "https://app.geovera.xyz/analytics"; return; }
       setAdminName(profile?.full_name || session.user.email || "Admin");
       setChecking(false);
     }

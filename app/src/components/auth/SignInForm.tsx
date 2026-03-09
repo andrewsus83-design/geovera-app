@@ -74,7 +74,7 @@ export default function SignInForm() {
         // Admin: only redirect to /backend if on backend domain
         const isBackendDomain = typeof window !== "undefined" && window.location.hostname.includes("backend");
         if (session.user.email === "andrewsus83@gmail.com" && isBackendDomain) { router.push("/backend"); return; }
-        if (profile?.status === "active") { router.push("/getting-started"); return; }
+        if (profile?.status === "active") { router.push("/analytics"); return; }
         if (!profile?.onboarding_completed) { router.push("/onboarding"); return; }
       }
       router.push("/pricing");

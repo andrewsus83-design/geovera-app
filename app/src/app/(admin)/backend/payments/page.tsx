@@ -59,7 +59,26 @@ export default function BackendPaymentsPage() {
   async function approve(sub: SubRow) {
     setActionId(sub.id);
     await supabase.rpc("activate_subscription_user", { sub_id: sub.id });
-    showToast(`Invoice ${sub.invoice_number} disetujui!`);
+
+    // Send approval email notification
+    if (sub.user_profiles?.email) {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      await fetch(`${supabaseUrl}/functions/v1/manual-payment-handler`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${supabaseKey}` },
+        body: JSON.stringify({
+          action: "send_approval_email",
+          user_email: sub.user_profiles.email,
+          user_name: sub.user_profiles.full_name || sub.user_profiles.email.split("@")[0],
+          plan_name: sub.plans?.name || "GeoVera",
+          plan_price: sub.plans?.price_idr || null,
+          invoice_number: sub.invoice_number,
+        }),
+      }).catch(e => console.error("approval email error:", e));
+    }
+
+    showToast(`Invoice ${sub.invoice_number} disetujui! Email notifikasi terkirim.`);
     setActionId(null);
     load();
   }

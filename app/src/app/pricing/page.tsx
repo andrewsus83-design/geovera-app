@@ -57,7 +57,7 @@ export default function PricingPage() {
         .limit(1)
         .single();
 
-      if (existingSub?.status === "active") { router.replace("/getting-started"); return; }
+      if (existingSub?.status === "active") { router.replace("/analytics"); return; }
       if (existingSub?.status === "proof_uploaded") { setExistingStatus("proof_uploaded"); }
       if (existingSub?.status === "pending_payment") { setExistingStatus("pending_payment"); }
 

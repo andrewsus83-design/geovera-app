@@ -10,7 +10,7 @@ export default function AdminRootPage() {
       if (session?.user.email === "andrewsus83@gmail.com") {
         router.replace("/backend");
       } else {
-        router.replace("/getting-started");
+        router.replace("/analytics");
       }
     });
   }, [router]);
