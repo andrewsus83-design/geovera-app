@@ -34,12 +34,19 @@ export default function BackendSettingsPage() {
 
   async function save() {
     setSaving(true);
-    const updates = Object.entries(settings).map(([key, value]) =>
-      supabase.from("app_settings").upsert({ key, value }, { onConflict: "key" })
+    const results = await Promise.all(
+      Object.entries(settings).map(([key, value]) =>
+        supabase.from("app_settings").upsert({ key, value }, { onConflict: "key" })
+      )
     );
-    await Promise.all(updates);
     setSaving(false);
-    showToast("Pengaturan berhasil disimpan!");
+    const failed = results.filter(r => r.error);
+    if (failed.length > 0) {
+      const msg = failed[0].error?.message ?? "Unknown error";
+      showToast(`Gagal menyimpan: ${msg}`);
+    } else {
+      showToast("Pengaturan berhasil disimpan!");
+    }
   }
 
   return (
