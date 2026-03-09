@@ -1870,6 +1870,7 @@ export default function CalendarPage() {
   ) : (
     <TaskDetailPanel
       task={selectedTask}
+      brandId={DEMO_BRAND_ID}
       isConnected={selectedTask ? isPlatformConnected(selectedTask.platform || "") : true}
       onPublish={handlePublish}
       onReject={handleReject}

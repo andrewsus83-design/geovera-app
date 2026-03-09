@@ -3,6 +3,206 @@ import { useState, useEffect, useCallback } from "react";
 import type { Task, ReplyComment } from "./TaskCard";
 import ImpactFireIcons from "./ImpactFireIcons";
 import FeedbackSection from "./FeedbackSection";
+import { supabase } from "@/lib/supabase";
+
+// ── Visual Pipeline Asset Picker ──────────────────────────────────────────────
+interface VisualAsset {
+  cdn_url: string;
+  ratio: string;
+  type: "image" | "video";
+  duration_sec?: number;
+  job_id: string;
+  objective_source?: string;
+}
+
+function AssetPickerModal({
+  brandId,
+  onSelect,
+  onClose,
+}: {
+  brandId: string;
+  onSelect: (asset: VisualAsset) => void;
+  onClose: () => void;
+}) {
+  const [assets, setAssets] = useState<VisualAsset[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"all" | "image" | "video">("all");
+  const [hovered, setHovered] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetchAssets() {
+      try {
+        setLoading(true);
+        const { data: jobs, error: jobErr } = await supabase
+          .from("gv_content_jobs")
+          .select("id, flux_outputs, video_outputs")
+          .eq("brand_id", brandId)
+          .eq("is_visual_pipeline", true)
+          .eq("status", "done")
+          .order("created_at", { ascending: false })
+          .limit(20);
+
+        if (jobErr) throw jobErr;
+
+        const all: VisualAsset[] = [];
+        for (const job of jobs || []) {
+          const imgs: any[] = Array.isArray(job.flux_outputs) ? job.flux_outputs : [];
+          const vids: any[] = Array.isArray(job.video_outputs) ? job.video_outputs : [];
+          imgs.forEach((img) => all.push({ ...img, type: "image", job_id: job.id }));
+          vids.forEach((vid) => all.push({ ...vid, type: "video", job_id: job.id }));
+        }
+        setAssets(all);
+      } catch (e: any) {
+        setError(e.message || "Failed to load assets");
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchAssets();
+  }, [brandId]);
+
+  const filtered = activeTab === "all" ? assets : assets.filter((a) => a.type === activeTab);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="flex flex-col w-full max-w-lg"
+        style={{
+          maxHeight: "80vh",
+          borderRadius: "var(--gv-radius-xl)",
+          background: "var(--gv-color-bg-surface)",
+          boxShadow: "var(--gv-shadow-modal)",
+          border: "1px solid var(--gv-color-glass-border)",
+        }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid var(--gv-color-neutral-200)" }}>
+          <div>
+            <h3 className="text-[15px] font-bold" style={{ fontFamily: "var(--gv-font-heading)", color: "var(--gv-color-neutral-900)" }}>
+              Pick from Visual Pipeline
+            </h3>
+            <p className="text-[11px] mt-0.5" style={{ color: "var(--gv-color-neutral-400)" }}>
+              Select your best AI-generated image or video for this content
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="flex items-center justify-center w-8 h-8 transition-colors"
+            style={{ borderRadius: "var(--gv-radius-full)", background: "var(--gv-color-neutral-100)", color: "var(--gv-color-neutral-500)" }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex items-center gap-1.5 px-5 pt-3 pb-2">
+          {(["all", "image", "video"] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setActiveTab(t)}
+              className="px-3 py-1 text-[11px] font-semibold transition-all"
+              style={{
+                borderRadius: "var(--gv-radius-full)",
+                background: activeTab === t ? "var(--gv-color-primary-50)" : "var(--gv-color-neutral-100)",
+                color: activeTab === t ? "var(--gv-color-primary-600)" : "var(--gv-color-neutral-500)",
+                border: activeTab === t ? "1px solid var(--gv-color-primary-200)" : "1px solid transparent",
+              }}
+            >
+              {t === "all" ? `All (${assets.length})` : t === "image" ? `Images (${assets.filter((a) => a.type === "image").length})` : `Videos (${assets.filter((a) => a.type === "video").length})`}
+            </button>
+          ))}
+        </div>
+
+        {/* Grid */}
+        <div className="flex-1 overflow-y-auto p-4">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-12 gap-3">
+              <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: "var(--gv-color-primary-300)", borderTopColor: "transparent" }} />
+              <p className="text-sm" style={{ color: "var(--gv-color-neutral-400)" }}>Loading your visual pipeline assets…</p>
+            </div>
+          ) : error ? (
+            <div className="text-center py-8">
+              <p className="text-sm" style={{ color: "var(--gv-color-danger-600)" }}>{error}</p>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="inline-flex items-center justify-center w-14 h-14 mb-3" style={{ borderRadius: "var(--gv-radius-md)", background: "var(--gv-color-neutral-100)", color: "var(--gv-color-neutral-300)" }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <circle cx="8.5" cy="8.5" r="1.5" />
+                  <path d="M21 15l-5-5L5 21" />
+                </svg>
+              </div>
+              <p className="text-sm font-medium" style={{ color: "var(--gv-color-neutral-500)" }}>No completed visual pipeline assets yet</p>
+              <p className="text-xs mt-1" style={{ color: "var(--gv-color-neutral-400)" }}>Generate images & videos in Content Studio → Visual Pipeline</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-2">
+              {filtered.map((asset, i) => {
+                const key = `${asset.job_id}-${i}`;
+                const isHovered = hovered === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => onSelect(asset)}
+                    onMouseEnter={() => setHovered(key)}
+                    onMouseLeave={() => setHovered(null)}
+                    className="relative overflow-hidden transition-all"
+                    style={{
+                      borderRadius: "var(--gv-radius-sm)",
+                      border: isHovered ? "2px solid var(--gv-color-primary-500)" : "2px solid transparent",
+                      aspectRatio: asset.ratio === "16:9" ? "16/9" : asset.ratio === "1:1" ? "1/1" : "9/16",
+                      background: "var(--gv-color-neutral-100)",
+                    }}
+                  >
+                    {asset.type === "video" ? (
+                      <>
+                        <video src={asset.cdn_url} className="w-full h-full object-cover" muted />
+                        <div className="absolute inset-0 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.25)" }}>
+                          <div className="flex items-center justify-center w-8 h-8 rounded-full" style={{ background: "rgba(255,255,255,0.9)" }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style={{ color: "var(--gv-color-primary-600)" }}>
+                              <polygon points="5 3 19 12 5 21 5 3" />
+                            </svg>
+                          </div>
+                        </div>
+                        {asset.duration_sec && (
+                          <span className="absolute bottom-1 right-1 text-[9px] text-white font-semibold px-1 rounded" style={{ background: "rgba(0,0,0,0.6)" }}>
+                            {asset.duration_sec}s
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <img src={asset.cdn_url} alt="" className="w-full h-full object-cover" />
+                    )}
+                    {/* Ratio badge */}
+                    <span className="absolute top-1 left-1 text-[8px] text-white font-bold px-1 rounded" style={{ background: "rgba(0,0,0,0.5)" }}>
+                      {asset.ratio}
+                    </span>
+                    {/* Select overlay */}
+                    {isHovered && (
+                      <div className="absolute inset-0 flex items-end justify-center pb-2" style={{ background: "rgba(95,143,139,0.15)" }}>
+                        <span className="text-[10px] font-semibold text-white px-2 py-0.5 rounded-full" style={{ background: "var(--gv-color-primary-500)" }}>
+                          Select
+                        </span>
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── TikTok helpers ────────────────────────────────────────────────────────────
 const TIKTOK_CLIENT_KEY   = process.env.NEXT_PUBLIC_TIKTOK_CLIENT_KEY   || "";
@@ -71,6 +271,7 @@ interface PublishOptions {
 
 interface TaskDetailPanelProps {
   task: Task | null;
+  brandId?: string;
   isConnected?: boolean;
   onPublish?: (taskId: string, options?: PublishOptions) => Promise<void>;
   onReject?: (taskId: string, reason: string) => void;
@@ -379,7 +580,9 @@ const REJECT_REASONS = [
 ];
 
 // ── Main TaskDetailPanel ─────────────────────────────────────────
-export default function TaskDetailPanel({ task, isConnected = true, onPublish, onReject, isRejected, onPublishReplies }: TaskDetailPanelProps) {
+export default function TaskDetailPanel({ task, brandId, isConnected = true, onPublish, onReject, isRejected, onPublishReplies }: TaskDetailPanelProps) {
+  const effectiveBrandId = brandId || DEMO_BRAND_ID;
+
   const [showScheduler, setShowScheduler] = useState(false);
   const [scheduleDate, setScheduleDate] = useState("");
   const [scheduleTime, setScheduleTime] = useState("");
@@ -393,6 +596,10 @@ export default function TaskDetailPanel({ task, isConnected = true, onPublish, o
   // Media upload
   const [mediaFiles, setMediaFiles] = useState<File[]>([]);
   const [mediaPreviews, setMediaPreviews] = useState<string[]>([]);
+
+  // Visual Pipeline asset picker
+  const [showAssetPicker, setShowAssetPicker] = useState(false);
+  const [selectedAsset, setSelectedAsset] = useState<VisualAsset | null>(null);
 
   const isTikTok = task?.platform === "TikTok";
   const isVideoTask = ["TikTok", "Reels", "Shorts", "YouTube", "YouTube Shorts"].includes(task?.platform || "");
@@ -591,6 +798,90 @@ export default function TaskDetailPanel({ task, isConnected = true, onPublish, o
                 </span>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* ── Visual Pipeline Asset (selected) ── */}
+        {selectedAsset && (
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <h4 className="text-sm font-medium" style={{ color: "var(--gv-color-neutral-400)" }}>
+                ✨ Visual Pipeline Asset
+              </h4>
+              <button
+                onClick={() => setSelectedAsset(null)}
+                className="text-[10px] font-medium transition-colors"
+                style={{ color: "var(--gv-color-neutral-400)" }}
+              >
+                Remove
+              </button>
+            </div>
+            <div
+              className="relative rounded-xl overflow-hidden"
+              style={{ border: "1.5px solid var(--gv-color-primary-200)" }}
+            >
+              {selectedAsset.type === "video" ? (
+                <video
+                  src={selectedAsset.cdn_url}
+                  controls
+                  className="w-full"
+                  style={{ maxHeight: 220, objectFit: "contain", background: "#000" }}
+                />
+              ) : (
+                <img
+                  src={selectedAsset.cdn_url}
+                  alt="Selected visual asset"
+                  className="w-full object-cover"
+                  style={{ maxHeight: 220 }}
+                />
+              )}
+              <div className="flex items-center gap-1.5 px-3 py-1.5" style={{ background: "var(--gv-color-primary-50)" }}>
+                <span className="text-[9px] font-bold text-white px-1.5 py-0.5 rounded" style={{ background: "var(--gv-color-primary-400)" }}>
+                  {selectedAsset.ratio}
+                </span>
+                <span className="text-[10px]" style={{ color: "var(--gv-color-primary-700)" }}>
+                  {selectedAsset.type === "video" ? `Video · ${selectedAsset.duration_sec || "—"}s` : "Image"} from Visual Pipeline
+                </span>
+                <button
+                  onClick={() => setShowAssetPicker(true)}
+                  className="ml-auto text-[10px] font-semibold transition-colors"
+                  style={{ color: "var(--gv-color-primary-500)" }}
+                >
+                  Change
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Pick from Visual Pipeline (when no asset selected) ── */}
+        {!selectedAsset && task.platform && task.platform !== "Blog" && (
+          <div>
+            <button
+              onClick={() => setShowAssetPicker(true)}
+              className="w-full flex items-center gap-3 px-4 py-3 transition-all"
+              style={{
+                borderRadius: "var(--gv-radius-md)",
+                border: "1.5px dashed var(--gv-color-primary-300)",
+                background: "var(--gv-color-primary-50)",
+              }}
+            >
+              <div
+                className="flex-shrink-0 flex items-center justify-center w-9 h-9"
+                style={{ borderRadius: "var(--gv-radius-sm)", background: "var(--gv-color-primary-100)", color: "var(--gv-color-primary-600)" }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                </svg>
+              </div>
+              <div className="text-left flex-1 min-w-0">
+                <p className="text-[12px] font-semibold" style={{ color: "var(--gv-color-primary-700)" }}>Pick from Visual Pipeline</p>
+                <p className="text-[10px] mt-0.5 truncate" style={{ color: "var(--gv-color-primary-500)" }}>Use AI-generated images or videos from your history</p>
+              </div>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--gv-color-primary-400)", flexShrink: 0 }}>
+                <path d="M9 18l6-6-6-6" />
+              </svg>
+            </button>
           </div>
         )}
 
@@ -909,6 +1200,21 @@ export default function TaskDetailPanel({ task, isConnected = true, onPublish, o
           </div>
         )}
       </div>
+
+      {/* ── Asset Picker Modal ── */}
+      {showAssetPicker && (
+        <AssetPickerModal
+          brandId={effectiveBrandId}
+          onSelect={(asset) => {
+            setSelectedAsset(asset);
+            setShowAssetPicker(false);
+            // Clear any manually uploaded media when a pipeline asset is selected
+            setMediaFiles([]);
+            setMediaPreviews([]);
+          }}
+          onClose={() => setShowAssetPicker(false)}
+        />
+      )}
     </div>
   );
 }
