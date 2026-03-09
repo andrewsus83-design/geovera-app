@@ -2,12 +2,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
-interface Setting {
-  key: string;
-  value: string;
-  description: string | null;
-}
-
 const SETTING_LABELS: Record<string, { label: string; placeholder: string; multiline?: boolean }> = {
   bank_name:         { label: "Nama Bank", placeholder: "BCA / Mandiri / BNI / BRI" },
   bank_account_no:   { label: "Nomor Rekening", placeholder: "1234567890" },
@@ -17,7 +11,6 @@ const SETTING_LABELS: Record<string, { label: string; placeholder: string; multi
   app_name:          { label: "Nama Aplikasi", placeholder: "GeoVera" },
 };
 
-const SETTING_ORDER = ["app_name", "support_email", "bank_name", "bank_account_no", "bank_account_name", "bank_transfer_note"];
 
 export default function BackendSettingsPage() {
   const [settings, setSettings] = useState<Record<string, string>>({});
@@ -28,7 +21,7 @@ export default function BackendSettingsPage() {
   useEffect(() => {
     supabase.from("app_settings").select("key, value").then(({ data }) => {
       const map: Record<string, string> = {};
-      (data || []).forEach((s: Setting) => { map[s.key] = s.value; });
+      (data || []).forEach((s: { key: string; value: string }) => { map[s.key] = s.value; });
       setSettings(map);
       setLoading(false);
     });
