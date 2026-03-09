@@ -2641,7 +2641,7 @@ export default function ContentStudioPage() {
 
   // Batch size for image generation — scales with monthly quota
   // e.g. 300/mo = 30 candidates, 100/mo = 15, anything else = 10
-  const batchSize = quota.content_images_per_month >= 300 ? 30 : quota.content_images_per_month >= 100 ? 15 : 10;
+  const batchSize = quota.content_images_per_day >= 300 ? 30 : quota.content_images_per_day >= 100 ? 15 : 10;
 
   // Daily usage
   const refreshUsage = useCallback(() => {
@@ -2696,8 +2696,8 @@ export default function ContentStudioPage() {
           <ImageVideoWizard
             brandId={brandId}
             initialMode="image"
-            imageLimit={quota.content_images_per_month}
-            videoLimit={quota.content_videos_per_month}
+            imageLimit={quota.content_images_per_day}
+            videoLimit={quota.content_videos_per_day}
             imagesUsedToday={imagesUsedToday}
             videosUsedToday={videosUsedToday}
             batchSize={batchSize}
@@ -2719,8 +2719,8 @@ export default function ContentStudioPage() {
           <ImageVideoWizard
             brandId={brandId}
             initialMode="video"
-            imageLimit={quota.content_images_per_month}
-            videoLimit={quota.content_videos_per_month}
+            imageLimit={quota.content_images_per_day}
+            videoLimit={quota.content_videos_per_day}
             imagesUsedToday={imagesUsedToday}
             videosUsedToday={videosUsedToday}
             batchSize={batchSize}

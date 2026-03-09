@@ -17,10 +17,16 @@ interface PlanQuota {
   plan_name: string;
   brands_limit: number;
   ai_chat_messages_per_day: number;
-  content_articles_per_month: number;
-  content_images_per_month: number;
-  content_videos_per_month: number;
-  reports_per_month: number;
+  content_articles_per_day: number;
+  content_articles_short_per_day: number;
+  content_articles_medium_per_day: number;
+  content_articles_long_per_day: number;
+  content_articles_verylong_per_day: number;
+  analytics_keywords_tracked: number;
+  analytics_topics_tracked: number;
+  content_images_per_day: number;
+  content_videos_per_day: number;
+  feature_report_enabled: boolean;
   feature_chronicle_enabled: boolean;
   feature_ai_chat_enabled: boolean;
   feature_content_enabled: boolean;
@@ -63,29 +69,35 @@ function quotaToFeatures(q: PlanQuota): string[] {
     );
   }
   if (q.feature_content_enabled) {
+    // Article types
+    if (q.content_articles_short_per_day !== 0)
+      features.push(q.content_articles_short_per_day === -1 ? "Unlimited artikel short/hari" : `${q.content_articles_short_per_day} artikel short (≤300w)/hari`);
+    if (q.content_articles_medium_per_day !== 0)
+      features.push(q.content_articles_medium_per_day === -1 ? "Unlimited artikel medium/hari" : `${q.content_articles_medium_per_day} artikel medium (≤800w)/hari`);
+    if (q.content_articles_long_per_day !== 0)
+      features.push(q.content_articles_long_per_day === -1 ? "Unlimited artikel long/hari" : `${q.content_articles_long_per_day} artikel long (≤1500w)/hari`);
+    if (q.content_articles_verylong_per_day !== 0)
+      features.push(q.content_articles_verylong_per_day === -1 ? "Unlimited artikel very long/hari" : `${q.content_articles_verylong_per_day} artikel very long (3000w+)/hari`);
     features.push(
-      q.content_articles_per_month === -1
-        ? "Unlimited artikel/hari"
-        : `${q.content_articles_per_month} artikel/hari`
-    );
-    features.push(
-      q.content_images_per_month === -1
+      q.content_images_per_day === -1
         ? "Unlimited gambar/hari"
-        : `${q.content_images_per_month} gambar/hari`
+        : `${q.content_images_per_day} gambar/hari`
     );
-    if (q.content_videos_per_month !== 0) {
+    if (q.content_videos_per_day !== 0) {
       features.push(
-        q.content_videos_per_month === -1
+        q.content_videos_per_day === -1
           ? "Unlimited video/hari"
-          : `${q.content_videos_per_month} video/hari`
+          : `${q.content_videos_per_day} video/hari`
       );
     }
   }
-  features.push(
-    q.reports_per_month === -1
-      ? "Unlimited reports/bulan"
-      : `${q.reports_per_month} brand report/bulan`
-  );
+  if (q.feature_report_enabled) {
+    features.push("Analytics included");
+    if (q.analytics_keywords_tracked !== 0)
+      features.push(q.analytics_keywords_tracked === -1 ? "Unlimited keywords tracked & optimized" : `${q.analytics_keywords_tracked} keywords tracked & optimized`);
+    if (q.analytics_topics_tracked !== 0)
+      features.push(q.analytics_topics_tracked === -1 ? "Unlimited topics tracked & optimized" : `${q.analytics_topics_tracked} topics tracked & optimized`);
+  }
   if (q.feature_chronicle_enabled) features.push("Brand Chronicle included");
   return features;
 }
@@ -139,7 +151,7 @@ export default function SubscriptionPage() {
             .order("price_idr", { ascending: true }),
           supabase
             .from("plan_quotas")
-            .select("plan_name, brands_limit, ai_chat_messages_per_day, content_articles_per_month, content_images_per_month, content_videos_per_month, reports_per_month, feature_chronicle_enabled, feature_ai_chat_enabled, feature_content_enabled"),
+            .select("plan_name, brands_limit, ai_chat_messages_per_day, content_articles_per_day, content_articles_short_per_day, content_articles_medium_per_day, content_articles_long_per_day, content_articles_verylong_per_day, content_images_per_day, content_videos_per_day, analytics_keywords_tracked, analytics_topics_tracked, feature_report_enabled, feature_chronicle_enabled, feature_ai_chat_enabled, feature_content_enabled"),
         ]);
 
         if (plansData) setPlans(plansData);

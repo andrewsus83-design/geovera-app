@@ -16,14 +16,20 @@ export interface UserQuota {
   onboarding_runs_limit: number;
   ai_chat_messages_per_day: number;
   suggested_prompts_per_day: number;
-  content_articles_per_month: number;
-  content_images_per_month: number;
-  content_videos_per_month: number;
+  content_articles_per_day: number;
+  content_articles_short_per_day: number;
+  content_articles_medium_per_day: number;
+  content_articles_long_per_day: number;
+  content_articles_verylong_per_day: number;
+  analytics_keywords_tracked: number;
+  analytics_topics_tracked: number;
+  content_images_per_day: number;
+  content_videos_per_day: number;
   qa_tier: string;
   qa_runs_per_cycle: number;
   qa_probes_total: number;
   reports_per_month: number;
-  auto_reply_per_day: number;
+  auto_reply_per_5min: number;
   auto_publish_per_month: number;
   chronicle_runs_per_cycle: number;
 }
@@ -40,14 +46,20 @@ const TRIAL_DEFAULTS: UserQuota = {
   onboarding_runs_limit: 1,
   ai_chat_messages_per_day: 5,
   suggested_prompts_per_day: 3,
-  content_articles_per_month: 3,
-  content_images_per_month: 3,
-  content_videos_per_month: 0,
+  content_articles_per_day: 3,
+  content_articles_short_per_day: 3,
+  content_articles_medium_per_day: 1,
+  content_articles_long_per_day: 0,
+  content_articles_verylong_per_day: 0,
+  analytics_keywords_tracked: 0,
+  analytics_topics_tracked: 0,
+  content_images_per_day: 3,
+  content_videos_per_day: 0,
   qa_tier: "basic",
   qa_runs_per_cycle: 1,
   qa_probes_total: 15,
   reports_per_month: 0,
-  auto_reply_per_day: 0,
+  auto_reply_per_5min: 0,
   auto_publish_per_month: 0,
   chronicle_runs_per_cycle: 0,
 };
