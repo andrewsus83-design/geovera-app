@@ -58,7 +58,7 @@ export default function BackendLayout({ children }: { children: React.ReactNode 
 
       const { data: profile } = await supabase
         .from("user_profiles")
-        .select("full_name, is_admin")
+        .select("full_name")
         .eq("id", session.user.id)
         .single();
 

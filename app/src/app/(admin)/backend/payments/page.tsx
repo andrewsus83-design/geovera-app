@@ -58,7 +58,12 @@ export default function BackendPaymentsPage() {
 
   async function approve(sub: SubRow) {
     setActionId(sub.id);
-    await supabase.rpc("activate_subscription_user", { sub_id: sub.id });
+    const { error: rpcError } = await supabase.rpc("activate_subscription_user", { sub_id: sub.id });
+    if (rpcError) {
+      showToast(`Gagal mengaktifkan: ${rpcError.message}`);
+      setActionId(null);
+      return;
+    }
 
     // Send approval email via server-side API route (JWT-verified, admin-only)
     if (sub.user_profiles?.email) {
@@ -86,7 +91,12 @@ export default function BackendPaymentsPage() {
 
   async function reject(subId: string, note: string) {
     setActionId(subId);
-    await supabase.from("subscriptions").update({ status: "rejected", notes: note || null }).eq("id", subId);
+    const { error: rejectError } = await supabase.from("subscriptions").update({ status: "rejected", notes: note || null }).eq("id", subId);
+    if (rejectError) {
+      showToast(`Gagal menolak: ${rejectError.message}`);
+      setActionId(null);
+      return;
+    }
     showToast("Pembayaran ditolak.");
     setRejectId(null);
     setRejectNote("");

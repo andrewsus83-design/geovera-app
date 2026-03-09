@@ -25,8 +25,8 @@ export default function AuthCallbackPage() {
         .eq("id", session.user.id)
         .single();
 
-      // Admin bypasses onboarding and goes straight to backend
-      if (session.user.email === "andrewsus83@gmail.com") { router.replace("/backend"); return; }
+      // Admin always goes to backend domain
+      if (session.user.email === "andrewsus83@gmail.com") { window.location.href = "https://backend.geovera.xyz/backend"; return; }
 
       if (profile?.status === "active") { window.location.href = "https://app.geovera.xyz/analytics"; return; }
       if (!profile?.onboarding_completed) { window.location.href = "https://app.geovera.xyz/onboarding"; return; }
