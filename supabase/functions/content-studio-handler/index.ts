@@ -12,6 +12,14 @@ const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") ?? "";
 const HEYGEN_API_KEY = Deno.env.get("HEYGEN_API_KEY") ?? "";
 const HEYGEN_BASE = "https://api.heygen.com";
 
+// ── Runway Gen 4 Turbo (video generation) ────────────────────────────────────
+const RUNWAY_API_SECRET = Deno.env.get("RUNWAY_API_SECRET") ?? "";
+const RUNWAY_BASE = "https://api.runwayml.com";
+
+// ── fal.ai / Modal (Flux Schnell batch image generation) ─────────────────────
+const FAL_API_KEY = Deno.env.get("FAL_API_KEY") ?? "";
+const MODAL_FLUX_URL = Deno.env.get("MODAL_FLUX_SCHNELL_URL") ?? ""; // Custom Modal endpoint (optional)
+
 // Cloudflare Workers AI (Llama) — for training prompt engineering
 const CF_ACCOUNT_ID = Deno.env.get("CLOUDFLARE_ACCOUNT_ID") ?? "";
 const CF_API_TOKEN = Deno.env.get("CLOUDFLARE_API_TOKEN") ?? "";
@@ -39,6 +47,111 @@ async function kieGet(path: string) {
   const res = await fetch(`${KIE_BASE}${path}`, { headers: kieHeaders() });
   if (!res.ok) throw new Error(`KIE API error ${res.status}: ${await res.text()}`);
   return res.json();
+}
+
+// ── Runway Gen 4 Turbo helpers ────────────────────────────────────────────────
+function runwayHeaders() {
+  return {
+    "Authorization": `Bearer ${RUNWAY_API_SECRET}`,
+    "Content-Type": "application/json",
+    "X-Runway-Version": "2024-11-06",
+  };
+}
+
+async function runwayCreateTask(params: {
+  prompt: string; imageUrl?: string | null; duration: 5 | 10; ratio: string;
+}): Promise<{ id: string; status: string }> {
+  const body: Record<string, unknown> = {
+    model: "gen4_turbo",
+    promptText: params.prompt,
+    duration: params.duration,
+    ratio: params.ratio,
+  };
+  if (params.imageUrl) body.promptImage = params.imageUrl;
+  const path = params.imageUrl ? "/v1/image_to_video" : "/v1/text_to_video";
+  const res = await fetch(`${RUNWAY_BASE}${path}`, {
+    method: "POST", headers: runwayHeaders(), body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Runway API error ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
+async function runwayPollTask(taskId: string): Promise<{ status: string; video_url: string | null }> {
+  const res = await fetch(`${RUNWAY_BASE}/v1/tasks/${taskId}`, { headers: runwayHeaders() });
+  if (!res.ok) throw new Error(`Runway poll error ${res.status}`);
+  const d = await res.json();
+  const rawStatus = (d.status ?? "PENDING") as string;
+  return {
+    status: rawStatus === "SUCCEEDED" ? "completed" : rawStatus === "FAILED" ? "failed" : "processing",
+    video_url: d.output?.[0] ?? null,
+  };
+}
+
+// ── fal.ai Flux Schnell (batch image generation) ──────────────────────────────
+const FAL_RATIO_MAP: Record<string, string> = {
+  "1:1": "square_hd", "9:16": "portrait_16_9", "16:9": "landscape_16_9", "4:5": "portrait_4_3",
+};
+
+async function falFluxSchnell(prompt: string, aspectRatio: string, numImages: number): Promise<string[]> {
+  const imageSize = FAL_RATIO_MAP[aspectRatio] ?? "square_hd";
+  const res = await fetch("https://fal.run/fal-ai/flux/schnell", {
+    method: "POST",
+    headers: { "Authorization": `Key ${FAL_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt, image_size: imageSize, num_images: numImages, num_inference_steps: 4, enable_safety_checker: false }),
+  });
+  if (!res.ok) throw new Error(`fal.ai Flux error ${res.status}: ${await res.text()}`);
+  const d = await res.json();
+  return (d.images ?? []).map((img: { url: string }) => img.url).filter(Boolean);
+}
+
+async function modalFluxGenerate(prompt: string, aspectRatio: string, numImages: number): Promise<string[]> {
+  const res = await fetch(MODAL_FLUX_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt, aspect_ratio: aspectRatio, num_images: numImages }),
+  });
+  if (!res.ok) throw new Error(`Modal Flux error ${res.status}: ${await res.text()}`);
+  const d = await res.json();
+  if (Array.isArray(d.images)) return d.images.map((img: { url?: string } | string) => typeof img === "string" ? img : (img.url ?? "")).filter(Boolean);
+  if (Array.isArray(d.urls)) return d.urls;
+  if (d.url) return [d.url];
+  return [];
+}
+
+// ── Claude image scoring (returns top 15%) ────────────────────────────────────
+async function claudeScoreImages(imageUrls: string[], prompt: string, anthropicKey: string): Promise<string[]> {
+  if (imageUrls.length <= 1) return imageUrls;
+  const threshold = Math.max(1, Math.ceil(imageUrls.length * 0.15));
+  try {
+    const imageContent = imageUrls.flatMap((url, i) => ([
+      { type: "text" as const, text: `Image ${i + 1}:` },
+      { type: "image" as const, source: { type: "url" as const, url } },
+    ]));
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": anthropicKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 512,
+        messages: [{ role: "user", content: [
+          ...imageContent,
+          { type: "text", text: `Score each image 1-10: commercial quality, composition, clarity, relevance to "${prompt}". Return JSON only: {"scores":[n,n,...]}` },
+        ]}],
+      }),
+    });
+    if (!res.ok) return imageUrls.slice(0, threshold);
+    const d = await res.json();
+    const raw = d.content?.[0]?.text ?? "{}";
+    const match = raw.match(/\{[\s\S]*\}/);
+    const scores: number[] = match ? (JSON.parse(match[0]).scores ?? []) : [];
+    return imageUrls
+      .map((url, i) => ({ url, score: scores[i] ?? 5 }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, threshold)
+      .map(x => x.url);
+  } catch {
+    return imageUrls.slice(0, threshold);
+  }
 }
 
 // OpenAI Sora-2 — video generation for long durations (> 10s)
@@ -460,84 +573,151 @@ Return ONLY a valid JSON array of ${count} prompt strings. No explanation, no ma
 
     // ── GENERATE IMAGE ───────────────────────────────────────────────────────
     if (action === "generate_image") {
-      const { prompt, aspect_ratio = "1:1", model = "kie-flux", negative_prompt = "", lora_model = "" } = data;
+      const {
+        prompt, aspect_ratio = "1:1", negative_prompt = "",
+        batch_size = 1, score_with_claude = false, lora_model = "",
+      } = data;
       if (!prompt) return json({ error: "prompt is required" }, 400);
+      const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
+      const numImages = Math.min(Number(batch_size) || 1, 30);
 
-      const payload: Record<string, unknown> = { prompt, negative_prompt, aspect_ratio, model, num_images: 1 };
-      if (lora_model) payload.lora_model = lora_model;
+      let imageUrls: string[] = [];
+      let aiProvider = "kie";
+      let aiModel = "flux-schnell";
 
-      const kieRes = await kiePost("/image/generate", payload);
+      try {
+        if (MODAL_FLUX_URL) {
+          imageUrls = await modalFluxGenerate(String(prompt), String(aspect_ratio), numImages);
+          aiProvider = "modal"; aiModel = "flux-schnell-modal";
+        } else if (FAL_API_KEY) {
+          imageUrls = await falFluxSchnell(String(prompt), String(aspect_ratio), numImages);
+          aiProvider = "fal"; aiModel = "flux-schnell-fal";
+        } else {
+          const kieRes = await kiePost("/image/generate", {
+            prompt, negative_prompt, aspect_ratio, model: "flux-schnell",
+            num_images: 1, ...(lora_model ? { lora_model } : {}),
+          });
+          const url = kieRes.image_url ?? kieRes.url;
+          if (url) imageUrls = [url];
+          aiModel = kieRes.model ?? "flux-schnell";
+        }
+      } catch (e) {
+        console.error("Primary image provider failed, falling back to KIE:", e);
+        try {
+          const kieRes = await kiePost("/image/generate", { prompt, negative_prompt, aspect_ratio, model: "flux-schnell", num_images: 1 });
+          const url = kieRes.image_url ?? kieRes.url;
+          if (url) { imageUrls = [url]; aiProvider = "kie"; aiModel = "flux-schnell"; }
+        } catch (e2) { console.error("KIE fallback also failed:", e2); }
+      }
 
-      const { data: inserted, error: insertErr } = await supabase.from("gv_image_generations").insert({
-        brand_id,
-        prompt_text: prompt,
-        negative_prompt,
-        aspect_ratio,
-        ai_provider: "kie",
-        ai_model: kieRes.model ?? model,
-        image_url: kieRes.image_url ?? kieRes.url ?? null,
-        thumbnail_url: kieRes.thumbnail_url ?? null,
-        status: kieRes.status ?? "completed",
-        target_platform: data.platform ?? "instagram",
-        style_preset: lora_model || null,
-      }).select("id").single();
-      if (insertErr) console.error("generate_image DB insert failed:", insertErr.message);
+      if (imageUrls.length === 0) return json({ error: "Image generation failed — no images returned" }, 500);
+
+      // Claude scoring: top 15% of batch
+      let approvedUrls = imageUrls;
+      if (score_with_claude && imageUrls.length > 1 && ANTHROPIC_KEY) {
+        approvedUrls = await claudeScoreImages(imageUrls, String(prompt), ANTHROPIC_KEY);
+      }
+
+      // Save all approved images to DB
+      const platform = data.platform as string ?? (aspect_ratio === "9:16" ? "instagram" : aspect_ratio === "16:9" ? "youtube" : "instagram");
+      const savedImages = await Promise.all(approvedUrls.map(async (url) => {
+        const { data: ins } = await supabase.from("gv_image_generations").insert({
+          brand_id, prompt_text: prompt, negative_prompt, aspect_ratio,
+          ai_provider: aiProvider, ai_model: aiModel,
+          image_url: url, thumbnail_url: url, status: "completed",
+          target_platform: platform, style_preset: lora_model || null,
+        }).select("id").single();
+        return { id: ins?.id ?? null, prompt_text: prompt, image_url: url, thumbnail_url: url, status: "completed", ai_model: aiModel, target_platform: platform, style_preset: lora_model || null, created_at: new Date().toISOString() };
+      }));
 
       return json({
         success: true,
-        task_id: kieRes.task_id ?? kieRes.id ?? null,
-        image_url: kieRes.image_url ?? kieRes.url ?? null,
-        status: kieRes.status ?? "completed",
-        db_id: inserted?.id ?? null,
-        raw: kieRes,
+        images: savedImages,
+        image_url: savedImages[0]?.image_url ?? null,
+        db_id: savedImages[0]?.id ?? null,
+        status: "completed",
+        total_generated: imageUrls.length,
+        total_approved: approvedUrls.length,
       });
     }
 
-    // ── GENERATE VIDEO ───────────────────────────────────────────────────────
-    // Routing: duration > 10s → OpenAI Sora-2, otherwise → Kie API
+    // ── GENERATE VIDEO (Runway Gen 4 Turbo, 16–64s total via clips) ──────────
     if (action === "generate_video") {
-      const { prompt, duration = 8, aspect_ratio = "9:16", model = "kling-v1", image_url = "" } = data;
+      const { prompt, duration = 32, aspect_ratio = "9:16", image_url = "" } = data;
       if (!prompt) return json({ error: "prompt is required" }, 400);
 
-      const useOpenAI = Number(duration) > 10;
+      // Duration range: 16–64s as set by Claude's art direction
+      const totalDuration = Math.min(64, Math.max(16, Number(duration)));
+      const clipDuration = 10 as const; // Runway Gen 4 max per clip
+      const numClips = Math.max(1, Math.min(7, Math.ceil(totalDuration / clipDuration)));
+
+      // Map aspect ratio to Runway format
+      const ratioMap: Record<string, string> = { "9:16": "720:1280", "1:1": "1280:1280", "16:9": "1280:720" };
+      const runwayRatio = ratioMap[String(aspect_ratio)] ?? "720:1280";
+      const platform = data.platform as string ?? (aspect_ratio === "9:16" ? "tiktok" : "youtube");
+
       let task_id: string | null = null;
       let video_url: string | null = null;
       let status = "processing";
-      let ai_model = model;
+      let ai_model = "runway-gen4-turbo";
+      let generation_mode = "runway";
+      let extra_task_ids: string[] = [];
 
-      if (useOpenAI) {
-        // OpenAI Sora-2 for long-duration videos (11–25s)
-        const soraRes = await openAISoraGenerate(prompt, Number(duration), aspect_ratio);
-        task_id = soraRes.job_id;
-        status = soraRes.status;
-        ai_model = "sora-2";
+      if (RUNWAY_API_SECRET) {
+        try {
+          // Generate all clips in parallel (each up to 10s)
+          const tasks = await Promise.all(
+            Array.from({ length: numClips }, (_, i) => {
+              const clipPrompt = numClips === 1
+                ? String(prompt)
+                : `${prompt}, scene ${i + 1} of ${numClips}, smooth continuation`;
+              return runwayCreateTask({
+                prompt: clipPrompt,
+                imageUrl: i === 0 && image_url ? String(image_url) : null,
+                duration: clipDuration,
+                ratio: runwayRatio,
+              });
+            })
+          );
+          task_id = tasks[0].id;
+          extra_task_ids = tasks.slice(1).map(t => t.id);
+          status = "processing";
+        } catch (e) {
+          console.error("Runway generation failed, falling back to KIE:", e);
+          generation_mode = "kie"; ai_model = "kling-v2";
+          const kiePayload: Record<string, unknown> = { prompt, duration: 8, aspect_ratio, model: "kling-v2", mode: "standard" };
+          if (image_url) kiePayload.image_url = image_url;
+          const kieRes = await kiePost("/video/generate", kiePayload);
+          task_id = kieRes.task_id ?? kieRes.id ?? null;
+          video_url = kieRes.video_url ?? null;
+          status = kieRes.status ?? "processing";
+          ai_model = kieRes.model ?? "kling-v2";
+        }
       } else {
-        // Kie API for short videos (≤ 10s)
-        const payload: Record<string, unknown> = { prompt, duration, aspect_ratio, model, mode: data.mode ?? "standard" };
-        if (image_url) payload.image_url = image_url;
-        const kieRes = await kiePost("/video/generate", payload);
+        // KIE fallback when RUNWAY_API_SECRET not configured
+        generation_mode = "kie"; ai_model = "kling-v2";
+        const kiePayload: Record<string, unknown> = { prompt, duration: 8, aspect_ratio, model: "kling-v2", mode: "standard" };
+        if (image_url) kiePayload.image_url = image_url;
+        const kieRes = await kiePost("/video/generate", kiePayload);
         task_id = kieRes.task_id ?? kieRes.id ?? null;
         video_url = kieRes.video_url ?? null;
         status = kieRes.status ?? "processing";
-        ai_model = kieRes.model ?? model;
+        ai_model = kieRes.model ?? "kling-v2";
       }
 
       const { data: inserted, error: insertErr } = await supabase.from("gv_video_generations").insert({
-        brand_id,
-        target_platform: data.platform ?? "tiktok",
-        hook: prompt,
-        ai_model,
-        status,
-        generation_mode: useOpenAI ? "openai" : "kie",
-        runway_task_id: task_id,
-        video_url,
-        video_thumbnail_url: null,
-        video_aspect_ratio: aspect_ratio,
-        video_status: status,
+        brand_id, target_platform: platform, hook: prompt,
+        ai_model, status, generation_mode,
+        runway_task_id: task_id, video_url,
+        video_thumbnail_url: null, video_aspect_ratio: aspect_ratio, video_status: status,
+        metadata: extra_task_ids.length > 0 ? { extra_task_ids, num_clips: numClips, total_duration: totalDuration } : null,
       }).select("id").single();
       if (insertErr) console.error("generate_video DB insert failed:", insertErr.message);
 
-      return json({ success: true, task_id, video_url, status, db_id: inserted?.id ?? null });
+      return json({
+        success: true, task_id, extra_task_ids, num_clips: numClips, total_duration: totalDuration,
+        video_url, status, db_id: inserted?.id ?? null, ai_model,
+      });
     }
 
     // ── LIST HEYGEN AVATARS ───────────────────────────────────────────────────
@@ -644,11 +824,14 @@ Return ONLY a valid JSON array of ${count} prompt strings. No explanation, no ma
       let video_url: string | null = null;
       let thumbnail_url: string | null = null;
 
-      if (generation_mode === "openai") {
+      if (generation_mode === "runway") {
+        const pollRes = await runwayPollTask(String(task_id));
+        status = pollRes.status;
+        video_url = pollRes.video_url;
+      } else if (generation_mode === "openai") {
         const pollRes = await openAISoraPoll(String(task_id));
         status = pollRes.status;
         video_url = pollRes.video_url;
-        // Normalize OpenAI statuses
         if (status === "succeeded") status = "completed";
         if (status === "failed") status = "failed";
       } else if (generation_mode === "heygen") {
@@ -807,6 +990,213 @@ Return ONLY a valid JSON array of ${count} prompt strings. No explanation, no ma
 
       if (dbError) return json({ error: `Failed to save feedback: ${dbError}` }, 500);
       return json({ success: true, feedback, db_id });
+    }
+
+    // ── ANALYZE IMAGES (Claude Vision — classifies content type) ─────────────
+    if (action === "analyze_images") {
+      const { image_urls } = data;
+      if (!Array.isArray(image_urls) || image_urls.length === 0) {
+        return json({ error: "image_urls array required" }, 400);
+      }
+      const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
+      if (!ANTHROPIC_API_KEY) return json({ error: "ANTHROPIC_API_KEY not configured" }, 500);
+
+      const imageContent = image_urls.slice(0, 10).map((url: string) => ({
+        type: "image",
+        source: { type: "url", url },
+      }));
+
+      const analysisResp = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-api-key": ANTHROPIC_API_KEY,
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 512,
+          system: "You are an expert visual analyst for brand content. Analyze images and return ONLY a valid JSON object, no markdown.",
+          messages: [{
+            role: "user",
+            content: [
+              ...imageContent,
+              {
+                type: "text",
+                text: `Analyze these ${image_urls.length} image(s) and classify:
+Return JSON: {
+  "content_type": "single_product_angles"|"multi_product"|"product_character_world"|"world_building"|"character_only"|"lifestyle"|"mixed",
+  "description": "brief 1-sentence description of what you see",
+  "subjects": ["product","character","person","location","food","fashion","tech","lifestyle"],
+  "recommended_objectives": ["multi_angles","theme","new_product","review","ads","mini_story","multi_catalog","education","faq","random"],
+  "best_ratio": "1:1"|"9:16"|"16:9",
+  "notes": "any important visual notes for prompt engineering"
+}
+Return ONLY the JSON, no explanation.`,
+              },
+            ],
+          }],
+        }),
+      });
+
+      if (!analysisResp.ok) return json({ error: `Claude vision error ${analysisResp.status}` }, 502);
+      const analysisData = await analysisResp.json();
+      const rawText = analysisData.content?.[0]?.text ?? "{}";
+      let analysis: Record<string, unknown> = {};
+      try {
+        const match = rawText.match(/\{[\s\S]*\}/);
+        analysis = match ? JSON.parse(match[0]) : {};
+      } catch { analysis = { content_type: "mixed", recommended_objectives: ["random"], best_ratio: "1:1" }; }
+
+      return json({ success: true, analysis });
+    }
+
+    // ── GENERATE ART-DIRECTED PROMPT (Claude as expert art director) ──────────
+    if (action === "generate_art_directed_prompt") {
+      const { content_type, objective, media_type, ratio, topic, image_urls, notes } = data;
+      const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
+      if (!ANTHROPIC_API_KEY) return json({ error: "ANTHROPIC_API_KEY not configured" }, 500);
+
+      const generator = media_type === "video" ? "Runway Gen 4 Turbo (cinematic AI video generation model)" : "Flux Schnell (ultra-fast, high-quality image generation model)";
+      const ratioDesc = ratio === "9:16" ? "9:16 vertical (TikTok/Instagram Reels/Stories)" : ratio === "16:9" ? "16:9 horizontal (YouTube/Landscape)" : "1:1 square (Instagram Feed/LinkedIn)";
+
+      const systemPrompt = `You are a world-class creative director, senior photographer, cinematographer, and AI prompt engineer.
+Your expertise:
+- Commercial photography: product, lifestyle, fashion, food, architecture
+- Cinematography: shot composition, camera movement, lighting, color grading
+- AI generation: Flux (images), Kling AI (videos) — you know exactly how to write prompts for each
+- Platform optimization: Instagram, TikTok, YouTube, LinkedIn visual requirements
+- Brand storytelling: visual narrative, mood, atmosphere
+
+Write highly technical, precise prompts that produce stunning commercial-quality results.`;
+
+      const userMsg = `Create an optimized ${media_type === "video" ? "VIDEO" : "IMAGE"} generation prompt for:
+- Generator: ${generator}
+- Content type detected: ${content_type || "product/lifestyle"}
+- Creative objective: ${objective || "brand showcase"}
+- Aspect ratio: ${ratioDesc}
+- Topic/Context: ${topic || "brand content"}
+- Visual notes: ${notes || "professional commercial quality"}
+${image_urls?.length ? `- Reference images provided: ${image_urls.length} image(s) (use their visual style/mood/subjects as reference)` : ""}
+
+Write the prompt as if you are directing a professional photoshoot/film shoot. Include:
+${media_type === "image" ? `- Lighting setup (natural/studio/golden hour/dramatic/soft box etc.)
+- Camera angle and lens (low angle, bird's eye, 35mm portrait, macro, etc.)
+- Composition (rule of thirds, leading lines, negative space, etc.)
+- Color palette and mood
+- Post-processing style (clean product, cinematic, editorial, etc.)
+- Technical quality markers (8K, hyperrealistic, RAW, commercial, etc.)` : `- Camera movement (dolly zoom, tracking shot, handheld, crane shot, etc.)
+- Opening shot to closing shot sequence
+- Lighting and atmosphere transitions
+- Pacing and rhythm
+- Sound/music mood suggestion
+- Platform-specific editing style (TikTok punchy cuts, YouTube cinematic, Reels trending format)
+- Recommended total duration (16–64 seconds): choose based on content complexity — 16s for simple ads, 32s for storytelling, 64s for documentaries/deep content`}
+
+Return ONLY valid JSON:
+{
+  "prompt": "the complete optimized generation prompt",
+  "negative_prompt": "what to avoid (for image models)",
+  "style_notes": "2-sentence creative direction"${media_type === "video" ? `,
+  "recommended_duration": <integer 16-64, total seconds based on content complexity and objective>` : ""}
+}`;
+
+      const promptResp = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-api-key": ANTHROPIC_API_KEY,
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 1024,
+          system: systemPrompt,
+          messages: [{ role: "user", content: userMsg }],
+        }),
+      });
+
+      if (!promptResp.ok) return json({ error: `Claude art director error ${promptResp.status}` }, 502);
+      const promptData = await promptResp.json();
+      const rawPromptText = promptData.content?.[0]?.text ?? "{}";
+      let promptResult: Record<string, string> = {};
+      try {
+        const match = rawPromptText.match(/\{[\s\S]*\}/);
+        promptResult = match ? JSON.parse(match[0]) : {};
+      } catch { promptResult = { prompt: topic || "professional commercial photography, high quality", negative_prompt: "blurry, low quality, watermark" }; }
+
+      return json({ success: true, ...promptResult });
+    }
+
+    // ── GENERATE ARTICLE (proxies to generate-article edge function) ──────────
+    if (action === "generate_article") {
+      const { topic, objective, length, image_urls } = data;
+      const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
+      const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+      // Build enriched topic with objective context
+      const objectiveLabels: Record<string, string> = {
+        faq: "FAQ artikel dengan pertanyaan dan jawaban yang umum",
+        trend: "artikel trend terkini dan viral",
+        review: "artikel review dan testimonial produk",
+        education: "artikel edukasi, tips dan trik praktis",
+        hot_topic: "artikel hot topic dan berita terkini",
+        new_product: "artikel peluncuran produk baru yang menarik",
+        seasonal: "konten seasonal dan hari spesial yang relevan",
+        random: "konten terbaik berdasarkan rekomendasi AI",
+      };
+      const enrichedTopic = [topic, objectiveLabels[objective as string] ?? ""].filter(Boolean).join(" — ") || "konten brand yang menarik dan relevan";
+
+      const articleResp = await fetch(`${SUPABASE_URL}/functions/v1/generate-article`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${SUPABASE_SERVICE_KEY}`,
+        },
+        body: JSON.stringify({
+          brand_id,
+          topic: enrichedTopic,
+          target_platforms: ["instagram", "linkedin", "tiktok"],
+          mode: "manual",
+          ...(image_urls?.length ? { image_urls } : {}),
+        }),
+      });
+
+      if (!articleResp.ok) {
+        const errText = await articleResp.text();
+        return json({ success: false, error: `Article generation failed: ${errText}` }, 502);
+      }
+
+      const articleData = await articleResp.json();
+
+      // Map length selection to the right article variant
+      const lengthMap: Record<string, string> = {
+        short: "article_short",
+        medium: "article_medium",
+        long: "article_long",
+        very_long: "article_long", // use long as max available
+      };
+      const selectedField = lengthMap[length as string] ?? "article_medium";
+
+      return json({
+        success: true,
+        article: {
+          id: `article-${Date.now()}`,
+          topic: enrichedTopic,
+          objective,
+          length,
+          content: articleData[selectedField] ?? articleData.article_medium ?? "",
+          content_short: articleData.article_short ?? "",
+          content_medium: articleData.article_medium ?? "",
+          content_long: articleData.article_long ?? "",
+          meta_title: articleData.meta_title ?? "",
+          meta_description: articleData.meta_description ?? "",
+          focus_keywords: articleData.focus_keywords ?? [],
+          social: articleData.social ?? {},
+          geo: articleData.geo ?? {},
+          created_at: new Date().toISOString(),
+        },
+      });
     }
 
     return json({ error: "Invalid action" }, 400);

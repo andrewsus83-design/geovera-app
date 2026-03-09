@@ -26,6 +26,10 @@ const ALLOWED_ACTIONS = new Set([
   "generate_smart_prompt",
   "generate_synthetics",
   "submit_feedback",
+  // New content workflow
+  "analyze_images",
+  "generate_art_directed_prompt",
+  "generate_article",
 ]);
 
 export async function POST(request: NextRequest) {

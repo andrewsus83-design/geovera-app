@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL =
   process.env.SUPABASE_URL || "https://vozjwptzutolvkvfpknk.supabase.co";
@@ -6,8 +7,7 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
 export async function OPTIONS() {
@@ -15,16 +15,29 @@ export async function OPTIONS() {
 }
 
 const ALLOWED_ACTIONS = new Set([
-  "create_invoice",
-  "check_payment_status",
+  "request_subscription",
   "get_subscription",
-  "cancel_subscription",
-  "get_payment_methods",
   "activate_free_tier",
 ]);
 
 export async function POST(request: NextRequest) {
   try {
+    // ── Verify the caller's JWT ──────────────────────────────────────
+    const authHeader = request.headers.get("authorization");
+    const token = authHeader?.replace("Bearer ", "").trim();
+
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: cors });
+    }
+
+    const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+    const { data: { user }, error: authError } = await adminClient.auth.getUser(token);
+
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: cors });
+    }
+
+    // ── Parse and validate body ──────────────────────────────────────
     const body = await request.json();
 
     if (!body.action || !ALLOWED_ACTIONS.has(body.action)) {
@@ -34,17 +47,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Override user_id with the server-verified value — never trust client-supplied ID
+    const verifiedBody = { ...body, user_id: user.id };
+
+    // ── Forward to edge function ─────────────────────────────────────
     const response = await fetch(
-      `${SUPABASE_URL}/functions/v1/xendit-payment-handler`,
+      `${SUPABASE_URL}/functions/v1/manual-payment-handler`,
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify(verifiedBody),
       }
     );
+
+    const ct = response.headers.get("content-type") ?? "";
+    if (!ct.includes("application/json")) {
+      return NextResponse.json(
+        { success: false, error: `Upstream error (${response.status})` },
+        { status: 502, headers: cors }
+      );
+    }
 
     const result = await response.json();
     return NextResponse.json(result, {
