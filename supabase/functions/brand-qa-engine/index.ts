@@ -169,7 +169,7 @@ Deno.serve(async (req: Request) => {
       force?: boolean;
     };
 
-    const { user_id, tier = "pro", force = false } = body;
+    const { user_id, tier, force = false } = body;
     brand_profile_id = body.brand_profile_id;
 
     if (!brand_profile_id || !user_id) {
@@ -202,8 +202,27 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    const effectiveTier = (profile.qa_tier as Tier) ?? tier;
-    const counts = TIER_CONFIG[effectiveTier] ?? TIER_CONFIG.pro;
+    // Resolve tier: brand override > plan quota > request param > "basic"
+    let planTier: Tier = tier ?? "basic";
+    if (!profile.qa_tier) {
+      const { data: subRow } = await supabase
+        .from("subscriptions")
+        .select("plan_id, plans!inner(slug)")
+        .eq("user_id", user_id)
+        .eq("status", "active")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+      const planSlug = (subRow?.plans as { slug: string } | null)?.slug ?? "trial";
+      const { data: planQuota } = await supabase
+        .from("plan_quotas")
+        .select("qa_tier")
+        .eq("plan_name", planSlug)
+        .single();
+      if (planQuota?.qa_tier) planTier = planQuota.qa_tier as Tier;
+    }
+    const effectiveTier: Tier = (profile.qa_tier as Tier) ?? planTier;
+    const counts = TIER_CONFIG[effectiveTier] ?? TIER_CONFIG.basic;
     const sot = profile.source_of_truth as Record<string, unknown>;
     const serpData = profile.serpapi_data as Record<string, unknown> | null;
 
