@@ -65,19 +65,19 @@ function quotaToFeatures(q: PlanQuota): string[] {
   if (q.feature_content_enabled) {
     features.push(
       q.content_articles_per_month === -1
-        ? "Unlimited artikel/bulan"
-        : `${q.content_articles_per_month} artikel/bulan`
+        ? "Unlimited artikel/hari"
+        : `${q.content_articles_per_month} artikel/hari`
     );
     features.push(
       q.content_images_per_month === -1
-        ? "Unlimited gambar/bulan"
-        : `${q.content_images_per_month} gambar/bulan`
+        ? "Unlimited gambar/hari"
+        : `${q.content_images_per_month} gambar/hari`
     );
     if (q.content_videos_per_month !== 0) {
       features.push(
         q.content_videos_per_month === -1
-          ? "Unlimited video/bulan"
-          : `${q.content_videos_per_month} video/bulan`
+          ? "Unlimited video/hari"
+          : `${q.content_videos_per_month} video/hari`
       );
     }
   }
