@@ -167,11 +167,12 @@ Deno.serve(async (req) => {
 
       const periodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
+      // Only cancel pending requests — never cancel a live paid subscription
       await supabase
         .from("subscriptions")
         .update({ status: "cancelled" })
         .eq("user_id", user_id)
-        .in("status", ["pending_payment", "active"]);
+        .eq("status", "pending_payment");
 
       const { error } = await supabase
         .from("subscriptions")

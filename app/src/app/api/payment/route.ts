@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL =
   process.env.SUPABASE_URL || "https://vozjwptzutolvkvfpknk.supabase.co";
@@ -21,6 +22,22 @@ const ALLOWED_ACTIONS = new Set([
 
 export async function POST(request: NextRequest) {
   try {
+    // ── Verify the caller's JWT ──────────────────────────────────────
+    const authHeader = request.headers.get("authorization");
+    const token = authHeader?.replace("Bearer ", "").trim();
+
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: cors });
+    }
+
+    const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+    const { data: { user }, error: authError } = await adminClient.auth.getUser(token);
+
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: cors });
+    }
+
+    // ── Parse and validate body ──────────────────────────────────────
     const body = await request.json();
 
     if (!body.action || !ALLOWED_ACTIONS.has(body.action)) {
@@ -30,6 +47,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Override user_id with the server-verified value — never trust client-supplied ID
+    const verifiedBody = { ...body, user_id: user.id };
+
+    // ── Forward to edge function ─────────────────────────────────────
     const response = await fetch(
       `${SUPABASE_URL}/functions/v1/manual-payment-handler`,
       {
@@ -38,7 +59,7 @@ export async function POST(request: NextRequest) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify(verifiedBody),
       }
     );
 

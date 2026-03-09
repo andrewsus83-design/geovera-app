@@ -54,7 +54,7 @@ function fmt(n: number, singular: string, plural?: string): string {
 
 function quotaToFeatures(q: PlanQuota): string[] {
   const features: string[] = [];
-  features.push(fmt(q.brands_limit, "brand"));
+  if (q.brands_limit !== 0) features.push(fmt(q.brands_limit, "brand"));
   if (q.feature_ai_chat_enabled) {
     features.push(
       q.ai_chat_messages_per_day === -1
@@ -121,7 +121,7 @@ export default function SubscriptionPage() {
   const router = useRouter();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [quotas, setQuotas] = useState<Record<string, PlanQuota>>({});
-  const [currentSub, setCurrentSub] = useState<{ status: string; plan_name?: string } | null>(null);
+  const [currentSub, setCurrentSub] = useState<{ status: string; plan_id?: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -149,18 +149,21 @@ export default function SubscriptionPage() {
           setQuotas(map);
         }
 
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
           const res = await fetch("/api/payment", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "get_subscription", user_id: user.id }),
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ action: "get_subscription", user_id: session.user.id }),
           });
           const data = await res.json();
           if (data.success && data.subscription) {
             setCurrentSub({
               status: data.subscription.status,
-              plan_name: data.subscription.plans?.name,
+              plan_id: data.subscription.plan_id,
             });
           }
         }
@@ -176,18 +179,21 @@ export default function SubscriptionPage() {
     setSubmitting(plan.id);
     setError(null);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Belum login");
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Belum login");
 
       const res = await fetch("/api/payment", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({
           action: "request_subscription",
-          user_id: user.id,
+          user_id: session.user.id,
           plan_id: plan.id,
-          email: user.email,
-          full_name: user.user_metadata?.full_name || user.email?.split("@")[0] || "User",
+          email: session.user.email,
+          full_name: session.user.user_metadata?.full_name || session.user.email?.split("@")[0] || "User",
         }),
       });
       const data = await res.json();
@@ -206,13 +212,16 @@ export default function SubscriptionPage() {
     setSubmitting("free");
     setError(null);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Belum login");
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Belum login");
 
       const res = await fetch("/api/payment", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "activate_free_tier", user_id: user.id }),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ action: "activate_free_tier", user_id: session.user.id }),
       });
       const data = await res.json();
       if (data.success) {
@@ -377,7 +386,7 @@ export default function SubscriptionPage() {
                 const colors = PLAN_COLORS[plan.slug] ?? PLAN_COLORS.basic;
                 const quota = quotas[QUOTA_NAME_MAP[plan.slug] ?? plan.slug];
                 const features = quota ? quotaToFeatures(quota) : [];
-                const isActive = currentSub?.status === "active" && currentSub?.plan_name === plan.name;
+                const isActive = currentSub?.status === "active" && currentSub?.plan_id === plan.id;
                 const isLoading = submitting === plan.id;
 
                 return (
