@@ -11,7 +11,88 @@ const ANALYTICS_REQUIRES_TIER = "partner";
 const TIER_ORDER: Record<string, number> = { basic: 0, premium: 1, partner: 2 };
 
 // ── Types ────────────────────────────────────────────────────────
-type AnalyticsSection = "seo" | "geo" | "social";
+type AnalyticsSection = "overview" | "seo" | "geo" | "social";
+
+// ── Analytics Report (from analytics_reports table) ───────────────
+interface TodoItem {
+  id: string;
+  category: "SEO" | "GEO" | "Social";
+  title: string;
+  description: string;
+  geovera_service: string;
+  impact: number;
+  effort: number;
+  priority_score: number;
+  metric_affected: string;
+  score_gain_est: string;
+}
+interface ContentPlanItem {
+  day: number;
+  title: string;
+  type: string;
+  platform: string;
+  category: "SEO" | "GEO" | "Social";
+  target_keyword: string;
+  goal: string;
+  brief: string;
+}
+interface KeywordTrackingItem {
+  keyword: string;
+  current_rank: number | null;
+  search_volume: number;
+  opportunity: "high" | "medium" | "low";
+  action: string;
+  seo_impact: number;
+  type: "ranking" | "gap" | "quick_win";
+}
+interface TopicTrackingItem {
+  topic: string;
+  content_coverage: number;
+  opportunity: "high" | "medium" | "low";
+  action: string;
+  geo_impact: number;
+  social_impact: number;
+}
+interface TopContentItem {
+  title: string;
+  type: string;
+  platform: string;
+  seo_impact: number;
+  geo_impact: number;
+  social_impact: number;
+  overall_impact: number;
+  why_it_works: string;
+  replicate_insight: string;
+}
+interface VisibilityPillar {
+  score: number;
+  tactic: string;
+  actions: string[];
+}
+interface AnalyticsReport {
+  id: string;
+  cycle_number: number;
+  status: string;
+  overall_score: number | null;
+  seo_score: number | null;
+  geo_score: number | null;
+  social_score: number | null;
+  overall_delta: number | null;
+  seo_delta: number | null;
+  geo_delta: number | null;
+  social_delta: number | null;
+  seo_breakdown: { score: number; metrics: Record<string, { score: number; status: string; finding: string }> } | null;
+  geo_breakdown: { score: number; metrics: Record<string, { score: number; status: string; finding: string }> } | null;
+  social_breakdown: { score: number; metrics: Record<string, { score: number; status: string; finding: string }> } | null;
+  todo_list: TodoItem[] | null;
+  content_plan: ContentPlanItem[] | null;
+  keywords_tracking: KeywordTrackingItem[] | null;
+  topics_tracking: TopicTrackingItem[] | null;
+  visibility_strategy: { search_visibility?: VisibilityPillar; discovery?: VisibilityPillar; authority?: VisibilityPillar; timeline_presence?: VisibilityPillar } | null;
+  top_content: TopContentItem[] | null;
+  report_summary: { overall_score?: number; strongest_area?: string; weakest_area?: string; biggest_opportunity?: string; geovera_focus?: string } | null;
+  created_at: string;
+}
 
 // SEO — content performance items
 interface ContentItem {
@@ -378,8 +459,8 @@ const socialFactors: SocialFactor[] = [
   },
 ];
 
-// ── Score data (biweekly) ─────────────────────────────────────────
-const scores = {
+// ── Score data (biweekly) — static fallback for demo tabs ─────────
+const DEMO_SCORES = {
   seo: { score: 74, prev: 68, updatedAt: "Feb 16, 2026", nextUpdate: "Mar 2, 2026" },
   geo: { score: 59, prev: 54, updatedAt: "Feb 16, 2026", nextUpdate: "Mar 2, 2026" },
   social: { score: 82, prev: 79, updatedAt: "Feb 16, 2026", nextUpdate: "Mar 2, 2026" },
@@ -577,6 +658,9 @@ type SelectedItem =
   | { type: "seo-factor"; item: SeoFactor }
   | { type: "geo-factor"; item: GeoFactor }
   | { type: "social-factor"; item: SocialFactor }
+  | { type: "overview-todo"; item: TodoItem }
+  | { type: "overview-content"; item: TopContentItem }
+  | { type: "overview-plan"; item: ContentPlanItem }
   | null;
 
 interface PageSpeedResult {
@@ -587,7 +671,7 @@ interface PageSpeedResult {
   fetchTime: string | null;
 }
 
-function DetailPanel({ selected, section }: { selected: SelectedItem; section: AnalyticsSection }) {
+function DetailPanel({ selected, section, analyticsReport }: { selected: SelectedItem; section: AnalyticsSection; analyticsReport: AnalyticsReport | null }) {
   const [psData, setPsData] = React.useState<{ mobile: PageSpeedResult | null; desktop: PageSpeedResult | null }>({ mobile: null, desktop: null });
   const [psLoading, setPsLoading] = React.useState(false);
 
@@ -605,6 +689,106 @@ function DetailPanel({ selected, section }: { selected: SelectedItem; section: A
       .finally(() => setPsLoading(false));
   }, [isPageSpeedFactor]);
   if (!selected) {
+    // Overview empty state — keywords, topics, visibility
+    if (section === "overview") {
+      return (
+        <div className="flex flex-col h-full overflow-y-auto custom-scrollbar px-4 py-4 space-y-5">
+          {/* Keywords Tracking */}
+          {analyticsReport?.keywords_tracking && analyticsReport.keywords_tracking.length > 0 && (
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.1em] mb-2.5" style={{ color: "var(--gv-color-neutral-400)" }}>Keywords Tracking</p>
+              <div className="space-y-1">
+                {analyticsReport.keywords_tracking.map((k, i) => {
+                  const oppColor = k.opportunity === "high" ? "#16A34A" : k.opportunity === "medium" ? "#D97706" : "#9CA3AF";
+                  const typeLabel = k.type === "quick_win" ? "⚡" : k.type === "gap" ? "🎯" : "📊";
+                  return (
+                    <div key={i} className="rounded-[12px] px-3 py-2" style={{ background: "var(--gv-color-neutral-50)", border: "1px solid var(--gv-color-neutral-100)" }}>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px]">{typeLabel}</span>
+                        <p className="text-[12px] font-semibold flex-1 min-w-0 truncate" style={{ color: "var(--gv-color-neutral-900)" }}>{k.keyword}</p>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {k.current_rank ? <span className="text-[11px] font-bold" style={{ color: "var(--gv-color-primary-600)" }}>#{k.current_rank}</span> : <span className="text-[10px]" style={{ color: "var(--gv-color-neutral-400)" }}>—</span>}
+                          <span className="text-[10px] font-bold" style={{ color: oppColor }}>{k.opportunity}</span>
+                        </div>
+                      </div>
+                      <p className="text-[10px] mt-0.5 pl-5" style={{ color: "var(--gv-color-neutral-500)" }}>{k.action}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Topics Tracking */}
+          {analyticsReport?.topics_tracking && analyticsReport.topics_tracking.length > 0 && (
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.1em] mb-2.5" style={{ color: "var(--gv-color-neutral-400)" }}>Topics Tracking</p>
+              <div className="space-y-1.5">
+                {analyticsReport.topics_tracking.map((t, i) => {
+                  const oppColor = t.opportunity === "high" ? "#16A34A" : t.opportunity === "medium" ? "#D97706" : "#9CA3AF";
+                  return (
+                    <div key={i} className="rounded-[12px] px-3 py-2" style={{ background: "var(--gv-color-neutral-50)", border: "1px solid var(--gv-color-neutral-100)" }}>
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="text-[12px] font-semibold flex-1 min-w-0" style={{ color: "var(--gv-color-neutral-900)" }}>{t.topic}</p>
+                        <span className="text-[10px] font-bold flex-shrink-0" style={{ color: oppColor }}>{t.opportunity}</span>
+                      </div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="flex-1 h-1.5 rounded-full" style={{ background: "var(--gv-color-neutral-200)" }}>
+                          <div className="h-1.5 rounded-full" style={{ background: "var(--gv-color-primary-500)", width: `${t.content_coverage}%` }} />
+                        </div>
+                        <span className="text-[10px]" style={{ color: "var(--gv-color-neutral-500)" }}>{t.content_coverage}%</span>
+                      </div>
+                      <p className="text-[10px]" style={{ color: "var(--gv-color-neutral-500)" }}>{t.action}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Visibility Strategy */}
+          {analyticsReport?.visibility_strategy && (
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.1em] mb-2.5" style={{ color: "var(--gv-color-neutral-400)" }}>Visibility Strategy</p>
+              <div className="space-y-2">
+                {([
+                  { key: "search_visibility" as const, label: "Search Visibility", icon: "🔍" },
+                  { key: "discovery" as const, label: "Discovery", icon: "✨" },
+                  { key: "authority" as const, label: "Authority", icon: "🏛️" },
+                  { key: "timeline_presence" as const, label: "Timeline Presence", icon: "⚡" },
+                ] as const).map(({ key, label, icon }) => {
+                  const pillar = analyticsReport.visibility_strategy?.[key];
+                  if (!pillar) return null;
+                  const scoreColor = pillar.score >= 70 ? "#16A34A" : pillar.score >= 50 ? "#D97706" : "#DC2626";
+                  return (
+                    <div key={key} className="rounded-[12px] p-3" style={{ background: "var(--gv-color-neutral-50)", border: "1px solid var(--gv-color-neutral-100)" }}>
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="text-sm">{icon}</span>
+                        <p className="text-[11px] font-semibold flex-1" style={{ color: "var(--gv-color-neutral-900)" }}>{label}</p>
+                        <span className="text-[13px] font-bold" style={{ color: scoreColor }}>{pillar.score}</span>
+                      </div>
+                      <p className="text-[10px] mb-1.5" style={{ color: "var(--gv-color-neutral-500)" }}>{pillar.tactic}</p>
+                      <div className="space-y-0.5">
+                        {pillar.actions?.slice(0, 2).map((a, ai) => (
+                          <p key={ai} className="text-[10px]" style={{ color: "var(--gv-color-neutral-500)" }}>• {a}</p>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {!analyticsReport && (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <p className="text-[13px] font-semibold" style={{ color: "var(--gv-color-neutral-500)" }}>Run an analysis to see insights</p>
+            </div>
+          )}
+        </div>
+      );
+    }
+
     // GEO empty state — show tracked AI platforms
     if (section === "geo") {
       const trackedPlatforms = [
@@ -646,6 +830,132 @@ function DetailPanel({ selected, section }: { selected: SelectedItem; section: A
           </div>
           <p className="text-[13px] font-semibold" style={{ color: "var(--gv-color-neutral-500)" }}>Select {sectionLabel}</p>
           <p className="mt-1 text-[11px]" style={{ color: "var(--gv-color-neutral-400)" }}>Click any item in the center panel</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Overview — todo detail
+  if (selected.type === "overview-todo") {
+    const t = selected.item;
+    const catColor = t.category === "SEO" ? "#1D4ED8" : t.category === "GEO" ? "#7C3AED" : "#DB2777";
+    const catBg   = t.category === "SEO" ? "#EFF6FF"  : t.category === "GEO" ? "#F5F3FF"  : "#FDF2F8";
+    const impactColor = t.impact >= 8 ? "#16A34A" : t.impact >= 5 ? "#D97706" : "#9CA3AF";
+    return (
+      <div className="flex flex-col h-full">
+        <div className="p-4" style={{ borderBottom: "1px solid var(--gv-color-neutral-100)" }}>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full" style={{ background: catBg, color: catColor }}>{t.category}</span>
+            <span className="text-[10px] font-medium" style={{ color: "var(--gv-color-neutral-400)" }}>Priority #{t.id?.replace("todo_","")}</span>
+          </div>
+          <h3 className="text-[15px] font-bold leading-snug" style={{ color: "var(--gv-color-neutral-900)", fontFamily: "var(--gv-font-heading)" }}>{t.title}</h3>
+          <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--gv-color-neutral-600)" }}>{t.description}</p>
+        </div>
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { label: "Impact", value: `${t.impact}/10`, color: impactColor },
+              { label: "Effort", value: `${t.effort}/10`, color: "var(--gv-color-neutral-700)" },
+              { label: "Score Gain Est.", value: t.score_gain_est, color: "#16A34A" },
+              { label: "Metric", value: t.metric_affected?.replace(/_/g," "), color: "var(--gv-color-neutral-700)" },
+            ].map((m) => (
+              <div key={m.label} className="rounded-[12px] p-3 text-center" style={{ background: "var(--gv-color-neutral-50)", border: "1px solid var(--gv-color-neutral-100)" }}>
+                <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "var(--gv-color-neutral-400)" }}>{m.label}</p>
+                <p className="text-[15px] font-bold capitalize" style={{ color: m.color }}>{m.value}</p>
+              </div>
+            ))}
+          </div>
+          <div style={{ height: 1, background: "var(--gv-color-neutral-100)" }} />
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: "var(--gv-color-neutral-400)" }}>GeoVera Service</p>
+            <span className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium capitalize" style={{ background: "var(--gv-color-primary-50)", color: "var(--gv-color-primary-700)" }}>{t.geovera_service?.replace(/_/g," ")}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Overview — top content detail
+  if (selected.type === "overview-content") {
+    const c = selected.item;
+    const platformIcons: Record<string, string> = { website:"✍️", instagram:"📸", tiktok:"🎵", linkedin:"💼", youtube:"▶️" };
+    const typeIcons: Record<string, string> = { article:"📄", social_reel:"🎬", social_post:"📱", video:"▶️" };
+    return (
+      <div className="flex flex-col h-full">
+        <div className="p-4" style={{ borderBottom: "1px solid var(--gv-color-neutral-100)" }}>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-lg">{platformIcons[c.platform] ?? "📄"}</span>
+            <span className="text-xs font-medium capitalize" style={{ color: "var(--gv-color-neutral-500)" }}>{c.platform}</span>
+            <span className="text-[10px]" style={{ color: "var(--gv-color-neutral-400)" }}>·</span>
+            <span className="text-xs" style={{ color: "var(--gv-color-neutral-400)" }}>{typeIcons[c.type] ?? "📄"} {c.type?.replace(/_/g," ")}</span>
+          </div>
+          <h3 className="text-[15px] font-bold leading-snug" style={{ color: "var(--gv-color-neutral-900)", fontFamily: "var(--gv-font-heading)" }}>{c.title}</h3>
+        </div>
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
+          {/* Impact scores */}
+          <div>
+            <h4 className="text-xs font-medium uppercase mb-2.5" style={{ color: "var(--gv-color-neutral-400)" }}>Impact Scores</h4>
+            {[
+              { label: "SEO Impact", score: c.seo_impact, color: "#1D4ED8", bg: "#EFF6FF" },
+              { label: "GEO Impact", score: c.geo_impact, color: "#7C3AED", bg: "#F5F3FF" },
+              { label: "Social Impact", score: c.social_impact, color: "#DB2777", bg: "#FDF2F8" },
+              { label: "Overall Impact", score: c.overall_impact, color: "#16A34A", bg: "#DCFCE7" },
+            ].map((m) => (
+              <div key={m.label} className="mb-2.5">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-medium" style={{ color: "var(--gv-color-neutral-700)" }}>{m.label}</span>
+                  <span className="text-sm font-bold" style={{ color: m.color }}>{m.score}</span>
+                </div>
+                <div style={{ height: 6, borderRadius: 99, background: "var(--gv-color-neutral-100)" }}>
+                  <div style={{ height: 6, borderRadius: 99, background: m.color, width: `${m.score}%`, transition: "width 0.3s", opacity: 0.8 }} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ height: 1, background: "var(--gv-color-neutral-100)" }} />
+          <div>
+            <h4 className="text-xs font-medium uppercase mb-1.5" style={{ color: "var(--gv-color-neutral-400)" }}>Why It Works</h4>
+            <p className="text-sm leading-relaxed" style={{ color: "var(--gv-color-neutral-700)" }}>{c.why_it_works}</p>
+          </div>
+          <div className="rounded-[12px] p-3 flex items-start gap-2" style={{ background: "var(--gv-color-primary-50)", border: "1px solid var(--gv-color-primary-100)" }}>
+            <span className="text-sm flex-shrink-0 mt-0.5">💡</span>
+            <p className="text-xs leading-relaxed" style={{ color: "var(--gv-color-primary-700)" }}><strong>Replicate:</strong> {c.replicate_insight}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Overview — content plan detail
+  if (selected.type === "overview-plan") {
+    const p = selected.item;
+    const catColor = p.category === "SEO" ? "#1D4ED8" : p.category === "GEO" ? "#7C3AED" : "#DB2777";
+    const catBg   = p.category === "SEO" ? "#EFF6FF"  : p.category === "GEO" ? "#F5F3FF"  : "#FDF2F8";
+    const typeLabel = p.type?.replace(/_/g," ") ?? "";
+    return (
+      <div className="flex flex-col h-full">
+        <div className="p-4" style={{ borderBottom: "1px solid var(--gv-color-neutral-100)" }}>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background: "var(--gv-color-neutral-100)", color: "var(--gv-color-neutral-600)" }}>Day {p.day}</span>
+            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full" style={{ background: catBg, color: catColor }}>{p.category}</span>
+          </div>
+          <h3 className="text-[15px] font-bold leading-snug" style={{ color: "var(--gv-color-neutral-900)", fontFamily: "var(--gv-font-heading)" }}>{p.title}</h3>
+          <p className="mt-1 text-xs capitalize" style={{ color: "var(--gv-color-neutral-500)" }}>{typeLabel} · {p.platform}</p>
+        </div>
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--gv-color-neutral-400)" }}>Target Keyword</p>
+            <p className="text-sm font-medium" style={{ color: "var(--gv-color-primary-700)", background: "var(--gv-color-primary-50)", display: "inline-block", padding: "2px 8px", borderRadius: 999 }}>{p.target_keyword}</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--gv-color-neutral-400)" }}>Goal</p>
+            <p className="text-sm leading-relaxed" style={{ color: "var(--gv-color-neutral-700)" }}>{p.goal}</p>
+          </div>
+          <div style={{ height: 1, background: "var(--gv-color-neutral-100)" }} />
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: "var(--gv-color-neutral-400)" }}>Content Brief</p>
+            <p className="text-sm leading-relaxed" style={{ color: "var(--gv-color-neutral-700)" }}>{p.brief}</p>
+          </div>
         </div>
       </div>
     );
@@ -1512,14 +1822,22 @@ function dbRowToSocialItem(row: DbAnalyticsRow): SocialItem {
 }
 
 export default function AnalyticsPage() {
-  const [activeSection, setActiveSection] = useState<AnalyticsSection>("seo");
+  const [activeSection, setActiveSection] = useState<AnalyticsSection>("overview");
   const [selected, setSelected] = useState<SelectedItem>(null);
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
 
   // ── Auth & subscription ──────────────────────────────────────────
   const [brandId, setBrandId] = useState(FALLBACK_BRAND_ID);
+  const [brandProfileId, setBrandProfileId] = useState<string | null>(null);
   const [currentTier, setCurrentTier] = useState<"basic" | "premium" | "partner">("basic");
   const hasAccess = TIER_ORDER[currentTier] >= TIER_ORDER[ANALYTICS_REQUIRES_TIER];
+
+  // ── Analytics report state ────────────────────────────────────────
+  const [analyticsReport, setAnalyticsReport] = useState<AnalyticsReport | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [runAnalysisLoading, setRunAnalysisLoading] = useState(false);
+  const [runAnalysisStatus, setRunAnalysisStatus] = useState<"idle" | "running" | "success" | "error">("idle");
+  const [todoFilter, setTodoFilter] = useState<"all" | "SEO" | "GEO" | "Social">("all");
 
   useEffect(() => {
     const loadAuth = async () => {
@@ -1547,10 +1865,62 @@ export default function AnalyticsPage() {
             setCurrentTier(mapped as "basic" | "premium" | "partner");
           }
         }
+        // Load brand_profile_id and latest analytics report
+        const { data: bp } = await supabase
+          .from("brand_profiles")
+          .select("id")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (bp?.id) {
+          setBrandProfileId(bp.id);
+          setReportLoading(true);
+          const { data: report } = await supabase
+            .from("analytics_reports")
+            .select("*")
+            .eq("brand_profile_id", bp.id)
+            .eq("status", "ready")
+            .order("cycle_number", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (report) setAnalyticsReport(report as AnalyticsReport);
+          setReportLoading(false);
+        }
       } catch { /* keep defaults */ }
     };
     loadAuth();
   }, []);
+
+  const handleRunAnalysis = async () => {
+    if (!brandProfileId) return;
+    setRunAnalysisLoading(true);
+    setRunAnalysisStatus("running");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("No session");
+      const res = await supabase.functions.invoke("brand-analytics-scorer", {
+        body: { brand_profile_id: brandProfileId, user_id: session.user.id },
+      });
+      if (res.error) throw res.error;
+      setRunAnalysisStatus("success");
+      // Reload latest report
+      const { data: report } = await supabase
+        .from("analytics_reports")
+        .select("*")
+        .eq("brand_profile_id", brandProfileId)
+        .eq("status", "ready")
+        .order("cycle_number", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (report) setAnalyticsReport(report as AnalyticsReport);
+    } catch {
+      setRunAnalysisStatus("error");
+    } finally {
+      setRunAnalysisLoading(false);
+      setTimeout(() => setRunAnalysisStatus("idle"), 5000);
+    }
+  };
 
   // ── Live analytics from Late API + Claude ──────────────────────────────────
   const [liveSocialItems, setLiveSocialItems] = useState<SocialItem[] | null>(null);
@@ -1821,8 +2191,13 @@ export default function AnalyticsPage() {
     <NavColumn />
   );
 
-  // Active score data
-  const activeScore = scores[activeSection];
+  // Active score data (use real data when available, fall back to demo)
+  const scores = activeSection !== "overview" ? {
+    seo: analyticsReport ? { score: analyticsReport.seo_score ?? DEMO_SCORES.seo.score, prev: (analyticsReport.seo_score ?? DEMO_SCORES.seo.score) - (analyticsReport.seo_delta ?? 0), updatedAt: new Date(analyticsReport.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }), nextUpdate: "Biweekly" } : DEMO_SCORES.seo,
+    geo: analyticsReport ? { score: analyticsReport.geo_score ?? DEMO_SCORES.geo.score, prev: (analyticsReport.geo_score ?? DEMO_SCORES.geo.score) - (analyticsReport.geo_delta ?? 0), updatedAt: new Date(analyticsReport.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }), nextUpdate: "Biweekly" } : DEMO_SCORES.geo,
+    social: analyticsReport ? { score: analyticsReport.social_score ?? DEMO_SCORES.social.score, prev: (analyticsReport.social_score ?? DEMO_SCORES.social.score) - (analyticsReport.social_delta ?? 0), updatedAt: new Date(analyticsReport.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }), nextUpdate: "Biweekly" } : DEMO_SCORES.social,
+  } : DEMO_SCORES;
+  const activeScore = activeSection !== "overview" ? scores[activeSection as "seo" | "geo" | "social"] : scores.seo;
   const activeDelta = activeScore.score - activeScore.prev;
 
   const center = (
@@ -1834,7 +2209,7 @@ export default function AnalyticsPage() {
             className="text-[22px] font-bold leading-tight flex-shrink-0"
             style={{ color: "var(--gv-color-neutral-900)", fontFamily: "var(--gv-font-heading)" }}
           >
-            {activeSection === "seo" ? "SEO" : activeSection === "geo" ? "GEO · AI Platform" : "Social Search"}
+            {activeSection === "overview" ? "Analytics Overview" : activeSection === "seo" ? "SEO" : activeSection === "geo" ? "GEO · AI Platform" : "Social Search"}
           </h1>
           {/* Sync button — Social section only */}
           {activeSection === "social" && (
@@ -1881,6 +2256,228 @@ export default function AnalyticsPage() {
 
       {/* ── Scrollable content body ── */}
       <div className="flex-1 overflow-y-auto custom-scrollbar px-5 py-4 space-y-4">
+
+      {/* ── OVERVIEW ── */}
+      {activeSection === "overview" && (
+        <div>
+          {/* Score Cards */}
+          <div className="grid grid-cols-2 gap-2 mb-4">
+            {[
+              { label: "Overall", score: analyticsReport?.overall_score, delta: analyticsReport?.overall_delta, color: "#16A34A", bg: "#DCFCE7" },
+              { label: "SEO", score: analyticsReport?.seo_score, delta: analyticsReport?.seo_delta, color: "#1D4ED8", bg: "#EFF6FF" },
+              { label: "GEO", score: analyticsReport?.geo_score, delta: analyticsReport?.geo_delta, color: "#7C3AED", bg: "#F5F3FF" },
+              { label: "Social", score: analyticsReport?.social_score, delta: analyticsReport?.social_delta, color: "#DB2777", bg: "#FDF2F8" },
+            ].map((c) => (
+              <div key={c.label} className="rounded-[14px] p-3 flex flex-col gap-1" style={{ background: c.bg, border: `1px solid ${c.color}22` }}>
+                <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: `${c.color}99` }}>{c.label}</p>
+                <div className="flex items-end gap-1.5">
+                  <span className="text-[28px] font-bold leading-none" style={{ color: c.color, fontFamily: "var(--gv-font-heading)" }}>
+                    {reportLoading ? "—" : c.score ?? "—"}
+                  </span>
+                  {c.delta !== null && c.delta !== undefined && (
+                    <span className="text-[11px] font-semibold mb-0.5" style={{ color: c.delta >= 0 ? "#16A34A" : "#DC2626" }}>
+                      {c.delta >= 0 ? "↑" : "↓"}{Math.abs(c.delta)}
+                    </span>
+                  )}
+                </div>
+                <div style={{ height: 4, borderRadius: 99, background: `${c.color}22` }}>
+                  <div style={{ height: 4, borderRadius: 99, background: c.color, width: `${c.score ?? 0}%`, transition: "width 0.4s" }} />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Run Analysis + cycle info */}
+          <div className="rounded-[14px] p-3 mb-4 flex items-center gap-3" style={{ background: "var(--gv-color-neutral-50)", border: "1px solid var(--gv-color-neutral-200)" }}>
+            <div className="flex-1 min-w-0">
+              <p className="text-[12px] font-semibold" style={{ color: "var(--gv-color-neutral-800)" }}>
+                {analyticsReport ? `Cycle #${analyticsReport.cycle_number}` : "No analysis yet"}
+              </p>
+              <p className="text-[10px]" style={{ color: "var(--gv-color-neutral-400)" }}>
+                {analyticsReport
+                  ? `Last run: ${new Date(analyticsReport.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+                  : "Run your first analysis to get real scores"}
+              </p>
+            </div>
+            <button
+              onClick={handleRunAnalysis}
+              disabled={runAnalysisLoading || !brandProfileId}
+              className="flex items-center gap-1.5 rounded-[10px] px-3 py-1.5 text-[12px] font-semibold transition-colors disabled:opacity-50 flex-shrink-0"
+              style={
+                runAnalysisStatus === "success"
+                  ? { background: "#DCFCE7", color: "#16A34A" }
+                  : runAnalysisStatus === "error"
+                  ? { background: "#FEE2E2", color: "#DC2626" }
+                  : { background: "var(--gv-color-primary-600)", color: "#fff" }
+              }
+            >
+              {runAnalysisLoading ? (
+                <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" strokeOpacity="0.25"/><path d="M21 12a9 9 0 00-9-9" strokeLinecap="round"/></svg>
+              ) : (
+                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              )}
+              {runAnalysisLoading ? "Analyzing…" : runAnalysisStatus === "success" ? "Done!" : runAnalysisStatus === "error" ? "Failed" : "Run Analysis"}
+            </button>
+          </div>
+
+          {/* Summary */}
+          {analyticsReport?.report_summary?.biggest_opportunity && (
+            <div className="rounded-[14px] p-3 mb-4 flex gap-2.5" style={{ background: "var(--gv-color-primary-50)", border: "1px solid var(--gv-color-primary-100)" }}>
+              <span className="text-base flex-shrink-0 mt-0.5">🎯</span>
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: "var(--gv-color-primary-500)" }}>Biggest Opportunity</p>
+                <p className="text-[12px] leading-relaxed" style={{ color: "var(--gv-color-primary-800)" }}>{analyticsReport.report_summary.biggest_opportunity}</p>
+                {analyticsReport.report_summary.geovera_focus && (
+                  <p className="text-[11px] mt-1 leading-relaxed" style={{ color: "var(--gv-color-primary-600)" }}>{analyticsReport.report_summary.geovera_focus}</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Top 5 Performing Content */}
+          {analyticsReport?.top_content && analyticsReport.top_content.length > 0 && (
+            <>
+              <SectionHeader label="Top 5 Performing Content — Claude Impact Score" />
+              <div className="space-y-1.5 mb-4">
+                {analyticsReport.top_content.map((c, i) => {
+                  const platformIcons: Record<string, string> = { website:"✍️", instagram:"📸", tiktok:"🎵", linkedin:"💼", youtube:"▶️" };
+                  const isSelected = selected?.type === "overview-content" && selected.item.title === c.title;
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => handleSelect({ type: "overview-content", item: c })}
+                      className="w-full text-left rounded-[14px] p-3 transition-colors"
+                      style={{
+                        background: isSelected ? "var(--gv-color-primary-50)" : "var(--gv-color-bg-surface)",
+                        border: isSelected ? "1.5px solid var(--gv-color-primary-200)" : "1px solid var(--gv-color-neutral-100)",
+                      }}
+                    >
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ background: "var(--gv-color-primary-100)", color: "var(--gv-color-primary-700)" }}>#{i + 1}</span>
+                        <span className="text-base">{platformIcons[c.platform] ?? "📄"}</span>
+                        <p className="text-[12px] font-semibold flex-1 min-w-0 leading-snug truncate" style={{ color: "var(--gv-color-neutral-900)" }}>{c.title}</p>
+                        <span className="text-[13px] font-bold flex-shrink-0" style={{ color: "#16A34A" }}>{c.overall_impact}</span>
+                      </div>
+                      <div className="flex gap-3 pl-7">
+                        {[
+                          { label: "SEO", score: c.seo_impact, color: "#1D4ED8" },
+                          { label: "GEO", score: c.geo_impact, color: "#7C3AED" },
+                          { label: "Social", score: c.social_impact, color: "#DB2777" },
+                        ].map((s) => (
+                          <div key={s.label} className="flex items-center gap-1">
+                            <span className="text-[9px] font-bold" style={{ color: s.color }}>{s.label}</span>
+                            <span className="text-[10px] font-semibold" style={{ color: "var(--gv-color-neutral-600)" }}>{s.score}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          {/* Todo List */}
+          {analyticsReport?.todo_list && analyticsReport.todo_list.length > 0 && (
+            <>
+              <div className="flex items-center justify-between mb-2 px-2">
+                <span className="text-[11px] font-bold uppercase tracking-[0.1em]" style={{ color: "var(--gv-color-neutral-400)" }}>Priority Actions</span>
+                <div className="flex gap-1">
+                  {(["all", "SEO", "GEO", "Social"] as const).map((f) => (
+                    <button
+                      key={f}
+                      onClick={() => setTodoFilter(f)}
+                      className="px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors"
+                      style={{
+                        background: todoFilter === f ? "var(--gv-color-primary-100)" : "var(--gv-color-neutral-100)",
+                        color: todoFilter === f ? "var(--gv-color-primary-700)" : "var(--gv-color-neutral-500)",
+                      }}
+                    >{f}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1.5 mb-4">
+                {analyticsReport.todo_list
+                  .filter((t) => todoFilter === "all" || t.category === todoFilter)
+                  .slice(0, 8)
+                  .map((t, i) => {
+                    const catColor = t.category === "SEO" ? "#1D4ED8" : t.category === "GEO" ? "#7C3AED" : "#DB2777";
+                    const catBg   = t.category === "SEO" ? "#EFF6FF"  : t.category === "GEO" ? "#F5F3FF"  : "#FDF2F8";
+                    const isSelected = selected?.type === "overview-todo" && selected.item.id === t.id;
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => handleSelect({ type: "overview-todo", item: t })}
+                        className="w-full text-left rounded-[14px] p-3 transition-colors"
+                        style={{
+                          background: isSelected ? "var(--gv-color-primary-50)" : "var(--gv-color-bg-surface)",
+                          border: isSelected ? "1.5px solid var(--gv-color-primary-200)" : "1px solid var(--gv-color-neutral-100)",
+                        }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: catBg, color: catColor }}>{t.category}</span>
+                          <p className="text-[12px] font-semibold flex-1 min-w-0 leading-snug" style={{ color: "var(--gv-color-neutral-900)" }}>{t.title}</p>
+                          <span className="text-[11px] font-semibold flex-shrink-0" style={{ color: "#16A34A" }}>{t.score_gain_est}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+              </div>
+            </>
+          )}
+
+          {/* 14-Day Content Plan */}
+          {analyticsReport?.content_plan && analyticsReport.content_plan.length > 0 && (
+            <>
+              <SectionHeader label="14-Day Content Plan" />
+              <div className="space-y-1.5 mb-4">
+                {analyticsReport.content_plan.map((p, i) => {
+                  const catColor = p.category === "SEO" ? "#1D4ED8" : p.category === "GEO" ? "#7C3AED" : "#DB2777";
+                  const catBg   = p.category === "SEO" ? "#EFF6FF"  : p.category === "GEO" ? "#F5F3FF"  : "#FDF2F8";
+                  const platformIcons: Record<string, string> = { website:"✍️", instagram:"📸", tiktok:"🎵", linkedin:"💼", youtube:"▶️" };
+                  const isSelected = selected?.type === "overview-plan" && selected.item.day === p.day;
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => handleSelect({ type: "overview-plan", item: p })}
+                      className="w-full text-left rounded-[14px] p-3 transition-colors"
+                      style={{
+                        background: isSelected ? "var(--gv-color-primary-50)" : "var(--gv-color-bg-surface)",
+                        border: isSelected ? "1.5px solid var(--gv-color-primary-200)" : "1px solid var(--gv-color-neutral-100)",
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="flex-shrink-0 w-7 text-center text-[10px] font-bold rounded-[6px] py-0.5" style={{ background: "var(--gv-color-neutral-100)", color: "var(--gv-color-neutral-600)" }}>D{p.day}</span>
+                        <span className="text-sm flex-shrink-0">{platformIcons[p.platform] ?? "📄"}</span>
+                        <p className="text-[12px] font-semibold flex-1 min-w-0 truncate leading-snug" style={{ color: "var(--gv-color-neutral-900)" }}>{p.title}</p>
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0" style={{ background: catBg, color: catColor }}>{p.category}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          {/* Empty state */}
+          {!reportLoading && !analyticsReport && (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="w-14 h-14 rounded-full mb-4 flex items-center justify-center" style={{ background: "var(--gv-color-neutral-100)" }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--gv-color-neutral-400)" strokeWidth="1.5">
+                  <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+              <p className="text-[14px] font-semibold" style={{ color: "var(--gv-color-neutral-700)" }}>No analysis yet</p>
+              <p className="mt-1 text-[12px]" style={{ color: "var(--gv-color-neutral-400)" }}>Click &ldquo;Run Analysis&rdquo; above to generate your first report</p>
+            </div>
+          )}
+          {reportLoading && (
+            <div className="flex items-center justify-center py-16">
+              <svg className="h-6 w-6 animate-spin" style={{ color: "var(--gv-color-primary-500)" }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" strokeOpacity="0.25"/><path d="M21 12a9 9 0 00-9-9" strokeLinecap="round"/></svg>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── SEO — Articles & Blog content ── */}
       {activeSection === "seo" && (
@@ -2154,10 +2751,19 @@ export default function AnalyticsPage() {
 
       </div>{/* end scrollable body */}
 
-      {/* ── Sticky bottom tabs — SEO / GEO / Social ── */}
+      {/* ── Sticky bottom tabs — Overview / SEO / GEO / Social ── */}
       <div className="flex-shrink-0 overflow-hidden rounded-b-xl" style={{ borderTop: "1px solid var(--gv-color-neutral-200)" }}>
         <div className="flex h-full">
           {([
+            {
+              key: "overview" as AnalyticsSection,
+              label: "Overview",
+              icon: (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+                </svg>
+              ),
+            },
             {
               key: "seo" as AnalyticsSection,
               label: "SEO",
@@ -2205,7 +2811,7 @@ export default function AnalyticsPage() {
     </div>
   );
 
-  const right = <DetailPanel selected={selected} section={activeSection} />;
+  const right = <DetailPanel selected={selected} section={activeSection} analyticsReport={analyticsReport} />;
 
   return (
     <ThreeColumnLayout

@@ -15,8 +15,18 @@ interface Plan {
 
 interface PlanQuota {
   plan_name: string;
+  // Feature toggles
+  feature_start_enabled: boolean;
+  feature_ai_chat_enabled: boolean;
+  feature_content_enabled: boolean;
+  feature_reply_enabled: boolean;
+  feature_report_enabled: boolean;
+  feature_chronicle_enabled: boolean;
+  // Limits
   brands_limit: number;
+  onboarding_runs_limit: number;
   ai_chat_messages_per_day: number;
+  suggested_prompts_per_day: number;
   content_articles_per_day: number;
   content_articles_short_per_day: number;
   content_articles_medium_per_day: number;
@@ -26,10 +36,13 @@ interface PlanQuota {
   analytics_topics_tracked: number;
   content_images_per_day: number;
   content_videos_per_day: number;
-  feature_report_enabled: boolean;
-  feature_chronicle_enabled: boolean;
-  feature_ai_chat_enabled: boolean;
-  feature_content_enabled: boolean;
+  qa_tier: string;
+  qa_runs_per_cycle: number;
+  qa_probes_total: number;
+  reports_per_month: number;
+  auto_reply_per_5min: number;
+  auto_publish_per_month: number;
+  chronicle_runs_per_cycle: number;
 }
 
 interface BankSettings {
@@ -60,16 +73,24 @@ function fmt(n: number, singular: string, plural?: string): string {
 
 function quotaToFeatures(q: PlanQuota): string[] {
   const features: string[] = [];
-  if (q.brands_limit !== 0) features.push(fmt(q.brands_limit, "brand"));
+
+  // Brands
+  if (q.brands_limit !== 0)
+    features.push(q.brands_limit === -1 ? "Unlimited brand" : `${q.brands_limit} brand`);
+
+  // Onboarding
+  if (q.feature_start_enabled && q.onboarding_runs_limit !== 0)
+    features.push(q.onboarding_runs_limit === -1 ? "Unlimited brand onboarding" : `${q.onboarding_runs_limit}x brand onboarding`);
+
+  // AI Chat
   if (q.feature_ai_chat_enabled) {
-    features.push(
-      q.ai_chat_messages_per_day === -1
-        ? "Unlimited AI chat/hari"
-        : `${q.ai_chat_messages_per_day} AI chat messages/hari`
-    );
+    features.push(q.ai_chat_messages_per_day === -1 ? "Unlimited AI chat/hari" : `${q.ai_chat_messages_per_day} AI chat messages/hari`);
+    if (q.suggested_prompts_per_day !== 0)
+      features.push(q.suggested_prompts_per_day === -1 ? "Unlimited suggested prompts/hari" : `${q.suggested_prompts_per_day} suggested prompts/hari`);
   }
+
+  // Content
   if (q.feature_content_enabled) {
-    // Article types
     if (q.content_articles_short_per_day !== 0)
       features.push(q.content_articles_short_per_day === -1 ? "Unlimited artikel short/hari" : `${q.content_articles_short_per_day} artikel short (≤300w)/hari`);
     if (q.content_articles_medium_per_day !== 0)
@@ -78,27 +99,43 @@ function quotaToFeatures(q: PlanQuota): string[] {
       features.push(q.content_articles_long_per_day === -1 ? "Unlimited artikel long/hari" : `${q.content_articles_long_per_day} artikel long (≤1500w)/hari`);
     if (q.content_articles_verylong_per_day !== 0)
       features.push(q.content_articles_verylong_per_day === -1 ? "Unlimited artikel very long/hari" : `${q.content_articles_verylong_per_day} artikel very long (3000w+)/hari`);
-    features.push(
-      q.content_images_per_day === -1
-        ? "Unlimited gambar/hari"
-        : `${q.content_images_per_day} gambar/hari`
-    );
-    if (q.content_videos_per_day !== 0) {
-      features.push(
-        q.content_videos_per_day === -1
-          ? "Unlimited video/hari"
-          : `${q.content_videos_per_day} video/hari`
-      );
-    }
+    if (q.content_images_per_day !== 0)
+      features.push(q.content_images_per_day === -1 ? "Unlimited gambar/hari" : `${q.content_images_per_day} gambar/hari`);
+    if (q.content_videos_per_day !== 0)
+      features.push(q.content_videos_per_day === -1 ? "Unlimited video/hari" : `${q.content_videos_per_day} video/hari`);
+    if (q.auto_publish_per_month !== 0)
+      features.push(q.auto_publish_per_month === -1 ? "Unlimited auto-publish/bulan" : `${q.auto_publish_per_month} auto-publish/bulan`);
   }
+
+  // Analytics
   if (q.feature_report_enabled) {
-    features.push("Analytics included");
+    features.push("Analytics (SEO · GEO · Social)");
     if (q.analytics_keywords_tracked !== 0)
-      features.push(q.analytics_keywords_tracked === -1 ? "Unlimited keywords tracked & optimized" : `${q.analytics_keywords_tracked} keywords tracked & optimized`);
+      features.push(q.analytics_keywords_tracked === -1 ? "Unlimited keywords tracked" : `${q.analytics_keywords_tracked} keywords tracked & optimized`);
     if (q.analytics_topics_tracked !== 0)
-      features.push(q.analytics_topics_tracked === -1 ? "Unlimited topics tracked & optimized" : `${q.analytics_topics_tracked} topics tracked & optimized`);
+      features.push(q.analytics_topics_tracked === -1 ? "Unlimited topics tracked" : `${q.analytics_topics_tracked} topics tracked & optimized`);
+    if (q.reports_per_month !== 0)
+      features.push(q.reports_per_month === -1 ? "Unlimited analytic cycles/bulan" : `${q.reports_per_month} analytic cycles/bulan`);
   }
-  if (q.feature_chronicle_enabled) features.push("Brand Chronicle included");
+
+  // Reply
+  if (q.feature_reply_enabled && q.auto_reply_per_5min !== 0)
+    features.push(q.auto_reply_per_5min === -1 ? "Unlimited auto-reply" : `${q.auto_reply_per_5min} auto-reply per 5 menit`);
+
+  // QA
+  if (q.qa_tier && q.qa_tier !== "none") {
+    features.push(`QA tier: ${q.qa_tier}`);
+    if (q.qa_probes_total !== 0)
+      features.push(q.qa_probes_total === -1 ? "Unlimited QA probes/cycle" : `${q.qa_probes_total} QA probes/cycle`);
+  }
+
+  // Chronicle
+  if (q.feature_chronicle_enabled) {
+    features.push("Brand Chronicle");
+    if (q.chronicle_runs_per_cycle !== 0)
+      features.push(q.chronicle_runs_per_cycle === -1 ? "Unlimited chronicle cycles" : `${q.chronicle_runs_per_cycle} chronicle runs/cycle`);
+  }
+
   return features;
 }
 
@@ -151,7 +188,7 @@ export default function SubscriptionPage() {
             .order("price_idr", { ascending: true }),
           supabase
             .from("plan_quotas")
-            .select("plan_name, brands_limit, ai_chat_messages_per_day, content_articles_per_day, content_articles_short_per_day, content_articles_medium_per_day, content_articles_long_per_day, content_articles_verylong_per_day, content_images_per_day, content_videos_per_day, analytics_keywords_tracked, analytics_topics_tracked, feature_report_enabled, feature_chronicle_enabled, feature_ai_chat_enabled, feature_content_enabled"),
+            .select("*"),
         ]);
 
         if (plansData) setPlans(plansData);
