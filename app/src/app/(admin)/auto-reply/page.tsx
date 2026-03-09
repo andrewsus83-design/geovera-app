@@ -5,6 +5,8 @@ import { supabase } from "@/lib/supabase";
 import ThreeColumnLayout from "@/components/shared/ThreeColumnLayout";
 import NavColumn from "@/components/shared/NavColumn";
 import PlatformIcon from "@/components/shared/PlatformIcon";
+import { useUserQuota } from "@/hooks/useUserQuota";
+import FeatureGate from "@/components/shared/FeatureGate";
 
 /* ══════════════════════════════════════════════════════════════════════════
    /auto-reply — GeoVera Auto-Reply Dashboard
@@ -104,6 +106,7 @@ function toDateKey(dateStr: string): string {
 function cache_label(s: string) { return `Cache ${s}`; }
 
 export default function AutoReplyPage() {
+  const { quota, loading: quotaLoading } = useUserQuota();
   const [replyMode, setReplyMode]       = useState<ReplyMode>("ai");
   const [selectedDateKey, setSDK]       = useState<string>(new Date().toISOString().slice(0, 10));
   const [selectedId, setSelectedId]     = useState<string | null>(null);
@@ -842,6 +845,7 @@ export default function AutoReplyPage() {
   );
 
   return (
+    <FeatureGate enabled={quotaLoading || quota.feature_reply_enabled} featureName="Auto Reply">
     <div className="flex flex-col h-full">
       <div className="flex-1 min-h-0">
         <ThreeColumnLayout
@@ -916,5 +920,6 @@ export default function AutoReplyPage() {
         </div>
       </nav>
     </div>
+    </FeatureGate>
   );
 }
