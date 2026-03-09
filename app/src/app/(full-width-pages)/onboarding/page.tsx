@@ -129,9 +129,13 @@ export default function OnboardingPage() {
   const isLast = step === STEPS.length - 1;
 
   function validate(): string {
-    if (current.required && !value.trim()) return "Field ini wajib diisi.";
-    if (current.id === "website_url" && value && !value.startsWith("http")) return "URL harus dimulai dengan https://";
-    if (current.id === "whatsapp_number" && value && !/^\+?[\d\s\-()]{8,}$/.test(value)) return "Format nomor tidak valid.";
+    const v = value.trim();
+    if (current.required && !v) return "Field ini wajib diisi.";
+    if (current.id === "brand_name" && v && (v.length < 2 || v.length > 100)) return "Nama brand harus 2–100 karakter.";
+    if (current.id === "website_url" && v && !/^https?:\/\/[^\s]+\.[^\s]{2,}/.test(v)) return "URL tidak valid. Contoh: https://brand.com";
+    if (current.id === "instagram_handle" && v && !/^[a-zA-Z0-9._]{1,30}$/.test(v.replace(/^@/, ""))) return "Handle hanya boleh huruf, angka, titik, underscore (maks 30 karakter).";
+    if (current.id === "tiktok_handle" && v && !/^[a-zA-Z0-9._]{1,30}$/.test(v.replace(/^@/, ""))) return "Handle hanya boleh huruf, angka, titik, underscore (maks 30 karakter).";
+    if (current.id === "whatsapp_number" && v && !/^\+?\d[\d\s\-]{6,14}\d$/.test(v)) return "Format nomor tidak valid. Contoh: +62812345678";
     return "";
   }
 
@@ -164,16 +168,16 @@ export default function OnboardingPage() {
     const instagram = form.instagram_handle.replace(/^@/, "").trim();
     const tiktok = form.tiktok_handle.replace(/^@/, "").trim();
 
-    const { error: dbErr } = await supabase.from("brand_profiles").upsert({
+    const { data: savedData, error: dbErr } = await supabase.from("brand_profiles").upsert({
       user_id: userId,
       brand_name: form.brand_name.trim(),
       website_url: form.website_url.trim() || null,
       instagram_handle: instagram || null,
       tiktok_handle: tiktok || null,
       country: form.country,
-      whatsapp_number: form.whatsapp_number.trim(),
+      whatsapp_number: form.whatsapp_number.replace(/[\s\-]/g, "").trim(),
       research_status: "pending",
-    }, { onConflict: "user_id" });
+    }, { onConflict: "user_id" }).select("id").single();
 
     if (dbErr) {
       setSaving(false);
@@ -184,6 +188,13 @@ export default function OnboardingPage() {
     await supabase.from("user_profiles")
       .update({ onboarding_completed: true })
       .eq("id", userId);
+
+    // Trigger Gemini brand indexer — fire-and-forget (runs in background)
+    if (savedData?.id) {
+      supabase.functions.invoke("brand-indexer-gemini", {
+        body: { user_id: userId, brand_profile_id: savedData.id },
+      }).catch(() => { /* background job, errors are logged server-side */ });
+    }
 
     setDone(true);
     setTimeout(() => router.replace("/pricing"), 2500);
