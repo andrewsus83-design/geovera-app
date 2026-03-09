@@ -81,7 +81,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: profile, error: fetchErr } = await supabase
       .from("brand_profiles")
-      .select("brand_name, country, source_of_truth, daily_insights, insights_updated_at, serpapi_data, firecrawl_data, apify_data, perplexity_data")
+      .select("brand_name, country, source_of_truth, daily_insights, insights_updated_at, serpapi_data, firecrawl_data, apify_data, perplexity_data, qa_analytics")
       .eq("id", brand_profile_id)
       .eq("user_id", user_id)
       .single();
@@ -108,6 +108,7 @@ Deno.serve(async (req: Request) => {
     const serpData = profile.serpapi_data as Record<string, unknown> | null;
     const firecrawlData = profile.firecrawl_data as Record<string, unknown> | null;
     const apifyData = profile.apify_data as Record<string, unknown> | null;
+    const qaData = profile.qa_analytics as Record<string, unknown> | null;
     const today = new Date().toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
     const systemPrompt = `You are GeoVera's Brand Intelligence AI — Claude Sonnet.
@@ -149,6 +150,20 @@ Output ONLY valid JSON. No markdown. No explanations outside the JSON.`;
       content_patterns: apifyData.content_patterns,
     }, null, 0).slice(0, 1000) : "{}";
 
+    // QA analytics — biweekly brand presence audit (GEO + Social + SEO probes)
+    const qaAnalysis = qaData ? (qaData.analysis as Record<string, unknown>) : null;
+    const qaSummary = qaAnalysis ? JSON.stringify({
+      qa_score: qaAnalysis.qa_score,
+      key_findings: qaAnalysis.key_findings,
+      new_keywords_discovered: qaAnalysis.new_keywords_discovered,
+      new_topics_discovered: qaAnalysis.new_topics_discovered,
+      priority_gaps: (qaAnalysis.priority_gaps as unknown[])?.slice(0, 6),
+      content_opportunities: (qaAnalysis.content_opportunities as unknown[])?.slice(0, 5),
+      qa_narrative: qaAnalysis.qa_narrative,
+      probes_run: qaData.probes_run,
+      geo_mention_rate: (qaData.probes_run as Record<string, unknown>)?.geo,
+    }, null, 0).slice(0, 2000) : "{}";
+
     const userPrompt = `Perform a 72-hour reverse engineering analysis for brand: "${profile.brand_name}" (${profile.country}).
 
 SOURCE OF TRUTH:
@@ -162,6 +177,10 @@ ${firecrawlSummary}
 
 SOCIAL MEDIA DATA (last 14 days):
 ${apifySummary}
+
+QA ANALYTICS — BIWEEKLY BRAND PRESENCE AUDIT (GEO + Social Search + SEO probes):
+${qaSummary}
+${qaAnalysis ? "IMPORTANT: Use new_keywords_discovered and new_topics_discovered from QA to enrich suggested_prompts and content_plan. Use priority_gaps to add urgency to tasks. Use qa_score for brand_presence_analytics scores." : ""}
 
 OUTPUT this exact JSON (no other text outside the JSON):
 {

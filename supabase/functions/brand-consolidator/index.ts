@@ -418,6 +418,11 @@ OUTPUT this exact JSON structure (no other text):
         body: { brand_profile_id, user_id },
       }).catch((e: Error) => console.error(`[brand-consolidator] learner chain failed: ${e.message}`));
 
+      // Brand QA engine — biweekly brand presence audit (runs after full pipeline)
+      supabase.functions.invoke("brand-qa-engine", {
+        body: { brand_profile_id, user_id },
+      }).catch((e: Error) => console.error(`[brand-consolidator] qa-engine chain failed: ${e.message}`));
+
       // Content engine — initial content generation (only on first sot_ready)
       if (!sotVersion || sotVersion < 1) {
         supabase.functions.invoke("brand-content-engine", {
@@ -425,7 +430,7 @@ OUTPUT this exact JSON structure (no other text):
         }).catch((e: Error) => console.error(`[brand-consolidator] content engine chain failed: ${e.message}`));
       }
 
-      console.log(`[brand-consolidator] Fired brand-daily-learner + brand-content-engine`);
+      console.log(`[brand-consolidator] Fired brand-daily-learner + brand-qa-engine + brand-content-engine`);
     }
 
     return new Response(JSON.stringify({
