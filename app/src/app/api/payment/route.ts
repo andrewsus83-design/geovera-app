@@ -6,8 +6,7 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
 export async function OPTIONS() {
@@ -15,11 +14,8 @@ export async function OPTIONS() {
 }
 
 const ALLOWED_ACTIONS = new Set([
-  "create_invoice",
-  "check_payment_status",
+  "request_subscription",
   "get_subscription",
-  "cancel_subscription",
-  "get_payment_methods",
   "activate_free_tier",
 ]);
 
@@ -35,7 +31,7 @@ export async function POST(request: NextRequest) {
     }
 
     const response = await fetch(
-      `${SUPABASE_URL}/functions/v1/xendit-payment-handler`,
+      `${SUPABASE_URL}/functions/v1/manual-payment-handler`,
       {
         method: "POST",
         headers: {
@@ -45,6 +41,14 @@ export async function POST(request: NextRequest) {
         body: JSON.stringify(body),
       }
     );
+
+    const ct = response.headers.get("content-type") ?? "";
+    if (!ct.includes("application/json")) {
+      return NextResponse.json(
+        { success: false, error: `Upstream error (${response.status})` },
+        { status: 502, headers: cors }
+      );
+    }
 
     const result = await response.json();
     return NextResponse.json(result, {
