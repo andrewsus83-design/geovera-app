@@ -20,9 +20,16 @@ interface PlanQuota {
   ai_chat_messages_per_day: number;
   suggested_prompts_per_day: number;
   // Content
-  content_articles_per_month: number;
-  content_images_per_month: number;
-  content_videos_per_month: number;
+  content_articles_per_day: number;
+  content_articles_short_per_day: number;
+  content_articles_medium_per_day: number;
+  content_articles_long_per_day: number;
+  content_articles_verylong_per_day: number;
+  content_images_per_day: number;
+  // Analytics
+  analytics_keywords_tracked: number;
+  analytics_topics_tracked: number;
+  content_videos_per_day: number;
   // QA
   qa_tier: string;
   qa_runs_per_cycle: number;
@@ -30,7 +37,7 @@ interface PlanQuota {
   // Report
   reports_per_month: number;
   // Reply / Chronicle
-  auto_reply_per_day: number;
+  auto_reply_per_5min: number;
   auto_publish_per_month: number;
   chronicle_runs_per_cycle: number;
 }
@@ -56,11 +63,11 @@ const FEATURES: Array<{ key: keyof PlanQuota; label: string; menu: string }> = [
   { key: "feature_ai_chat_enabled",   label: "AI Chat",              menu: "AI Chat" },
   { key: "feature_content_enabled",   label: "Content Generation",   menu: "Content" },
   { key: "feature_reply_enabled",     label: "Auto Reply (Late API)",menu: "Reply" },
-  { key: "feature_report_enabled",    label: "Report",               menu: "Report" },
+  { key: "feature_report_enabled",    label: "Analytics",            menu: "Analytics" },
   { key: "feature_chronicle_enabled", label: "Chronicle (14D)",      menu: "Chronicle" },
 ];
 
-const QUOTA_FIELDS: Array<{ key: keyof PlanQuota; label: string; section: string; type?: "select" }> = [
+const QUOTA_FIELDS: Array<{ key: keyof PlanQuota; label: string; section: string; type?: "select" | "toggle" }> = [
   // Start
   { key: "brands_limit",           label: "Brand profiles limit",     section: "Start" },
   { key: "onboarding_runs_limit",  label: "Onboarding pipeline runs", section: "Start" },
@@ -68,22 +75,28 @@ const QUOTA_FIELDS: Array<{ key: keyof PlanQuota; label: string; section: string
   { key: "ai_chat_messages_per_day",   label: "AI Chat messages / day",     section: "AI Chat" },
   { key: "suggested_prompts_per_day",  label: "Suggested prompts / day",    section: "AI Chat" },
   // Content
-  { key: "content_articles_per_month", label: "Articles / day",    section: "Content" },
-  { key: "content_images_per_month",   label: "Images / day",      section: "Content" },
-  { key: "content_videos_per_month",   label: "Videos / day",      section: "Content" },
+  { key: "content_articles_per_day",          label: "Articles total / day",    section: "Content" },
+  { key: "content_articles_short_per_day",    label: "– Short (≤300w) / day",   section: "Content" },
+  { key: "content_articles_medium_per_day",   label: "– Medium (≤800w) / day",  section: "Content" },
+  { key: "content_articles_long_per_day",     label: "– Long (≤1500w) / day",   section: "Content" },
+  { key: "content_articles_verylong_per_day", label: "– Very Long (3000w+) / day", section: "Content" },
+  { key: "content_images_per_day",   label: "Images / day",      section: "Content" },
+  { key: "content_videos_per_day",   label: "Videos / day",      section: "Content" },
   // QA
   { key: "qa_tier",              label: "QA tier",               section: "QA", type: "select" },
   { key: "qa_runs_per_cycle",    label: "QA runs / biweek cycle", section: "QA" },
   { key: "qa_probes_total",      label: "Total QA probes (URLs audited per cycle)", section: "QA" },
-  // Report
-  { key: "reports_per_month",    label: "Reports / month",        section: "Report" },
+  // Analytics
+  { key: "feature_report_enabled",       label: "Analytics enabled",            section: "Analytics", type: "toggle" },
+  { key: "analytics_keywords_tracked",   label: "Keywords tracked & optimized", section: "Analytics" },
+  { key: "analytics_topics_tracked",     label: "Topics tracked & optimized",   section: "Analytics" },
   // Reply / Chronicle
-  { key: "auto_reply_per_day",          label: "Auto replies / 5 min",     section: "Reply" },
+  { key: "auto_reply_per_5min",          label: "Auto replies / 5 min",     section: "Reply" },
   { key: "auto_publish_per_month",      label: "Auto publishes / month",   section: "Reply" },
   { key: "chronicle_runs_per_cycle",    label: "Chronicle runs / 14D",     section: "Chronicle" },
 ];
 
-const SECTIONS = ["Start", "AI Chat", "Content", "QA", "Report", "Reply", "Chronicle"];
+const SECTIONS = ["Start", "AI Chat", "Content", "QA", "Analytics", "Reply", "Chronicle"];
 
 const DEFAULT_QUOTA: PlanQuota = {
   plan_name: "basic",
@@ -91,10 +104,14 @@ const DEFAULT_QUOTA: PlanQuota = {
   feature_reply_enabled: false, feature_report_enabled: true, feature_chronicle_enabled: false,
   brands_limit: 1, onboarding_runs_limit: 1,
   ai_chat_messages_per_day: 20, suggested_prompts_per_day: 5,
-  content_articles_per_month: 10, content_images_per_month: 5, content_videos_per_month: 0,
+  content_articles_per_day: 10,
+  content_articles_short_per_day: 5, content_articles_medium_per_day: 3,
+  content_articles_long_per_day: 1, content_articles_verylong_per_day: 0,
+  content_images_per_day: 5, content_videos_per_day: 0,
+  analytics_keywords_tracked: 10, analytics_topics_tracked: 10,
   qa_tier: "basic", qa_runs_per_cycle: 1, qa_probes_total: 15,
   reports_per_month: 3,
-  auto_reply_per_day: 0, auto_publish_per_month: 0, chronicle_runs_per_cycle: 0,
+  auto_reply_per_5min: 0, auto_publish_per_month: 0, chronicle_runs_per_cycle: 0,
 };
 
 export default function QuotasPage() {
