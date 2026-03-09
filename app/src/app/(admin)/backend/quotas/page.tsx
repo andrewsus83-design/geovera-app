@@ -180,7 +180,7 @@ export default function QuotasPage() {
         <>
           {/* Feature Toggles */}
           <div style={{ background: "var(--gv-color-bg-surface)", borderRadius: "var(--gv-radius-lg)", boxShadow: "var(--gv-shadow-card)", padding: 24, marginBottom: 20 }}>
-            <h2 style={{ fontFamily: "var(--gv-font-heading)", fontSize: 14, fontWeight: 700, color: "var(--gv-color-neutral-700)", margin: "0 0 16px", textTransform: "uppercase", letterSpacing: "0.06em", fontSize: 11 }}>
+            <h2 style={{ fontFamily: "var(--gv-font-heading)", fontSize: 11, fontWeight: 700, color: "var(--gv-color-neutral-700)", margin: "0 0 16px", textTransform: "uppercase", letterSpacing: "0.06em" }}>
               FITUR AKTIF
             </h2>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>

@@ -343,10 +343,10 @@ export default function SubscriptionPage() {
               <span className="text-[20px]">✅</span>
               <div>
                 <p className="text-[14px] font-semibold" style={{ color: "var(--gv-color-primary-800, #1a3d38)" }}>
-                  Plan aktif: {currentSub.plan_name}
+                  Berlangganan aktif
                 </p>
                 <p className="text-[12px]" style={{ color: "var(--gv-color-neutral-500)" }}>
-                  Berlangganan aktif
+                  Plan sedang berjalan
                 </p>
               </div>
             </div>
