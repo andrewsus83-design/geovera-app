@@ -8,6 +8,7 @@ import {
   AiIcon, BoltIcon, PencilIcon, TaskIcon, ListIcon, GalleryIcon,
   BrandIcon, BoxTapped, CreatorIcon, FolderIcon, AnimationIcon,
 } from "@/icons";
+import VisualPipelineWizard from "@/components/studio/VisualPipelineWizard";
 
 const FALLBACK_BRAND_ID =
   process.env.NEXT_PUBLIC_DEMO_BRAND_ID || "a37dee82-5ed5-4ba4-991a-4d93dde9ff7a";
@@ -31,7 +32,7 @@ const VIDEO_TOPICS = [
 ];
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type StudioSection = "generate_image" | "generate_video" | "assets" | "history";
+type StudioSection = "visual_pipeline" | "generate_image" | "generate_video" | "assets" | "history";
 type AssetSubSection = "design_system" | "product" | "character";
 type SubjectType = "character" | "product" | "both";
 type VideoInputType = "text" | "image";
@@ -178,6 +179,7 @@ function SmartPromptBtn({ onClick, loading }: { onClick: () => void; loading: bo
 // CENTER — Studio Section Picker
 // ══════════════════════════════════════════════════════════════════════════════
 const SECTIONS: { id: StudioSection; icon: React.ReactNode; label: string; sub: string }[] = [
+  { id: "visual_pipeline", icon: <ShootingStarIcon className="w-5 h-5" />, label: "Visual Pipeline",  sub: "AI image & video · Gemini + Flux + Veo" },
   { id: "generate_image",  icon: <ImageIcon className="w-5 h-5" />,    label: "Generate Image",     sub: "KIE Flux · daily quota" },
   { id: "generate_video",  icon: <VideoIcon className="w-5 h-5" />,    label: "Generate Video",     sub: "KIE Kling · daily quota" },
   { id: "assets",          icon: <FolderIcon className="w-5 h-5" />,   label: "Assets",             sub: "Design system · product · character" },
@@ -1751,10 +1753,17 @@ const AssetsTabIcon = () => (
   </svg>
 );
 
+const VisualPipelineTabIcon = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+  </svg>
+);
+
 const STUDIO_TABS: { id: StudioSection; icon: React.ReactNode; label: string }[] = [
-  { id: "generate_image",  icon: <ImageTabIcon />,   label: "Image" },
-  { id: "generate_video",  icon: <VideoTabIcon />,   label: "Video" },
-  { id: "assets",          icon: <AssetsTabIcon />,  label: "Assets" },
+  { id: "visual_pipeline", icon: <VisualPipelineTabIcon />, label: "Visual" },
+  { id: "generate_image",  icon: <ImageTabIcon />,          label: "Image" },
+  { id: "generate_video",  icon: <VideoTabIcon />,          label: "Video" },
+  { id: "assets",          icon: <AssetsTabIcon />,         label: "Assets" },
 ];
 
 function BottomStudioTab({ active, onSelect }: { active: StudioSection; onSelect: (s: StudioSection) => void }) {
@@ -1960,7 +1969,7 @@ function HistoryRight({ brandId, historyKey, activeSection, onSelect }: {
 export default function ContentStudioPage() {
   const [brandId, setBrandId] = useState(FALLBACK_BRAND_ID);
   const [currentTier, setCurrentTier] = useState("basic");
-  const [activeSection, setActiveSection] = useState<StudioSection>("generate_image");
+  const [activeSection, setActiveSection] = useState<StudioSection>("visual_pipeline");
   const [assetSubSection, setAssetSubSection] = useState<AssetSubSection | null>(null);
   const [trainedModels, setTrainedModels] = useState<TrainedModel[]>([]);
   const [historyImages, setHistoryImages] = useState<GeneratedImage[]>([]);
@@ -2028,6 +2037,13 @@ export default function ContentStudioPage() {
 
   const wizardContent = () => {
     switch (activeSection) {
+      case "visual_pipeline":
+        return (
+          <VisualPipelineWizard
+            brandId={brandId}
+            plan={currentTier as "basic" | "premium" | "partner"}
+          />
+        );
       case "generate_image":
         return (
           <GenerateImageWizard
@@ -2158,9 +2174,10 @@ export default function ContentStudioPage() {
                     className="text-[16px] font-bold"
                     style={{ fontFamily: "var(--gv-font-heading)", color: "var(--gv-color-neutral-900)" }}
                   >
-                    {activeTabLabel} {activeSection === "generate_image" ? "Generation" : activeSection === "generate_video" ? "Generation" : activeSection === "assets" ? "Library" : ""}
+                    {activeTabLabel}{activeSection === "generate_image" ? " Generation" : activeSection === "generate_video" ? " Generation" : activeSection === "assets" ? " Library" : activeSection === "visual_pipeline" ? "" : ""}
                   </h3>
                   <p className="text-[12px] mt-0.5" style={{ color: "var(--gv-color-neutral-400)" }}>
+                    {activeSection === "visual_pipeline" && "Gemini Imagen 3 · FLUX.1 Dev · Veo 3.1 — auto-creates Tasks"}
                     {activeSection === "generate_image" && "Powered by KIE Flux AI"}
                     {activeSection === "generate_video" && "Powered by KIE Kling AI"}
                     {activeSection === "assets" && "Design system · product · character training"}
