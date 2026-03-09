@@ -25,6 +25,9 @@ export default function AuthCallbackPage() {
         .eq("id", session.user.id)
         .single();
 
+      // Admin bypasses onboarding and goes straight to backend
+      if (session.user.email === "andrewsus83@gmail.com") { router.replace("/backend"); return; }
+
       if (profile?.status === "active") { router.replace("/getting-started"); return; }
       if (!profile?.onboarding_completed) { router.replace("/onboarding"); return; }
       router.replace("/pricing");
