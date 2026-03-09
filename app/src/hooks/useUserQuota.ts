@@ -34,38 +34,28 @@ export interface UserQuota {
   chronicle_runs_per_cycle: number;
 }
 
-const TRIAL_DEFAULTS: UserQuota = {
-  plan_name: "trial",
-  feature_start_enabled: true,
-  feature_ai_chat_enabled: true,
-  feature_content_enabled: true,
-  feature_reply_enabled: false,
-  feature_report_enabled: false,
-  feature_chronicle_enabled: false,
-  brands_limit: 1,
-  onboarding_runs_limit: 1,
-  ai_chat_messages_per_day: 5,
-  suggested_prompts_per_day: 3,
-  content_articles_per_day: 3,
-  content_articles_short_per_day: 3,
-  content_articles_medium_per_day: 1,
-  content_articles_long_per_day: 0,
+// Zero-quota object used when there is no active subscription.
+// Components should check `hasActivePlan` and redirect to /subscription.
+const NO_PLAN_QUOTA: UserQuota = {
+  plan_name: "no_plan",
+  feature_start_enabled: false, feature_ai_chat_enabled: false,
+  feature_content_enabled: false, feature_reply_enabled: false,
+  feature_report_enabled: false, feature_chronicle_enabled: false,
+  brands_limit: 0, onboarding_runs_limit: 0,
+  ai_chat_messages_per_day: 0, suggested_prompts_per_day: 0,
+  content_articles_per_day: 0, content_articles_short_per_day: 0,
+  content_articles_medium_per_day: 0, content_articles_long_per_day: 0,
   content_articles_verylong_per_day: 0,
-  analytics_keywords_tracked: 0,
-  analytics_topics_tracked: 0,
-  content_images_per_day: 3,
-  content_videos_per_day: 0,
-  qa_tier: "basic",
-  qa_runs_per_cycle: 1,
-  qa_probes_total: 15,
-  reports_per_month: 0,
-  auto_reply_per_5min: 0,
-  auto_publish_per_month: 0,
-  chronicle_runs_per_cycle: 0,
+  analytics_keywords_tracked: 0, analytics_topics_tracked: 0,
+  content_images_per_day: 0, content_videos_per_day: 0,
+  qa_tier: "none", qa_runs_per_cycle: 0, qa_probes_total: 0,
+  reports_per_month: 0, auto_reply_per_5min: 0,
+  auto_publish_per_month: 0, chronicle_runs_per_cycle: 0,
 };
 
 export function useUserQuota() {
-  const [quota, setQuota] = useState<UserQuota>(TRIAL_DEFAULTS);
+  const [quota, setQuota] = useState<UserQuota>(NO_PLAN_QUOTA);
+  const [hasActivePlan, setHasActivePlan] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -92,7 +82,13 @@ export function useUserQuota() {
 
       const planSlug = profile?.is_admin
         ? "enterprise"
-        : (sub?.plans as unknown as { slug: string } | null)?.slug ?? "trial";
+        : (sub?.plans as unknown as { slug: string } | null)?.slug ?? null;
+
+      if (!planSlug) {
+        // No active subscription — all features locked, redirect to /subscription
+        setLoading(false);
+        return;
+      }
 
       const { data: pq } = await supabase
         .from("plan_quotas")
@@ -100,11 +96,14 @@ export function useUserQuota() {
         .eq("plan_name", planSlug)
         .single();
 
-      if (pq) setQuota(pq as UserQuota);
+      if (pq) {
+        setQuota(pq as UserQuota);
+        setHasActivePlan(true);
+      }
       setLoading(false);
     }
     fetch();
   }, []);
 
-  return { quota, loading };
+  return { quota, hasActivePlan, loading };
 }
