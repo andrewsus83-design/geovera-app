@@ -809,6 +809,211 @@ Return ONLY a valid JSON array of ${count} prompt strings. No explanation, no ma
       return json({ success: true, feedback, db_id });
     }
 
+    // ── ANALYZE IMAGES (Claude Vision — classifies content type) ─────────────
+    if (action === "analyze_images") {
+      const { image_urls } = data;
+      if (!Array.isArray(image_urls) || image_urls.length === 0) {
+        return json({ error: "image_urls array required" }, 400);
+      }
+      const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
+      if (!ANTHROPIC_API_KEY) return json({ error: "ANTHROPIC_API_KEY not configured" }, 500);
+
+      const imageContent = image_urls.slice(0, 10).map((url: string) => ({
+        type: "image",
+        source: { type: "url", url },
+      }));
+
+      const analysisResp = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-api-key": ANTHROPIC_API_KEY,
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 512,
+          system: "You are an expert visual analyst for brand content. Analyze images and return ONLY a valid JSON object, no markdown.",
+          messages: [{
+            role: "user",
+            content: [
+              ...imageContent,
+              {
+                type: "text",
+                text: `Analyze these ${image_urls.length} image(s) and classify:
+Return JSON: {
+  "content_type": "single_product_angles"|"multi_product"|"product_character_world"|"world_building"|"character_only"|"lifestyle"|"mixed",
+  "description": "brief 1-sentence description of what you see",
+  "subjects": ["product","character","person","location","food","fashion","tech","lifestyle"],
+  "recommended_objectives": ["multi_angles","theme","new_product","review","ads","mini_story","multi_catalog","education","faq","random"],
+  "best_ratio": "1:1"|"9:16"|"16:9",
+  "notes": "any important visual notes for prompt engineering"
+}
+Return ONLY the JSON, no explanation.`,
+              },
+            ],
+          }],
+        }),
+      });
+
+      if (!analysisResp.ok) return json({ error: `Claude vision error ${analysisResp.status}` }, 502);
+      const analysisData = await analysisResp.json();
+      const rawText = analysisData.content?.[0]?.text ?? "{}";
+      let analysis: Record<string, unknown> = {};
+      try {
+        const match = rawText.match(/\{[\s\S]*\}/);
+        analysis = match ? JSON.parse(match[0]) : {};
+      } catch { analysis = { content_type: "mixed", recommended_objectives: ["random"], best_ratio: "1:1" }; }
+
+      return json({ success: true, analysis });
+    }
+
+    // ── GENERATE ART-DIRECTED PROMPT (Claude as expert art director) ──────────
+    if (action === "generate_art_directed_prompt") {
+      const { content_type, objective, media_type, ratio, topic, image_urls, notes } = data;
+      const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
+      if (!ANTHROPIC_API_KEY) return json({ error: "ANTHROPIC_API_KEY not configured" }, 500);
+
+      const generator = media_type === "video" ? "Kling AI v2 (best-in-class video generation model)" : "Flux 2 Pro (highest quality image generation model)";
+      const ratioDesc = ratio === "9:16" ? "9:16 vertical (TikTok/Instagram Reels/Stories)" : ratio === "16:9" ? "16:9 horizontal (YouTube/Landscape)" : "1:1 square (Instagram Feed/LinkedIn)";
+
+      const systemPrompt = `You are a world-class creative director, senior photographer, cinematographer, and AI prompt engineer.
+Your expertise:
+- Commercial photography: product, lifestyle, fashion, food, architecture
+- Cinematography: shot composition, camera movement, lighting, color grading
+- AI generation: Flux (images), Kling AI (videos) — you know exactly how to write prompts for each
+- Platform optimization: Instagram, TikTok, YouTube, LinkedIn visual requirements
+- Brand storytelling: visual narrative, mood, atmosphere
+
+Write highly technical, precise prompts that produce stunning commercial-quality results.`;
+
+      const userMsg = `Create an optimized ${media_type === "video" ? "VIDEO" : "IMAGE"} generation prompt for:
+- Generator: ${generator}
+- Content type detected: ${content_type || "product/lifestyle"}
+- Creative objective: ${objective || "brand showcase"}
+- Aspect ratio: ${ratioDesc}
+- Topic/Context: ${topic || "brand content"}
+- Visual notes: ${notes || "professional commercial quality"}
+${image_urls?.length ? `- Reference images provided: ${image_urls.length} image(s) (use their visual style/mood/subjects as reference)` : ""}
+
+Write the prompt as if you are directing a professional photoshoot/film shoot. Include:
+${media_type === "image" ? `- Lighting setup (natural/studio/golden hour/dramatic/soft box etc.)
+- Camera angle and lens (low angle, bird's eye, 35mm portrait, macro, etc.)
+- Composition (rule of thirds, leading lines, negative space, etc.)
+- Color palette and mood
+- Post-processing style (clean product, cinematic, editorial, etc.)
+- Technical quality markers (8K, hyperrealistic, RAW, commercial, etc.)` : `- Camera movement (dolly zoom, tracking shot, handheld, crane shot, etc.)
+- Opening shot to closing shot sequence
+- Lighting and atmosphere transitions
+- Pacing and rhythm
+- Sound/music mood suggestion
+- Platform-specific editing style (TikTok punchy cuts, YouTube cinematic, Reels trending format)`}
+
+Return ONLY valid JSON:
+{
+  "prompt": "the complete optimized generation prompt",
+  "negative_prompt": "what to avoid (for image models)",
+  "style_notes": "2-sentence creative direction"
+}`;
+
+      const promptResp = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-api-key": ANTHROPIC_API_KEY,
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 1024,
+          system: systemPrompt,
+          messages: [{ role: "user", content: userMsg }],
+        }),
+      });
+
+      if (!promptResp.ok) return json({ error: `Claude art director error ${promptResp.status}` }, 502);
+      const promptData = await promptResp.json();
+      const rawPromptText = promptData.content?.[0]?.text ?? "{}";
+      let promptResult: Record<string, string> = {};
+      try {
+        const match = rawPromptText.match(/\{[\s\S]*\}/);
+        promptResult = match ? JSON.parse(match[0]) : {};
+      } catch { promptResult = { prompt: topic || "professional commercial photography, high quality", negative_prompt: "blurry, low quality, watermark" }; }
+
+      return json({ success: true, ...promptResult });
+    }
+
+    // ── GENERATE ARTICLE (proxies to generate-article edge function) ──────────
+    if (action === "generate_article") {
+      const { topic, objective, length, image_urls } = data;
+      const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
+      const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+      // Build enriched topic with objective context
+      const objectiveLabels: Record<string, string> = {
+        faq: "FAQ artikel dengan pertanyaan dan jawaban yang umum",
+        trend: "artikel trend terkini dan viral",
+        review: "artikel review dan testimonial produk",
+        education: "artikel edukasi, tips dan trik praktis",
+        hot_topic: "artikel hot topic dan berita terkini",
+        new_product: "artikel peluncuran produk baru yang menarik",
+        seasonal: "konten seasonal dan hari spesial yang relevan",
+        random: "konten terbaik berdasarkan rekomendasi AI",
+      };
+      const enrichedTopic = [topic, objectiveLabels[objective as string] ?? ""].filter(Boolean).join(" — ") || "konten brand yang menarik dan relevan";
+
+      const articleResp = await fetch(`${SUPABASE_URL}/functions/v1/generate-article`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${SUPABASE_SERVICE_KEY}`,
+        },
+        body: JSON.stringify({
+          brand_id,
+          topic: enrichedTopic,
+          target_platforms: ["instagram", "linkedin", "tiktok"],
+          mode: "manual",
+          ...(image_urls?.length ? { image_urls } : {}),
+        }),
+      });
+
+      if (!articleResp.ok) {
+        const errText = await articleResp.text();
+        return json({ success: false, error: `Article generation failed: ${errText}` }, 502);
+      }
+
+      const articleData = await articleResp.json();
+
+      // Map length selection to the right article variant
+      const lengthMap: Record<string, string> = {
+        short: "article_short",
+        medium: "article_medium",
+        long: "article_long",
+        very_long: "article_long", // use long as max available
+      };
+      const selectedField = lengthMap[length as string] ?? "article_medium";
+
+      return json({
+        success: true,
+        article: {
+          id: `article-${Date.now()}`,
+          topic: enrichedTopic,
+          objective,
+          length,
+          content: articleData[selectedField] ?? articleData.article_medium ?? "",
+          content_short: articleData.article_short ?? "",
+          content_medium: articleData.article_medium ?? "",
+          content_long: articleData.article_long ?? "",
+          meta_title: articleData.meta_title ?? "",
+          meta_description: articleData.meta_description ?? "",
+          focus_keywords: articleData.focus_keywords ?? [],
+          social: articleData.social ?? {},
+          geo: articleData.geo ?? {},
+          created_at: new Date().toISOString(),
+        },
+      });
+    }
+
     return json({ error: "Invalid action" }, 400);
 
   } catch (err: unknown) {
