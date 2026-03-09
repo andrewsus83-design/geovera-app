@@ -48,8 +48,9 @@ export default function BackendUsersPage() {
       .order("created_at", { ascending: false });
 
     const subMap: Record<string, UserRow["sub"]> = {};
-    (subs || []).forEach((s: { user_id: string; status: string; invoice_number: string | null; plans: { name: string | null } | null }) => {
-      if (!subMap[s.user_id]) subMap[s.user_id] = { status: s.status, invoice_number: s.invoice_number, plans: s.plans };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (subs || []).forEach((s: any) => {
+      if (!subMap[s.user_id]) subMap[s.user_id] = { status: s.status, invoice_number: s.invoice_number, plans: Array.isArray(s.plans) ? s.plans[0] ?? null : s.plans };
     });
 
     setUsers(data.map(u => ({ ...u, sub: subMap[u.id] || null })));
