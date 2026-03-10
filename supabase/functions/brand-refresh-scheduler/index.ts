@@ -44,6 +44,12 @@ Deno.serve(async (req: Request) => {
     });
   }
 
+  // Service-key auth — only callable from internal server-to-server
+  const incomingToken = (req.headers.get("Authorization") ?? "").replace("Bearer ", "").trim();
+  if (!incomingToken || incomingToken !== SUPABASE_SERVICE_KEY) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { "Content-Type": "application/json" } });
+  }
+
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
   let dry_run = false;

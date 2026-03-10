@@ -448,7 +448,8 @@ Identify at least 3 new_keywords_discovered and 3 content_opportunities.`,
         qa_updated_at: new Date().toISOString(),
         qa_tier: tier,
       })
-      .eq("id", brand_profile_id);
+      .eq("id", brand_profile_id)
+      .eq("user_id", user_id);
 
     if (updateErr) throw new Error(`DB update failed: ${updateErr.message}`);
 

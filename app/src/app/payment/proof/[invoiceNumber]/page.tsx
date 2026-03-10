@@ -72,6 +72,7 @@ export default function ProofUploadPage({ params }: { params: Promise<{ invoiceN
       await supabase.from("subscriptions").update({
         proof_url: publicUrl,
         proof_uploaded_at: new Date().toISOString(),
+        status: "proof_uploaded",
       }).eq("id", subId);
 
       setDone(true);

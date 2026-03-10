@@ -21,29 +21,27 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: cors });
     }
     const token = authHeader.slice(7);
-    const userClient = createClient(SUPABASE_URL, ANON_KEY, {
-      global: { headers: { Authorization: `Bearer ${token}` } },
-    });
-    const { data: { user }, error: authError } = await userClient.auth.getUser();
+    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+    const { data: { user }, error: authError } = await admin.auth.getUser(token);
     if (authError || !user) {
       return NextResponse.json({ error: "Invalid session" }, { status: 401, headers: cors });
     }
 
-    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
     const { data: userBrand } = await admin
-      .from("user_brands").select("brand_id").eq("user_id", user.id).single();
+      .from("brand_profiles").select("id").eq("user_id", user.id).maybeSingle();
     if (!userBrand) return NextResponse.json({ error: "No brand" }, { status: 400, headers: cors });
+    const brandId = userBrand.id;
 
     const { data: quota, error } = await admin
-      .rpc("get_visual_quota", { p_brand_id: userBrand.brand_id });
+      .rpc("get_visual_quota", { p_brand_id: brandId });
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: cors });
+    if (error) return NextResponse.json({ error: "Internal server error" }, { status: 500, headers: cors });
 
     // Also get recent jobs for history display
     const { data: recentJobs } = await admin
       .from("gv_content_jobs")
       .select("id, status, objectives, flux_outputs, video_outputs, quality_gate_passed, created_at")
-      .eq("brand_id", userBrand.brand_id)
+      .eq("brand_id", brandId)
       .eq("is_visual_pipeline", true)
       .order("created_at", { ascending: false })
       .limit(10);
@@ -53,7 +51,8 @@ export async function GET(request: NextRequest) {
       recent_jobs: recentJobs || [],
     }, { headers: cors });
 
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500, headers: cors });
+  } catch (err: unknown) {
+    console.error("[quota/visual]", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500, headers: cors });
   }
 }

@@ -17,17 +17,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     if (skip) { setReady(true); return; }
 
     async function gate() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { router.replace("/signin"); return; }
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { router.replace("/signin"); return; }
 
       const { data: profile } = await supabase
         .from("user_profiles")
         .select("status, is_admin")
-        .eq("id", session.user.id)
+        .eq("id", user.id)
         .single();
 
       // Admin bypasses all gates
-      const isAdmin = profile?.is_admin || session.user.email === "andrewsus83@gmail.com";
+      const isAdmin = profile?.is_admin || user.email === "andrewsus83@gmail.com";
       if (isAdmin) { setReady(true); return; }
 
       // Active users get in

@@ -213,7 +213,9 @@ Deno.serve(async (req: Request) => {
         .order("created_at", { ascending: false })
         .limit(1)
         .single();
-      const planSlug = (subRow?.plans as { slug: string } | null)?.slug ?? "trial";
+      const rawSlug = (subRow?.plans as { slug: string } | null)?.slug ?? "trial";
+      // plans.slug uses "premium" but plan_quotas.plan_name uses "pro"
+      const planSlug = rawSlug === "premium" ? "pro" : rawSlug;
       const { data: planQuota } = await supabase
         .from("plan_quotas")
         .select("qa_tier")

@@ -42,11 +42,12 @@ const ChatIcon = () => (
   </svg>
 );
 
-// Content Studio — pencil/edit
-const StudioIcon = () => (
+// Content — layers/stack icon
+const ContentIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square" strokeLinejoin="miter">
-    <path d="M17 3L21 7L8 20L3 21L4 16L17 3Z" />
-    <line x1="13" y1="7" x2="17" y2="11" />
+    <path d="M2 8l10-5 10 5-10 5-10-5z" />
+    <path d="M2 13l10 5 10-5" />
+    <path d="M2 18l10 5 10-5" />
   </svg>
 );
 
@@ -106,7 +107,7 @@ const navItems = [
   { icon: <CalendarIcon />, name: "Tasks",  path: "/calendar"        },
   { icon: <AIChatIcon />,   name: "Chat",   path: "/ai-chat"         },
   { icon: <ChatIcon />,     name: "Reply",  path: "/auto-reply"      },
-  { icon: <StudioIcon />,   name: "Studio", path: "/content-studio"  },
+  { icon: <ContentIcon />,  name: "Content", path: "/content"        },
   { icon: <AnalyticsIcon />, name: "Report", path: "/analytics"      },
 ];
 

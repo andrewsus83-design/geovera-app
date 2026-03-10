@@ -1031,9 +1031,9 @@ function BrandAssetsGuide() {
         ))}
       </div>
 
-      <button onClick={() => router.push("/content-studio")} className="w-full py-3 rounded-[14px] text-[14px] font-bold text-white"
+      <button onClick={() => router.push("/content")} className="w-full py-3 rounded-[14px] text-[14px] font-bold text-white"
         style={{ background: "linear-gradient(135deg,#7C3AED,#F57422)", boxShadow: "0 4px 14px rgba(124,58,237,0.30)" }}>
-        Go to Content Studio → Upload Brand Assets
+        Go to Content → Upload Brand Assets
       </button>
     </div>
   );
@@ -1201,11 +1201,11 @@ function BuildTrainingGuide() {
       </div>
 
       <button
-        onClick={() => router.push("/content-studio")}
+        onClick={() => router.push("/content")}
         className="w-full py-3 rounded-[14px] text-[14px] font-bold text-white"
         style={{ background: "linear-gradient(135deg, #7C3AED, #F57422)" }}
       >
-        Go to Content Studio → Start Training
+        Go to Content → Start Training
       </button>
     </div>
   );
@@ -1950,15 +1950,19 @@ export default function GettingStartedPage() {
       }
     });
 
-    supabase
-      .from("gv_brands")
-      .select("name, subscription_tier")
-      .eq("id", FALLBACK_BRAND_ID)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data?.name) setBrandName(data.name);
-        if (data?.subscription_tier) setBrandTier(data.subscription_tier);
-      });
+    supabase.auth.getUser().then(({ data: { user: u } }) => {
+      if (!u) return;
+      supabase
+        .from("brand_profiles")
+        .select("brand_name")
+        .eq("user_id", u.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data?.brand_name) setBrandName(data.brand_name);
+        });
+    });
 
     // Fetch connected platform count from Supabase
     supabase

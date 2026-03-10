@@ -45,11 +45,10 @@ interface ChatSession {
 }
 
 interface BrandInfo {
-  id:                 string;
-  brand_name:         string;
-  brand_category:     string | null;
-  brand_country:      string | null;
-  subscription_tier:  string | null;
+  id:           string;
+  brand_name:   string;
+  country:      string | null;
+  source_of_truth?: Record<string, unknown> | null;
 }
 
 interface SuggestedPrompt {
@@ -244,20 +243,13 @@ export default function AIChatPage() {
       if (!user) { router.replace("/signin"); return; }
       setUserId(user.id);
 
-      const { data: ub } = await supabase
-        .from("user_brands")
-        .select("brand_id")
-        .eq("user_id", user.id)
-        .limit(1)
-        .single();
-
-      if (!ub?.brand_id) { setLoading(false); return; }
-
       const { data: b } = await supabase
-        .from("gv_brands")
-        .select("id, brand_name, brand_category, brand_country, subscription_tier")
-        .eq("id", ub.brand_id)
-        .single();
+        .from("brand_profiles")
+        .select("id, brand_name, country, source_of_truth")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
       if (b) setBrand(b as BrandInfo);
       setLoading(false);
@@ -267,39 +259,43 @@ export default function AIChatPage() {
 
   // ── Load sessions ──────────────────────────────────────────────────────────
   const loadSessions = useCallback(async () => {
-    if (!brand || !userId) return;
+    if (!userId) return;
     const { data } = await supabase
       .from("gv_ai_chat_sessions")
       .select("id, title, message_count, total_tokens, total_cost_usd, updated_at")
-      .eq("brand_id", brand.id)
-      .eq("user_id",  userId)
-      .is("archived_at", null)
+      .eq("user_id", userId)
       .order("updated_at", { ascending: false })
       .limit(30);
     if (data) setSessions(data as ChatSession[]);
-  }, [brand, userId]);
+  }, [userId]);
 
   useEffect(() => { loadSessions(); }, [loadSessions]);
 
-  // ── Load suggested prompts (tier-based) ────────────────────────────────────
+  // ── Load suggested prompts from brand's source_of_truth keywords ──────────
   useEffect(() => {
-    async function loadSuggested() {
-      if (!brand) return;
-      const { data } = await supabase
-        .from("gv_keywords")
-        .select("keyword, keyword_type")
-        .eq("brand_id", brand.id)
-        .eq("source",   "research_suggested")
-        .in("keyword_type", ["seo", "geo", "social"])
-        .eq("active", true)
-        .limit(100);
+    if (!brand) return;
+    const sot = brand.source_of_truth as Record<string, unknown> | null | undefined;
+    const ki = sot?.keyword_intelligence as Record<string, unknown> | undefined;
+    const keywords: SuggestedPrompt[] = [];
 
-      if (data && data.length > 0) {
-        const shuffled = shuffle(data as SuggestedPrompt[]);
-        setSuggested(shuffled.slice(0, suggestedCount));
-      }
+    // Pull ranking + gap + quick_win keywords and assign keyword_type
+    const push = (arr: unknown[] | undefined, type: "seo" | "geo" | "social") => {
+      if (!Array.isArray(arr)) return;
+      arr.forEach((k: unknown) => {
+        if (typeof k === "string" && k.trim()) {
+          keywords.push({ keyword: k.trim(), keyword_type: type });
+        } else if (k && typeof (k as Record<string,unknown>).keyword === "string") {
+          keywords.push({ keyword: (k as Record<string,unknown>).keyword as string, keyword_type: type });
+        }
+      });
+    };
+    push(ki?.ranking_keywords as unknown[], "seo");
+    push(ki?.gap_keywords as unknown[], "geo");
+    push(ki?.quick_win_keywords as unknown[], "social");
+
+    if (keywords.length > 0) {
+      setSuggested(shuffle(keywords).slice(0, suggestedCount));
     }
-    loadSuggested();
   }, [brand, suggestedCount]);
 
   // ── Daily spend check ──────────────────────────────────────────────────────
@@ -747,7 +743,7 @@ export default function AIChatPage() {
                   {brand.brand_name}
                 </p>
                 <p className="text-[11px]" style={{ color: "var(--gv-color-neutral-400)" }}>
-                  {brand.brand_category ?? "Brand"} · {brand.brand_country ?? "Global"}
+                  {brand.country ?? "Global"}
                 </p>
               </div>
             </div>

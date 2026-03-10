@@ -9,7 +9,7 @@ const TIKTOK_REDIRECT_URI = process.env.NEXT_PUBLIC_TIKTOK_REDIRECT_URI
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://report.geovera.xyz";
 
 // State format: "{brandId}:{source}:{code_verifier}"
-// source is "connect" or "tiktok-calendar"
+// source is "calendar" (or legacy "tiktok-calendar")
 function parseState(state: string): { brandId: string; source: string; verifier: string } | null {
   const parts = state.split(":");
   if (parts.length < 3) return null;
@@ -28,8 +28,8 @@ export async function GET(request: NextRequest) {
 
   // Determine redirect destination from state
   const parsed = state ? parseState(state) : null;
-  const source = parsed?.source || "connect";
-  const returnPath = source === "tiktok-calendar" ? "/tiktok-calendar" : "/connect";
+  const source = parsed?.source || "calendar";
+  const returnPath = (source === "tiktok-calendar" || source === "calendar") ? "/calendar" : "/calendar";
 
   const errorRedirect = (err: string) =>
     NextResponse.redirect(`${APP_URL}${returnPath}?error=${encodeURIComponent(err)}`);

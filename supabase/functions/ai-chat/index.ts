@@ -108,12 +108,12 @@ Deno.serve(async (req: Request) => {
     // Default to general mode if not specified
     const mode = chat_mode || "general";
 
-    // Verify user owns the brand
+    // Verify user owns the brand via brand_profiles
     const { data: userBrand, error: brandError } = await supabase
-      .from("user_brands")
-      .select("brand_id, role")
+      .from("brand_profiles")
+      .select("id")
       .eq("user_id", userId)
-      .eq("brand_id", brand_id)
+      .eq("id", brand_id)
       .single();
 
     if (brandError || !userBrand) {
@@ -292,6 +292,7 @@ If user asks specific questions about SEO, GEO, or Social Search, suggest they s
         .from("brand_profiles")
         .select("brand_name, source_of_truth, research_status")
         .eq("user_id", userId)
+        .eq("id", brand_id)
         .single();
 
       if (profileErr || !brandProfile) {
@@ -461,7 +462,7 @@ ${JSON.stringify(sot, null, 2).slice(0, 12000)}
     if (!openaiResponse.ok) {
       const errorData = await openaiResponse.json();
       console.error("OpenAI API error:", errorData);
-      return new Response(JSON.stringify({ error: "OpenAI API error", details: errorData }), {
+      return new Response(JSON.stringify({ error: "Internal server error" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -538,7 +539,6 @@ ${JSON.stringify(sot, null, 2).slice(0, 12000)}
     console.error("Unexpected error:", err);
     return new Response(JSON.stringify({
       error: "Internal server error",
-      details: err instanceof Error ? err.message : String(err)
     }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

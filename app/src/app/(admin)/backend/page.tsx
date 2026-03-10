@@ -43,21 +43,23 @@ export default function BackendOverviewPage() {
 
   useEffect(() => {
     async function load() {
-      const [usersRes, subsRes] = await Promise.all([
-        supabase.from("user_profiles").select("id, status", { count: "exact" }),
-        supabase.from("subscriptions").select("id, status, invoice_number, proof_uploaded_at, created_at, user_profiles(full_name, email), plans(name)", { count: "exact" }).order("created_at", { ascending: false }).limit(10),
+      const [usersRes, subsRes, pendingApprovalRes, activeRes, pendingPaymentRes] = await Promise.all([
+        supabase.from("user_profiles").select("id", { count: "exact", head: true }),
+        supabase.from("subscriptions").select("id, status, invoice_number, proof_uploaded_at, created_at, user_profiles(full_name, email), plans(name)").order("created_at", { ascending: false }).limit(10),
+        supabase.from("subscriptions").select("id", { count: "exact", head: true }).eq("status", "proof_uploaded"),
+        supabase.from("subscriptions").select("id", { count: "exact", head: true }).eq("status", "active"),
+        supabase.from("subscriptions").select("id", { count: "exact", head: true }).eq("status", "pending_payment"),
       ]);
 
-      const allUsers = usersRes.data || [];
-      const allSubs = (subsRes.data as unknown as RecentSub[]) || [];
+      const recentSubs = (subsRes.data as unknown as RecentSub[]) || [];
 
       setStats({
-        totalUsers: allUsers.length,
-        pendingApproval: allSubs.filter(s => s.status === "proof_uploaded").length,
-        activeSubscriptions: allSubs.filter(s => s.status === "active").length,
-        pendingPayment: allSubs.filter(s => s.status === "pending_payment").length,
+        totalUsers: usersRes.count ?? 0,
+        pendingApproval: pendingApprovalRes.count ?? 0,
+        activeSubscriptions: activeRes.count ?? 0,
+        pendingPayment: pendingPaymentRes.count ?? 0,
       });
-      setRecent(allSubs.slice(0, 8));
+      setRecent(recentSubs);
       setLoading(false);
     }
     load();

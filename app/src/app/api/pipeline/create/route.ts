@@ -31,23 +31,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: cors });
     }
     const token = authHeader.slice(7);
-    const userClient = createClient(SUPABASE_URL, ANON_KEY, {
-      global: { headers: { Authorization: `Bearer ${token}` } },
-    });
-    const { data: { user }, error: authError } = await userClient.auth.getUser();
+    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+    const { data: { user }, error: authError } = await admin.auth.getUser(token);
     if (authError || !user) {
       return NextResponse.json({ error: "Invalid session" }, { status: 401, headers: cors });
     }
 
-    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-
     // ── Get brand ─────────────────────────────────────────────────────────────
     const { data: userBrand } = await admin
-      .from("user_brands").select("brand_id").eq("user_id", user.id).single();
+      .from("brand_profiles").select("id").eq("user_id", user.id).maybeSingle();
     if (!userBrand) {
       return NextResponse.json({ error: "No brand found for user" }, { status: 400, headers: cors });
     }
-    const brand_id = userBrand.brand_id;
+    const brand_id = userBrand.id;
 
     // ── Quota check ───────────────────────────────────────────────────────────
     const { data: quota, error: quotaErr } = await admin
@@ -93,8 +89,6 @@ export async function POST(request: NextRequest) {
       target_platforms = [],         // ["tiktok_9_16","instagram_1_1",...] — chosen upfront
       video_requested  = false,
       brand_notes,
-      linked_task_id,                // optional: UUID of existing gv_tasks row
-      brand_dna_id,                  // optional: UUID of gv_brand_dna to enrich Stage 0
     } = body;
 
     // ── Validate images ───────────────────────────────────────────────────────
@@ -158,22 +152,6 @@ export async function POST(request: NextRequest) {
       video_requested &&
       target_platforms.includes("tiktok_9_16");
 
-    // ── Validate linked_task_id belongs to this brand ─────────────────────────
-    if (linked_task_id) {
-      const { data: taskCheck } = await admin
-        .from("gv_tasks")
-        .select("id")
-        .eq("id", linked_task_id)
-        .eq("brand_id", brand_id)
-        .maybeSingle();
-      if (!taskCheck) {
-        return NextResponse.json({
-          error: "linked_task_id not found",
-          code: "INVALID_TASK",
-        }, { status: 400, headers: cors });
-      }
-    }
-
     // ── Insert job — objectives confirmed immediately ──────────────────────────
     const { data: job, error: jobErr } = await admin
       .from("gv_content_jobs")
@@ -199,10 +177,6 @@ export async function POST(request: NextRequest) {
         target_platforms:     JSON.stringify(target_platforms),
         video_requested:      effectiveVideoRequested,
         brand_notes:          brand_notes || null,
-        linked_task_id:       linked_task_id || null,
-
-        // Pass brand_dna_id for Stage 0 enrichment
-        prompts_used:         JSON.stringify({ brand_dna_id: brand_dna_id || null }),
       })
       .select("id")
       .single();
@@ -227,7 +201,6 @@ export async function POST(request: NextRequest) {
         job_id: job.id,
         stage:  "analyze_images_background",  // non-blocking variant
         brand_id,
-        brand_dna_id: brand_dna_id || null,
       }),
     }).catch(() => {});
 
@@ -242,7 +215,6 @@ export async function POST(request: NextRequest) {
         job_id: job.id,
         stage:  "prompt_engineering",
         brand_id,
-        brand_dna_id: brand_dna_id || null,
       }),
     }).catch(() => {});
 
@@ -264,8 +236,8 @@ export async function POST(request: NextRequest) {
       },
     }, { status: 201, headers: cors });
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[pipeline/create]", err);
-    return NextResponse.json({ error: err.message }, { status: 500, headers: cors });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500, headers: cors });
   }
 }

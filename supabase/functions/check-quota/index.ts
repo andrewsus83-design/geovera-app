@@ -29,9 +29,20 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   try {
-    const { user_id, action } = await req.json() as { user_id: string; action: string };
-    if (!user_id || !action) {
-      return new Response(JSON.stringify({ error: "user_id and action are required" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const token = authHeader.replace("Bearer ", "").trim();
+    if (!token) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...cors, "Content-Type": "application/json" } });
+    }
+    const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+    const { data: { user }, error: authErr } = await adminClient.auth.getUser(token);
+    if (authErr || !user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...cors, "Content-Type": "application/json" } });
+    }
+
+    const { action } = await req.json() as { action: string };
+    if (!action) {
+      return new Response(JSON.stringify({ error: "action is required" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
     }
 
     const map = ACTION_MAP[action];
@@ -39,7 +50,7 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
     }
 
-    const supa = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+    const supa = adminClient;
     const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
     const monthStart = today.slice(0, 7) + "-01"; // YYYY-MM-01
 
@@ -47,7 +58,7 @@ Deno.serve(async (req: Request) => {
     const { data: subRow } = await supa
       .from("subscriptions")
       .select("plan_id, plans!inner(slug)")
-      .eq("user_id", user_id)
+      .eq("user_id", user.id)
       .eq("status", "active")
       .order("created_at", { ascending: false })
       .limit(1)
@@ -89,7 +100,7 @@ Deno.serve(async (req: Request) => {
     const { data: usageRow } = await supa
       .from("user_quota_usage")
       .select("*")
-      .eq("user_id", user_id)
+      .eq("user_id", user.id)
       .single();
 
     let currentUsage = 0;
@@ -115,6 +126,6 @@ Deno.serve(async (req: Request) => {
 
   } catch (err) {
     console.error("[check-quota] error:", err);
-    return new Response(JSON.stringify({ error: String(err) }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ error: "Internal server error" }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });
   }
 });

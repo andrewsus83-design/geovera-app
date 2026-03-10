@@ -6,8 +6,8 @@ import { supabase } from "@/lib/supabase";
 export default function AdminRootPage() {
   const router = useRouter();
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user.email === "andrewsus83@gmail.com") {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user?.email === "andrewsus83@gmail.com") {
         router.replace("/backend");
       } else {
         router.replace("/analytics");

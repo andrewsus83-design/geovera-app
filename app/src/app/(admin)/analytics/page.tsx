@@ -2,13 +2,9 @@
 import React, { useState, useEffect, useCallback } from "react";
 import ThreeColumnLayout from "@/components/shared/ThreeColumnLayout";
 import NavColumn from "@/components/shared/NavColumn";
+import { AnalyticsPillNav, AnalyticsTabBar } from "@/components/analytics/AnalyticsNav";
 import { supabase } from "@/lib/supabase";
-
-const FALLBACK_BRAND_ID = process.env.NEXT_PUBLIC_brandId || "a37dee82-5ed5-4ba4-991a-4d93dde9ff7a";
-
-// ── Tier gating ───────────────────────────────────────────────────
-const ANALYTICS_REQUIRES_TIER = "partner";
-const TIER_ORDER: Record<string, number> = { basic: 0, premium: 1, partner: 2 };
+import { useUserQuota } from "@/hooks/useUserQuota";
 
 // ── Types ────────────────────────────────────────────────────────
 type AnalyticsSection = "overview" | "seo" | "geo" | "social";
@@ -680,7 +676,7 @@ function DetailPanel({ selected, section, analyticsReport }: { selected: Selecte
   React.useEffect(() => {
     if (!isPageSpeedFactor || psData.mobile) return;
     setPsLoading(true);
-    const base = "https://vozjwptzutolvkvfpknk.supabase.co/functions/v1/pagespeed-check";
+    const base = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/pagespeed-check`;
     Promise.all([
       fetch(`${base}?url=https://geovera.xyz&strategy=mobile`).then((r) => r.json()),
       fetch(`${base}?url=https://geovera.xyz&strategy=desktop`).then((r) => r.json()),
@@ -1827,10 +1823,9 @@ export default function AnalyticsPage() {
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
 
   // ── Auth & subscription ──────────────────────────────────────────
-  const [brandId, setBrandId] = useState(FALLBACK_BRAND_ID);
-  const [brandProfileId, setBrandProfileId] = useState<string | null>(null);
-  const [currentTier, setCurrentTier] = useState<"basic" | "premium" | "partner">("basic");
-  const hasAccess = TIER_ORDER[currentTier] >= TIER_ORDER[ANALYTICS_REQUIRES_TIER];
+  const { hasActivePlan, loading: quotaLoading } = useUserQuota();
+  const [brandId, setBrandId] = useState<string | null>(null);
+  const hasAccess = hasActivePlan;
 
   // ── Analytics report state ────────────────────────────────────────
   const [analyticsReport, setAnalyticsReport] = useState<AnalyticsReport | null>(null);
@@ -1844,27 +1839,6 @@ export default function AnalyticsPage() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
-        const { data: ub } = await supabase
-          .from("user_brands")
-          .select("brand_id")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: true })
-          .limit(1)
-          .single();
-        if (ub?.brand_id) {
-          setBrandId(ub.brand_id);
-          const res = await fetch("/api/payment", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "get_subscription", brand_id: ub.brand_id }),
-          });
-          const sub = await res.json();
-          if (sub.success) {
-            const tier = sub.brand_payment?.subscription_tier as string | undefined;
-            const mapped = tier === "partner" ? "partner" : tier === "premium" ? "premium" : "basic";
-            setCurrentTier(mapped as "basic" | "premium" | "partner");
-          }
-        }
         // Load brand_profile_id and latest analytics report
         const { data: bp } = await supabase
           .from("brand_profiles")
@@ -1874,7 +1848,7 @@ export default function AnalyticsPage() {
           .limit(1)
           .maybeSingle();
         if (bp?.id) {
-          setBrandProfileId(bp.id);
+          setBrandId(bp.id);
           setReportLoading(true);
           const { data: report } = await supabase
             .from("analytics_reports")
@@ -1893,14 +1867,14 @@ export default function AnalyticsPage() {
   }, []);
 
   const handleRunAnalysis = async () => {
-    if (!brandProfileId) return;
+    if (!brandId) return;
     setRunAnalysisLoading(true);
     setRunAnalysisStatus("running");
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("No session");
       const res = await supabase.functions.invoke("brand-analytics-scorer", {
-        body: { brand_profile_id: brandProfileId, user_id: session.user.id },
+        body: { brand_profile_id: brandId },
       });
       if (res.error) throw res.error;
       setRunAnalysisStatus("success");
@@ -1908,7 +1882,7 @@ export default function AnalyticsPage() {
       const { data: report } = await supabase
         .from("analytics_reports")
         .select("*")
-        .eq("brand_profile_id", brandProfileId)
+        .eq("brand_profile_id", brandId)
         .eq("status", "ready")
         .order("cycle_number", { ascending: false })
         .limit(1)
@@ -1928,34 +1902,45 @@ export default function AnalyticsPage() {
   const [syncStatus, setSyncStatus] = useState<"idle" | "success" | "error">("idle");
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
 
-  // Load from Supabase on mount
+  // Load from Supabase on mount (only when brandId is set)
   useEffect(() => {
-    fetch(`/api/analytics/sync?brand_id=${brandId}`)
-      .then((r) => r.json())
-      .then((res: { success: boolean; data?: DbAnalyticsRow[] }) => {
-        if (res.success && res.data && res.data.length > 0) {
-          setLiveSocialItems(res.data.map(dbRowToSocialItem));
-          setLastSyncAt(res.data[0].synced_at || null);
-        }
+    if (!brandId) return;
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      fetch(`/api/analytics/sync?brand_id=${brandId}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
       })
-      .catch(() => {/* fall back to demo data */});
-  }, []);
+        .then((r) => r.json())
+        .then((res: { success: boolean; data?: DbAnalyticsRow[] }) => {
+          if (res.success && res.data && res.data.length > 0) {
+            setLiveSocialItems(res.data.map(dbRowToSocialItem));
+            setLastSyncAt(res.data[0].synced_at || null);
+          }
+        })
+        .catch(() => {/* fall back to demo data */});
+    })();
+  }, [brandId]);
 
   // Trigger sync from Late API
   const handleSyncAnalytics = useCallback(async () => {
+    if (!brandId) return;
     setSyncLoading(true);
     setSyncStatus("idle");
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("No session");
+      const authHeader = { Authorization: `Bearer ${session.access_token}` };
       const res = await fetch("/api/analytics/sync", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeader },
         body: JSON.stringify({ brand_id: brandId }),
       });
       const data = await res.json() as { success: boolean; synced?: number; error?: string };
       if (data.success) {
         setSyncStatus("success");
         // Reload from DB
-        const getRes = await fetch(`/api/analytics/sync?brand_id=${brandId}`);
+        const getRes = await fetch(`/api/analytics/sync?brand_id=${brandId}`, { headers: authHeader });
         const getData = await getRes.json() as { success: boolean; data?: DbAnalyticsRow[] };
         if (getData.success && getData.data && getData.data.length > 0) {
           setLiveSocialItems(getData.data.map(dbRowToSocialItem));
@@ -1970,7 +1955,7 @@ export default function AnalyticsPage() {
       setSyncLoading(false);
       setTimeout(() => setSyncStatus("idle"), 4000);
     }
-  }, []);
+  }, [brandId]);
 
   // Mobile: open right panel when item selected
   const handleSelect = (item: SelectedItem) => {
@@ -1982,50 +1967,34 @@ export default function AnalyticsPage() {
     setSelected(null);
   };
 
-  // ── Tier gate ─────────────────────────────────────────────────
-  if (!hasAccess) {
+  // ── Tier gate (no active subscription) ───────────────────────
+  if (!quotaLoading && !hasAccess) {
     const gateLeft = (
       <NavColumn>
-        {/* ── Upgrade plan card ── */}
+        {/* ── Subscribe card ── */}
         <div className="mt-4 flex flex-col gap-3">
-          {/* Current plan */}
-          <div className="rounded-[14px] px-3 py-3" style={{ background: "var(--gv-color-neutral-50)", border: "1px solid var(--gv-color-neutral-200)" }}>
-            <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--gv-color-neutral-400)" }}>Current Plan</p>
-            <p className="text-[13px] font-bold capitalize" style={{ color: "var(--gv-color-neutral-900)", fontFamily: "Georgia, serif" }}>{currentTier}</p>
+          {/* No plan notice */}
+          <div className="rounded-[14px] px-3 py-3" style={{ background: "#FEF3C7", border: "1px solid #FDE68A" }}>
+            <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "#D97706" }}>No Active Plan</p>
+            <p className="text-[11px] leading-snug" style={{ color: "#92400E" }}>Subscribe to access Analytics Dashboard.</p>
           </div>
 
-          {/* Plan tiers */}
-          {(["basic", "premium", "partner"] as const).map((tier) => {
-            const isActive = tier === currentTier;
-            const isTarget = tier === ANALYTICS_REQUIRES_TIER;
-            return (
-              <div
-                key={tier}
-                className="rounded-[14px] px-3 py-2.5"
-                style={{
-                  background: isTarget ? "var(--gv-color-primary-50)" : "var(--gv-color-bg-surface)",
-                  border: isTarget ? "1.5px solid var(--gv-color-primary-200)" : "1px solid var(--gv-color-neutral-200)",
-                }}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[12px] font-semibold capitalize" style={{ color: isTarget ? "var(--gv-color-primary-700)" : "var(--gv-color-neutral-700)" }}>
-                    {tier}
-                  </span>
-                  {isActive && (
-                    <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full" style={{ background: "var(--gv-color-neutral-200)", color: "var(--gv-color-neutral-500)" }}>You</span>
-                  )}
-                  {isTarget && !isActive && (
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="var(--gv-color-primary-500)">
-                      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                    </svg>
-                  )}
-                </div>
-                <p className="text-[10px] mt-0.5" style={{ color: isTarget ? "var(--gv-color-primary-600)" : "var(--gv-color-neutral-400)" }}>
-                  {tier === "basic" ? "Core features" : tier === "premium" ? "Advanced tools" : "Full analytics"}
-                </p>
+          {/* What's included */}
+          {[
+            { label: "SEO Performance", desc: "Content rank tracking" },
+            { label: "GEO AI Visibility", desc: "AI engine citations" },
+            { label: "Social Algorithm", desc: "Algorithm scoring" },
+            { label: "Priority Actions", desc: "Automated todo list" },
+          ].map((item) => (
+            <div key={item.label} className="rounded-[14px] px-3 py-2.5 flex items-center gap-2.5"
+              style={{ background: "var(--gv-color-bg-surface)", border: "1px solid var(--gv-color-neutral-200)" }}>
+              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--gv-color-primary-400)" }} />
+              <div>
+                <p className="text-[11px] font-semibold" style={{ color: "var(--gv-color-neutral-800)" }}>{item.label}</p>
+                <p className="text-[10px]" style={{ color: "var(--gv-color-neutral-400)" }}>{item.desc}</p>
               </div>
-            );
-          })}
+            </div>
+          ))}
 
           {/* Upgrade CTA */}
           <a
@@ -2033,10 +2002,10 @@ export default function AnalyticsPage() {
             className="block text-center rounded-[14px] py-2.5 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
             style={{ background: "var(--gv-gradient-primary)", boxShadow: "0 3px 10px rgba(95,143,139,0.25)" }}
           >
-            Upgrade to Partner
+            Subscribe Now
           </a>
           <p className="text-[10px] text-center leading-tight" style={{ color: "var(--gv-color-neutral-400)" }}>
-            Already a Partner?{" "}
+            Questions?{" "}
             <a href="mailto:hello@geovera.xyz" style={{ color: "var(--gv-color-primary-500)" }}>Contact support</a>
           </p>
         </div>
@@ -2057,14 +2026,14 @@ export default function AnalyticsPage() {
           <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
           </svg>
-          Partner Tier Required
+          Active Subscription Required
         </span>
 
         <h2 className="text-[22px] font-bold mb-3" style={{ color: "var(--gv-color-neutral-900)", fontFamily: "Georgia, serif" }}>
           Analytics Dashboard
         </h2>
         <p className="text-[13px] leading-relaxed mb-8" style={{ color: "var(--gv-color-neutral-500)" }}>
-          Deep performance insights across SEO, GEO AI visibility, and Social Algorithm — all in one dashboard. Available exclusively for Partner tier members.
+          Deep performance insights across SEO, GEO AI visibility, and Social Algorithm — all in one dashboard. Available for all active subscribers.
         </p>
 
         {/* Mini preview cards */}
@@ -2092,7 +2061,7 @@ export default function AnalyticsPage() {
         </div>
 
         <p className="mt-6 text-[11px]" style={{ color: "var(--gv-color-neutral-400)" }}>
-          Current plan: <span className="font-semibold capitalize" style={{ color: "var(--gv-color-neutral-600)" }}>{currentTier}</span>
+          <a href="/subscription" className="font-semibold" style={{ color: "var(--gv-color-primary-500)" }}>View subscription plans →</a>
         </p>
       </div>
     );
@@ -2202,14 +2171,14 @@ export default function AnalyticsPage() {
 
   const center = (
     <div className="flex flex-col h-full">
-      {/* ── Sticky top header — title + scores ── */}
+      {/* ── Sticky top header — title + section nav ── */}
       <div className="flex-shrink-0 px-5 pt-5 pb-4" style={{ borderBottom: "1px solid var(--gv-color-neutral-200)", background: "var(--gv-color-bg-surface)" }}>
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-3 mb-3">
           <h1
             className="text-[22px] font-bold leading-tight flex-shrink-0"
             style={{ color: "var(--gv-color-neutral-900)", fontFamily: "var(--gv-font-heading)" }}
           >
-            {activeSection === "overview" ? "Analytics Overview" : activeSection === "seo" ? "SEO" : activeSection === "geo" ? "GEO · AI Platform" : "Social Search"}
+            Analytics
           </h1>
           {/* Sync button — Social section only */}
           {activeSection === "social" && (
@@ -2252,6 +2221,19 @@ export default function AnalyticsPage() {
             </div>
           )}
           </div>
+
+        {/* ── Section nav pills ── */}
+        <AnalyticsPillNav
+          activeSection={activeSection}
+          onSectionChange={handleSectionChange}
+          scores={{
+            overall: analyticsReport?.overall_score,
+            seo: analyticsReport?.seo_score,
+            geo: analyticsReport?.geo_score,
+            social: analyticsReport?.social_score,
+          }}
+          loading={reportLoading}
+        />
       </div>
 
       {/* ── Scrollable content body ── */}
@@ -2262,26 +2244,58 @@ export default function AnalyticsPage() {
         <div>
           {/* Score Cards */}
           <div className="grid grid-cols-2 gap-2 mb-4">
-            {[
-              { label: "Overall", score: analyticsReport?.overall_score, delta: analyticsReport?.overall_delta, color: "#16A34A", bg: "#DCFCE7" },
-              { label: "SEO", score: analyticsReport?.seo_score, delta: analyticsReport?.seo_delta, color: "#1D4ED8", bg: "#EFF6FF" },
-              { label: "GEO", score: analyticsReport?.geo_score, delta: analyticsReport?.geo_delta, color: "#7C3AED", bg: "#F5F3FF" },
-              { label: "Social", score: analyticsReport?.social_score, delta: analyticsReport?.social_delta, color: "#DB2777", bg: "#FDF2F8" },
-            ].map((c) => (
-              <div key={c.label} className="rounded-[14px] p-3 flex flex-col gap-1" style={{ background: c.bg, border: `1px solid ${c.color}22` }}>
-                <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: `${c.color}99` }}>{c.label}</p>
+            {([
+              { label: "Overall", score: analyticsReport?.overall_score, delta: analyticsReport?.overall_delta, mode: "general" as const },
+              { label: "SEO",     score: analyticsReport?.seo_score,     delta: analyticsReport?.seo_delta,     mode: "seo"     as const },
+              { label: "GEO",     score: analyticsReport?.geo_score,     delta: analyticsReport?.geo_delta,     mode: "geo"     as const },
+              { label: "Social",  score: analyticsReport?.social_score,  delta: analyticsReport?.social_delta,  mode: "social"  as const },
+            ] as { label: string; score?: number | null; delta?: number | null; mode: "general" | "seo" | "geo" | "social" }[]).map((c) => (
+              <div
+                key={c.label}
+                className="rounded-[14px] p-3 flex flex-col gap-1"
+                style={{
+                  background: `var(--gv7-mode-${c.mode}-light)`,
+                  border: `1px solid var(--gv7-mode-${c.mode}-border)`,
+                }}
+              >
+                <p
+                  className="text-[10px] font-bold uppercase tracking-wider"
+                  style={{ color: `var(--gv7-mode-${c.mode}-text)`, opacity: 0.7 }}
+                >
+                  {c.label}
+                </p>
                 <div className="flex items-end gap-1.5">
-                  <span className="text-[28px] font-bold leading-none" style={{ color: c.color, fontFamily: "var(--gv-font-heading)" }}>
+                  <span
+                    className="text-[28px] font-bold leading-none"
+                    style={{ color: `var(--gv7-mode-${c.mode}-text)`, fontFamily: "var(--gv-font-heading)" }}
+                  >
                     {reportLoading ? "—" : c.score ?? "—"}
                   </span>
                   {c.delta !== null && c.delta !== undefined && (
-                    <span className="text-[11px] font-semibold mb-0.5" style={{ color: c.delta >= 0 ? "#16A34A" : "#DC2626" }}>
+                    <span
+                      className="text-[11px] font-semibold mb-0.5"
+                      style={{ color: c.delta >= 0 ? "var(--gv7-mode-general-text)" : "#DC2626" }}
+                    >
                       {c.delta >= 0 ? "↑" : "↓"}{Math.abs(c.delta)}
                     </span>
                   )}
                 </div>
-                <div style={{ height: 4, borderRadius: 99, background: `${c.color}22` }}>
-                  <div style={{ height: 4, borderRadius: 99, background: c.color, width: `${c.score ?? 0}%`, transition: "width 0.4s" }} />
+                <div
+                  style={{
+                    height: 4,
+                    borderRadius: 99,
+                    background: `var(--gv7-mode-${c.mode}-border)`,
+                  }}
+                >
+                  <div
+                    style={{
+                      height: 4,
+                      borderRadius: 99,
+                      background: `var(--gv7-mode-${c.mode}-accent)`,
+                      width: `${c.score ?? 0}%`,
+                      transition: `width var(--gv-duration-slow) var(--gv-easing-default)`,
+                    }}
+                  />
                 </div>
               </div>
             ))}
@@ -2301,7 +2315,7 @@ export default function AnalyticsPage() {
             </div>
             <button
               onClick={handleRunAnalysis}
-              disabled={runAnalysisLoading || !brandProfileId}
+              disabled={runAnalysisLoading || !brandId}
               className="flex items-center gap-1.5 rounded-[10px] px-3 py-1.5 text-[12px] font-semibold transition-colors disabled:opacity-50 flex-shrink-0"
               style={
                 runAnalysisStatus === "success"
@@ -2753,60 +2767,17 @@ export default function AnalyticsPage() {
 
       {/* ── Sticky bottom tabs — Overview / SEO / GEO / Social ── */}
       <div className="flex-shrink-0 overflow-hidden rounded-b-xl" style={{ borderTop: "1px solid var(--gv-color-neutral-200)" }}>
-        <div className="flex h-full">
-          {([
-            {
-              key: "overview" as AnalyticsSection,
-              label: "Overview",
-              icon: (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
-                </svg>
-              ),
-            },
-            {
-              key: "seo" as AnalyticsSection,
-              label: "SEO",
-              icon: (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-                </svg>
-              ),
-            },
-            {
-              key: "geo" as AnalyticsSection,
-              label: "GEO",
-              icon: (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
-                </svg>
-              ),
-            },
-            {
-              key: "social" as AnalyticsSection,
-              label: "Social",
-              icon: (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-                </svg>
-              ),
-            },
-          ]).map(({ key, icon, label }) => (
-            <button
-              key={key}
-              onClick={() => handleSectionChange(key)}
-              className="flex-1 flex flex-col items-center justify-center gap-0.5 py-3 text-[11px] font-medium transition-colors border-r last:border-r-0"
-              style={{
-                borderColor: "var(--gv-color-neutral-200)",
-                background: activeSection === key ? "var(--gv-color-primary-50)" : "var(--gv-color-bg-surface)",
-                color: activeSection === key ? "var(--gv-color-primary-600)" : "var(--gv-color-neutral-400)",
-              }}
-            >
-              {icon}
-              <span>{label}</span>
-            </button>
-          ))}
-        </div>
+        <AnalyticsTabBar
+          activeSection={activeSection}
+          onSectionChange={handleSectionChange}
+          scores={{
+            overall: analyticsReport?.overall_score,
+            seo: analyticsReport?.seo_score,
+            geo: analyticsReport?.geo_score,
+            social: analyticsReport?.social_score,
+          }}
+          loading={reportLoading}
+        />
       </div>
     </div>
   );

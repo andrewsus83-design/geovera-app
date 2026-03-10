@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL =
   process.env.SUPABASE_URL || "https://vozjwptzutolvkvfpknk.supabase.co";
@@ -16,6 +17,13 @@ export async function OPTIONS() {
 
 export async function POST(request: NextRequest) {
   try {
+    const authHeader = request.headers.get("authorization");
+    const token = authHeader?.replace("Bearer ", "").trim();
+    if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: cors });
+    const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+    const { data: { user }, error: authError } = await adminClient.auth.getUser(token);
+    if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: cors });
+
     const body = await request.json();
 
     if (!body.brand_id || !body.role || !body.message) {
@@ -25,6 +33,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const brandId = body.brand_id;
+    const { data: brand } = await adminClient.from("brand_profiles").select("id").eq("id", brandId).eq("user_id", user.id).maybeSingle();
+    if (!brand) return NextResponse.json({ error: "Forbidden" }, { status: 403, headers: cors });
+
     const response = await fetch(
       `${SUPABASE_URL}/functions/v1/agent-inference`,
       {
@@ -33,7 +45,7 @@ export async function POST(request: NextRequest) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...body, user_id: user.id }),
       }
     );
 
@@ -42,10 +54,9 @@ export async function POST(request: NextRequest) {
       status: response.ok ? 200 : response.status,
       headers: cors,
     });
-  } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : "Internal server error";
+  } catch {
     return NextResponse.json(
-      { success: false, error: msg },
+      { success: false, error: "Internal server error" },
       { status: 500, headers: cors }
     );
   }

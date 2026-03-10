@@ -14,8 +14,6 @@ import FeatureGate from "@/components/shared/FeatureGate";
    DS v5.9 compliant — Tasks page style tabs
 ══════════════════════════════════════════════════════════════════════════ */
 
-const DEMO_BRAND_ID = process.env.NEXT_PUBLIC_DEMO_BRAND_ID || "a37dee82-5ed5-4ba4-991a-4d93dde9ff7a";
-
 type ReplyStatus = "queued" | "processing" | "sent" | "failed" | "skipped";
 type AttentionClassification = "purchase_intent" | "complaint" | "question" | "influencer" | "vip" | "spam" | "neutral";
 type ReplyMode = "manual" | "ai";
@@ -107,6 +105,7 @@ function cache_label(s: string) { return `Cache ${s}`; }
 
 export default function AutoReplyPage() {
   const { quota, loading: quotaLoading } = useUserQuota();
+  const [brandId, setBrandId]           = useState<string | null>(null);
   const [replyMode, setReplyMode]       = useState<ReplyMode>("ai");
   const [selectedDateKey, setSDK]       = useState<string>(new Date().toISOString().slice(0, 10));
   const [selectedId, setSelectedId]     = useState<string | null>(null);
@@ -118,22 +117,50 @@ export default function AutoReplyPage() {
   const [aiEnabled, setAIEnabled]       = useState(true);
   const [aiTone, setAITone]             = useState<"professional" | "friendly" | "casual">("friendly");
   const [filter, setFilter]             = useState<"all" | "unreplied" | "replied">("unreplied");
+  const [platformFilter, setPlatformFilter] = useState<string>("all");
   const [sending, setSending]           = useState(false);
+  const [syncing, setSyncing]           = useState(false);
+  const [replyingAll, setReplyingAll]   = useState(false);
+  const [syncResult, setSyncResult]     = useState<string | null>(null);
   const [repliedComments, setReplied]   = useState<CommentItem[]>([]);
+  const [stats, setStats]               = useState<{
+    auto_replied_total: number;
+    auto_replied_today: number;
+    manual_replied_total: number;
+    manual_replied_today: number;
+    pending_auto: number;
+    pending_attention: number;
+  } | null>(null);
+
+  // Load actual user's brand
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) return;
+      supabase
+        .from("brand_profiles")
+        .select("id")
+        .eq("user_id", session.user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+        .then(({ data }) => { if (data) setBrandId(data.id); });
+    });
+  }, []);
 
   const fetchData = useCallback(async () => {
+    if (!brandId) return;
     setLoading(true);
     const [queueRes, attentionRes, rateLimitRes, sentRes, resolvedRes] = await Promise.all([
-      supabase.from("gv_reply_queue").select("*").eq("brand_id", DEMO_BRAND_ID)
+      supabase.from("gv_reply_queue").select("*").eq("brand_id", brandId)
         .in("status", ["queued", "processing", "failed"]).order("weight", { ascending: false }).limit(100),
-      supabase.from("gv_attention_queue").select("*").eq("brand_id", DEMO_BRAND_ID)
+      supabase.from("gv_attention_queue").select("*").eq("brand_id", brandId)
         .eq("is_resolved", false).order("created_at", { ascending: false }).limit(100),
-      supabase.from("gv_reply_rate_limit").select("platform,last_reply_at,cooldown_seconds").eq("brand_id", DEMO_BRAND_ID),
+      supabase.from("gv_reply_rate_limit").select("platform,last_reply_at,cooldown_seconds").eq("brand_id", brandId),
       // Replied tab — sent/skipped queue items
-      supabase.from("gv_reply_queue").select("*").eq("brand_id", DEMO_BRAND_ID)
+      supabase.from("gv_reply_queue").select("*").eq("brand_id", brandId)
         .in("status", ["sent", "skipped"]).order("updated_at", { ascending: false }).limit(100),
       // Replied tab — resolved attention items
-      supabase.from("gv_attention_queue").select("*").eq("brand_id", DEMO_BRAND_ID)
+      supabase.from("gv_attention_queue").select("*").eq("brand_id", brandId)
         .eq("is_resolved", true).order("updated_at", { ascending: false }).limit(100),
     ]);
 
@@ -177,10 +204,21 @@ export default function AutoReplyPage() {
     ].sort(sort));
 
     setRateLimits((rateLimitRes.data ?? []) as RateLimit[]);
-    setLoading(false);
-  }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+    // Fetch historical stats from edge function
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token && brandId) {
+      await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/social-auto-reply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
+        body: JSON.stringify({ action: "get_stats", brand_id: brandId }),
+      }).then(r => r.json()).then(d => { if (d.success) setStats(d.stats); }).catch(() => null);
+    }
+
+    setLoading(false);
+  }, [brandId]);
+
+  useEffect(() => { if (brandId) fetchData(); }, [fetchData, brandId]);
 
   /* ── 7D window: 3 days back + today + 3 ahead ── */
   const sevenDays = useMemo(() => {
@@ -205,15 +243,25 @@ export default function AutoReplyPage() {
 
   const filteredComments = useMemo(() => {
     const byDate = (arr: CommentItem[]) => arr.filter(c => toDateKey(c.created_at) === selectedDateKey);
-    if (filter === "unreplied") return byDate(comments);
-    if (filter === "replied")   return byDate(repliedComments);
-    return [...byDate(comments), ...byDate(repliedComments)]
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  }, [comments, repliedComments, selectedDateKey, filter]);
+    const byPlatform = (arr: CommentItem[]) => platformFilter === "all" ? arr : arr.filter(c => c.platform.toLowerCase() === platformFilter);
+    if (filter === "unreplied") return byPlatform(byDate(comments));
+    if (filter === "replied")   return byPlatform(byDate(repliedComments));
+    return byPlatform([...byDate(comments), ...byDate(repliedComments)]
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
+  }, [comments, repliedComments, selectedDateKey, filter, platformFilter]);
 
-  const selectedComment = [...comments, ...repliedComments].find(c => c.id === selectedId) ?? null;
+  const selectedComment = useMemo(
+    () => [...comments, ...repliedComments].find(c => c.id === selectedId) ?? null,
+    [comments, repliedComments, selectedId],
+  );
 
   const todayDateKey = new Date().toISOString().slice(0, 10);
+
+  /* ── Available platforms (for filter pills) ── */
+  const availablePlatforms = useMemo(() => {
+    const platforms = new Set([...comments, ...repliedComments].map(c => c.platform.toLowerCase()));
+    return Array.from(platforms);
+  }, [comments, repliedComments]);
 
   /* ── Tab counts ── */
   const countUnreplied = useMemo(() => comments.filter(c => toDateKey(c.created_at) === selectedDateKey).length, [comments, selectedDateKey]);
@@ -238,7 +286,7 @@ export default function AutoReplyPage() {
           },
           body: JSON.stringify({
             action: "send_single",
-            brand_id: DEMO_BRAND_ID,
+            brand_id: brandId,
             queue_id: selectedComment.id,
             reply_text: replyText,
             source: selectedComment.source,
@@ -275,7 +323,7 @@ export default function AutoReplyPage() {
           },
           body: JSON.stringify({
             action: "send_single",
-            brand_id: DEMO_BRAND_ID,
+            brand_id: brandId,
             queue_id: selectedComment.id,
             reply_text: manualReply.trim(),
             source: selectedComment.source,
@@ -319,6 +367,77 @@ export default function AutoReplyPage() {
     }
   }, [selectedComment, sending]);
 
+  /* ── Sync: fetch_and_classify from Late API ── */
+  const handleSync = useCallback(async () => {
+    if (!brandId || syncing) return;
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/social-auto-reply`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${session?.access_token ?? ""}`,
+          },
+          body: JSON.stringify({ action: "fetch_and_classify", brand_id: brandId }),
+        }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        const msg = data.fetched === 0
+          ? "No new comments found"
+          : `${data.queued_for_auto_reply ?? 0} auto-reply + ${data.queued_for_attention ?? 0} attention (${data.skipped_duplicate ?? 0} skipped)`;
+        setSyncResult(msg);
+        await fetchData();
+      } else {
+        setSyncResult(data.error ?? "Sync failed");
+      }
+    } catch {
+      setSyncResult("Network error");
+    } finally {
+      setSyncing(false);
+      setTimeout(() => setSyncResult(null), 5000);
+    }
+  }, [brandId, syncing, fetchData]);
+
+  /* ── Reply Now: send_replies (batch auto-send queued) ── */
+  const handleReplyNow = useCallback(async () => {
+    if (!brandId || replyingAll) return;
+    const queuedCount = comments.filter(c => c.source === "queue" && c.status === "queued").length;
+    if (queuedCount === 0) { setSyncResult("No queued replies to send"); setTimeout(() => setSyncResult(null), 3000); return; }
+    setReplyingAll(true);
+    setSyncResult(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/social-auto-reply`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${session?.access_token ?? ""}`,
+          },
+          body: JSON.stringify({ action: "send_replies", brand_id: brandId, limit: 20 }),
+        }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        setSyncResult(`Sent ${data.sent ?? 0} replies${data.failed ? `, ${data.failed} failed` : ""}`);
+        await fetchData();
+      } else {
+        setSyncResult(data.error ?? "Reply Now failed");
+      }
+    } catch {
+      setSyncResult("Network error");
+    } finally {
+      setReplyingAll(false);
+      setTimeout(() => setSyncResult(null), 5000);
+    }
+  }, [brandId, replyingAll, comments, fetchData]);
+
   /* ════════════════════════════════════════════════════════════
      LEFT COLUMN — NavColumn only
   ════════════════════════════════════════════════════════════ */
@@ -345,7 +464,33 @@ export default function AutoReplyPage() {
               style={{ background: "var(--gv-color-neutral-100)", color: "var(--gv-color-neutral-700)" }}>
               {filteredComments.length}/{comments.length}
             </span>
+            {/* Sync result toast */}
+            {syncResult && (
+              <span className="text-[11px] font-medium px-2 py-1 rounded-[6px]"
+                style={{ background: syncResult.toLowerCase().includes("fail") || syncResult.toLowerCase().includes("error") ? "#FEE2E2" : "#DCFCE7", color: syncResult.toLowerCase().includes("fail") || syncResult.toLowerCase().includes("error") ? "#DC2626" : "#16A34A" }}>
+                {syncResult}
+              </span>
+            )}
           </div>
+          {/* Sync button */}
+          <button
+            onClick={handleSync}
+            disabled={syncing || !brandId}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-[10px] text-[12px] font-semibold transition-all"
+            style={{
+              background: syncing ? "var(--gv-color-neutral-100)" : "var(--gv-color-primary-50)",
+              color: syncing ? "var(--gv-color-neutral-400)" : "var(--gv-color-primary-600)",
+              border: "1px solid var(--gv-color-primary-200)",
+              cursor: syncing || !brandId ? "not-allowed" : "pointer",
+              flexShrink: 0,
+            }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+              style={{ animation: syncing ? "gv-spin 0.8s linear infinite" : "none" }}>
+              <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+            </svg>
+            {syncing ? "Syncing…" : "Sync"}
+          </button>
           {/* 7D date strip */}
           <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
             {sevenDays.map((dateStr) => {
@@ -416,7 +561,7 @@ export default function AutoReplyPage() {
             return (
               <button
                 key={f.key}
-                onClick={() => setFilter(f.key)}
+                onClick={() => { setFilter(f.key); setPlatformFilter("all"); }}
                 className="flex-1 text-center text-[13px] font-semibold transition-all duration-200"
                 style={{
                   borderRadius: "var(--gv-radius-full)",
@@ -438,6 +583,31 @@ export default function AutoReplyPage() {
           })}
         </div>
       </div>
+
+      {/* ─── Platform filter pills (only when multiple platforms) ─── */}
+      {availablePlatforms.length > 1 && (
+        <div className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 overflow-x-auto no-scrollbar"
+          style={{ borderBottom: "1px solid var(--gv-color-neutral-100)" }}>
+          {["all", ...availablePlatforms].map((p) => {
+            const isActive = platformFilter === p;
+            return (
+              <button
+                key={p}
+                onClick={() => setPlatformFilter(p)}
+                className="flex-shrink-0 flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize transition-all"
+                style={{
+                  background: isActive ? "var(--gv-color-primary-100)" : "var(--gv-color-neutral-100)",
+                  color: isActive ? "var(--gv-color-primary-700)" : "var(--gv-color-neutral-500)",
+                  border: `1px solid ${isActive ? "var(--gv-color-primary-200)" : "transparent"}`,
+                }}
+              >
+                {p !== "all" && <PlatformIcon id={p} size={12} />}
+                {p === "all" ? "All Platforms" : p}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* ─── Comment list — dynamic height ─── */}
       <div
@@ -633,7 +803,7 @@ export default function AutoReplyPage() {
                     <p className="text-[12px] font-bold uppercase tracking-widest" style={{ color: "var(--gv-color-neutral-400)" }}>AI Draft Reply</p>
                     <span className="text-[10px] font-bold rounded-full px-2 py-0.5"
                       style={{ background: "var(--gv-color-primary-100)", color: "var(--gv-color-primary-700)" }}>
-                      Llama + Claude
+                      Claude Haiku
                     </span>
                   </div>
                   <div className="rounded-[14px] p-4" style={{ background: "var(--gv-color-primary-50)", border: "1.5px solid var(--gv-color-primary-200)" }}>
@@ -674,7 +844,7 @@ export default function AutoReplyPage() {
               ) : (
                 <div className="rounded-[14px] p-4 text-center" style={{ background: "var(--gv-color-neutral-50)", border: "1px solid var(--gv-color-neutral-200)" }}>
                   <p className="text-[13px] font-semibold" style={{ color: "var(--gv-color-neutral-600)" }}>⏳ AI draft generating…</p>
-                  <p className="text-[11px] mt-1" style={{ color: "var(--gv-color-neutral-400)" }}>Llama + Claude are composing a reply</p>
+                  <p className="text-[11px] mt-1" style={{ color: "var(--gv-color-neutral-400)" }}>Claude Haiku is composing a reply</p>
                 </div>
               )}
             </div>
@@ -709,8 +879,69 @@ export default function AutoReplyPage() {
       {/* Settings content — scrollable */}
       <div className="overflow-y-auto p-5 flex flex-col gap-5 h-full">
         <p className="text-[11px] font-bold uppercase tracking-[0.1em]" style={{ color: "var(--gv-color-neutral-400)" }}>
-          Settings
+          Stats & Settings
         </p>
+
+        {/* Historical counter */}
+        {stats && (
+          <div className="rounded-[16px] overflow-hidden" style={{ border: "1px solid var(--gv-color-neutral-200)" }}>
+            <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--gv-color-neutral-100)", background: "var(--gv-color-neutral-50)" }}>
+              <p className="text-[13px] font-bold" style={{ color: "var(--gv-color-neutral-800)" }}>Reply History</p>
+              <p className="text-[11px] mt-0.5" style={{ color: "var(--gv-color-neutral-400)" }}>Total comments replied</p>
+            </div>
+            <div className="grid grid-cols-2 divide-x divide-y" style={{ borderColor: "var(--gv-color-neutral-100)" }}>
+              {[
+                { label: "Auto Replied", value: stats.auto_replied_total, today: stats.auto_replied_today, color: "var(--gv-color-primary-600)", icon: "⚡" },
+                { label: "Manual", value: stats.manual_replied_total, today: stats.manual_replied_today, color: "#7C3AED", icon: "✍️" },
+              ].map(s => (
+                <div key={s.label} className="px-3 py-3 text-center">
+                  <p className="text-[11px] font-semibold mb-1" style={{ color: "var(--gv-color-neutral-500)" }}>{s.icon} {s.label}</p>
+                  <p className="text-[22px] font-bold leading-tight" style={{ color: s.color }}>{s.value}</p>
+                  <p className="text-[10px] mt-0.5" style={{ color: "var(--gv-color-neutral-400)" }}>+{s.today} today</p>
+                </div>
+              ))}
+            </div>
+            <div className="px-4 py-2.5 flex items-center justify-between" style={{ borderTop: "1px solid var(--gv-color-neutral-100)" }}>
+              <span className="text-[11px]" style={{ color: "var(--gv-color-neutral-500)" }}>Pending</span>
+              <div className="flex gap-2">
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "var(--gv-color-primary-50)", color: "var(--gv-color-primary-700)" }}>
+                  ⚡ {stats.pending_auto} queued
+                </span>
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "#FEE2E2", color: "#DC2626" }}>
+                  👁 {stats.pending_attention} attention
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Group classification legend */}
+        <div className="rounded-[16px] overflow-hidden" style={{ border: "1px solid var(--gv-color-neutral-200)" }}>
+          <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--gv-color-neutral-100)", background: "var(--gv-color-neutral-50)" }}>
+            <p className="text-[13px] font-bold" style={{ color: "var(--gv-color-neutral-800)" }}>Comment Groups</p>
+            <p className="text-[11px] mt-0.5" style={{ color: "var(--gv-color-neutral-400)" }}>Claude Haiku classification</p>
+          </div>
+          <div className="divide-y" style={{ borderColor: "var(--gv-color-neutral-100)" }}>
+            <div className="px-4 py-3">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: "#FEE2E2", color: "#DC2626" }}>Group 1</span>
+                <span className="text-[12px] font-semibold" style={{ color: "var(--gv-color-neutral-800)" }}>Need Attention</span>
+              </div>
+              <p className="text-[10px] leading-relaxed" style={{ color: "var(--gv-color-neutral-500)" }}>
+                Questions, complaints, purchase intent, influencers, VIPs. <strong>Requires human moderation.</strong> AI draft provided as suggestion only.
+              </p>
+            </div>
+            <div className="px-4 py-3">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: "var(--gv-color-primary-100)", color: "var(--gv-color-primary-700)" }}>Group 2</span>
+                <span className="text-[12px] font-semibold" style={{ color: "var(--gv-color-neutral-800)" }}>Auto Reply</span>
+              </div>
+              <p className="text-[10px] leading-relaxed" style={{ color: "var(--gv-color-neutral-500)" }}>
+                Simple praise: emojis, "thanks", "love it", "great". <strong>AI auto-replies safely</strong> within rate limits.
+              </p>
+            </div>
+          </div>
+        </div>
 
         {/* AI Auto Reply toggle */}
         <div className="rounded-[16px] overflow-hidden" style={{ border: "1px solid var(--gv-color-neutral-200)" }}>
@@ -752,29 +983,36 @@ export default function AutoReplyPage() {
           </div>
         </div>
 
-        {/* Rate limits */}
+        {/* Auto-reply rate limits (from plan quota) */}
         <div className="rounded-[16px] overflow-hidden" style={{ border: "1px solid var(--gv-color-neutral-200)" }}>
           <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--gv-color-neutral-100)", background: "var(--gv-color-neutral-50)" }}>
-            <p className="text-[13px] font-bold" style={{ color: "var(--gv-color-neutral-800)" }}>Rate Limits by Tier</p>
-            <p className="text-[11px] mt-0.5" style={{ color: "var(--gv-color-neutral-400)" }}>Cooldown + jitter per platform</p>
+            <p className="text-[13px] font-bold" style={{ color: "var(--gv-color-neutral-800)" }}>Auto-Reply Rate Limit</p>
+            <p className="text-[11px] mt-0.5" style={{ color: "var(--gv-color-neutral-400)" }}>Group 2 • Based on your plan</p>
           </div>
-          <div className="divide-y" style={{ borderColor: "var(--gv-color-neutral-100)" }}>
-            {[
-              { tier: "Basic",   cooldown: "10 min", jitter: "4 min", replies: "~6/h" },
-              { tier: "Premium", cooldown: "5 min",  jitter: "2 min", replies: "~12/h" },
-              { tier: "Partner", cooldown: "3 min",  jitter: "1 min", replies: "~20/h" },
-            ].map(t => (
-              <div key={t.tier} className="flex items-center justify-between px-4 py-2.5">
-                <div>
-                  <p className="text-[12px] font-semibold" style={{ color: "var(--gv-color-neutral-800)" }}>{t.tier}</p>
-                  <p className="text-[10px]" style={{ color: "var(--gv-color-neutral-400)" }}>{t.cooldown} + {t.jitter} jitter</p>
-                </div>
-                <span className="text-[11px] font-semibold px-2 py-1 rounded-[6px]"
-                  style={{ background: "var(--gv-color-neutral-100)", color: "var(--gv-color-neutral-700)" }}>
-                  {t.replies}
-                </span>
-              </div>
-            ))}
+          <div className="px-4 py-3 flex items-center justify-between">
+            <div>
+              <p className="text-[12px] font-semibold capitalize" style={{ color: "var(--gv-color-neutral-800)" }}>
+                {quota.plan_name === "no_plan" ? "No active plan" : quota.plan_name}
+              </p>
+              <p className="text-[10px] mt-0.5" style={{ color: "var(--gv-color-neutral-400)" }}>
+                {quota.auto_reply_per_5min > 0
+                  ? `Cooldown: ${Math.floor(300 / quota.auto_reply_per_5min)}s between replies`
+                  : "Auto reply not available"}
+              </p>
+            </div>
+            <div className="text-right">
+              <span className="text-[18px] font-bold" style={{ color: "var(--gv-color-primary-600)" }}>
+                {quota.auto_reply_per_5min}
+              </span>
+              <p className="text-[9px] font-semibold" style={{ color: "var(--gv-color-neutral-400)" }}>per 5 min</p>
+            </div>
+          </div>
+          <div className="px-4 pb-3 flex items-center justify-between" style={{ borderTop: "1px solid var(--gv-color-neutral-100)", paddingTop: 10 }}>
+            <span className="text-[11px]" style={{ color: "var(--gv-color-neutral-500)" }}>Hourly cap</span>
+            <span className="text-[11px] font-semibold px-2 py-1 rounded-[6px]"
+              style={{ background: "var(--gv-color-neutral-100)", color: "var(--gv-color-neutral-700)" }}>
+              ~{quota.auto_reply_per_5min * 12}/hour
+            </span>
           </div>
         </div>
 
@@ -916,6 +1154,35 @@ export default function AutoReplyPage() {
                 </button>
               );
             })}
+
+            {/* Divider */}
+            <div style={{ width: 1, height: 24, background: "var(--gv-color-neutral-200)", margin: "0 4px", flexShrink: 0 }} />
+
+            {/* Reply Now button */}
+            <button
+              onClick={handleReplyNow}
+              disabled={replyingAll || !brandId || comments.filter(c => c.source === "queue" && c.status === "queued").length === 0}
+              className="flex items-center gap-2 h-10 px-4 transition-all duration-200"
+              style={{
+                borderRadius: "var(--gv-radius-full)",
+                background: replyingAll ? "var(--gv-color-neutral-100)" : "var(--gv-color-primary-600)",
+                color: replyingAll ? "var(--gv-color-neutral-400)" : "white",
+                border: "1px solid transparent",
+                cursor: replyingAll || !brandId ? "not-allowed" : "pointer",
+                boxShadow: replyingAll ? "none" : "0 2px 8px rgba(61,107,104,0.3)",
+                opacity: (!brandId || comments.filter(c => c.source === "queue" && c.status === "queued").length === 0) && !replyingAll ? 0.5 : 1,
+              }}
+            >
+              <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="22" y1="2" x2="11" y2="13"/>
+                  <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                </svg>
+              </span>
+              <span className="text-[13px] font-[550] whitespace-nowrap leading-none">
+                {replyingAll ? "Sending…" : `Reply Now${comments.filter(c => c.source === "queue" && c.status === "queued").length > 0 ? ` (${comments.filter(c => c.source === "queue" && c.status === "queued").length})` : ""}`}
+              </span>
+            </button>
           </div>
         </div>
       </nav>
