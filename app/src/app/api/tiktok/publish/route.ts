@@ -18,6 +18,13 @@ export async function OPTIONS() {
 
 export async function POST(request: NextRequest) {
   try {
+    const authHeader = request.headers.get("authorization");
+    const token = authHeader?.replace("Bearer ", "").trim();
+    if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: cors });
+    const adminClient = createClient(SUPABASE_URL, SUPABASE_KEY);
+    const { data: { user }, error: authError } = await adminClient.auth.getUser(token);
+    if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: cors });
+
     const body = await request.json() as {
       postId?:    string;
       caption?:   string;
@@ -27,6 +34,9 @@ export async function POST(request: NextRequest) {
     };
 
     const brandId  = body.brandId || DEMO_BRAND_ID;
+
+    const { data: brand } = await adminClient.from("brand_profiles").select("id").eq("id", brandId).eq("user_id", user.id).maybeSingle();
+    if (!brand) return NextResponse.json({ error: "Forbidden" }, { status: 403, headers: cors });
     const caption  = body.caption || "";
     const videoUrl = body.videoUrl;
 

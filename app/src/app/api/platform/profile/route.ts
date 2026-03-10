@@ -1,18 +1,25 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
 
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://vozjwptzutolvkvfpknk.supabase.co";
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+
 function getSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 }
 
 const IG_API = "https://graph.instagram.com/v21.0";
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
+  const authHeader = request.headers.get("authorization");
+  const token = authHeader?.replace("Bearer ", "").trim();
+  if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+  const { data: { user }, error: authError } = await adminClient.auth.getUser(token);
+  if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const { searchParams } = new URL(request.url);
   const platform = searchParams.get("platform");
   const brandId = searchParams.get("brandId");
@@ -20,6 +27,9 @@ export async function GET(request: Request) {
   if (!platform || !brandId) {
     return NextResponse.json({ error: "missing_params" }, { status: 400 });
   }
+
+  const { data: brand } = await adminClient.from("brand_profiles").select("id").eq("id", brandId).eq("user_id", user.id).maybeSingle();
+  if (!brand) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const supabase = getSupabase();
   // Look up the stored connection for this brand + platform

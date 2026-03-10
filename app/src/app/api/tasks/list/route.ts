@@ -15,6 +15,13 @@ export async function OPTIONS() {
 
 // GET /api/tasks/list?brand_id=...&date=YYYY-MM-DD&status=...
 export async function GET(request: NextRequest) {
+  const authHeader = request.headers.get("authorization");
+  const token = authHeader?.replace("Bearer ", "").trim();
+  if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: cors });
+  const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+  const { data: { user }, error: authError } = await adminClient.auth.getUser(token);
+  if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: cors });
+
   const { searchParams } = new URL(request.url);
   const brand_id = searchParams.get("brand_id");
   const date = searchParams.get("date");
@@ -24,7 +31,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "brand_id required" }, { status: 400, headers: cors });
   }
 
-  const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+  const { data: brandCheck } = await adminClient.from("brand_profiles").select("id").eq("id", brand_id).eq("user_id", user.id).maybeSingle();
+  if (!brandCheck) return NextResponse.json({ error: "Forbidden" }, { status: 403, headers: cors });
+
+  const sb = adminClient;
 
   // Get the active task cycle for this brand
   const { data: cycle } = await sb
