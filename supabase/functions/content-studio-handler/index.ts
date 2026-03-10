@@ -20,6 +20,9 @@ const RUNWAY_BASE = "https://api.runwayml.com";
 const FAL_API_KEY = Deno.env.get("FAL_API_KEY") ?? "";
 const MODAL_FLUX_URL = Deno.env.get("MODAL_FLUX_SCHNELL_URL") ?? ""; // Custom Modal endpoint (optional)
 
+// ── Modal FFmpeg stitch endpoint (optional — concat scene clips into final video) ─
+const MODAL_FFMPEG_URL = Deno.env.get("MODAL_FFMPEG_URL") ?? "";
+
 // Cloudflare Workers AI (Llama) — for training prompt engineering
 const CF_ACCOUNT_ID = Deno.env.get("CLOUDFLARE_ACCOUNT_ID") ?? "";
 const CF_API_TOKEN = Deno.env.get("CLOUDFLARE_API_TOKEN") ?? "";
@@ -118,47 +121,47 @@ async function modalFluxGenerate(prompt: string, aspectRatio: string, numImages:
   return [];
 }
 
-// ── Claude image scoring (returns top N best images — 1:5 ratio) ──────────────
-async function claudeScoreImages(imageUrls: string[], prompt: string, anthropicKey: string): Promise<string[]> {
-  return claudeScoreAndPickN(imageUrls, prompt, Math.max(1, Math.ceil(imageUrls.length * 0.15)), anthropicKey);
-}
-
-async function claudeScoreAndPickN(imageUrls: string[], prompt: string, n: number, anthropicKey: string): Promise<string[]> {
+// ── 6-criteria weighted batch image scoring (no reasoning, one call per 20 imgs) ─
+// Weights: visual_clarity×0.25 + cinematic_composition×0.25 + motion_potential×0.20
+//        + depth_layers×0.15 + narrative_usefulness×0.10 + style_consistency×0.05
+async function claudeScoreAndPickN(imageUrls: string[], brief: string, n: number, anthropicKey: string): Promise<string[]> {
   if (imageUrls.length <= 1) return imageUrls;
   const pickN = Math.min(n, imageUrls.length);
   try {
-    // Score in batches of 10 max (Claude vision limit)
-    const batchUrls = imageUrls.slice(0, 10);
-    const imageContent = batchUrls.flatMap((url, i) => ([
-      { type: "text" as const, text: `Image ${i + 1}:` },
-      { type: "image" as const, source: { type: "url" as const, url } },
-    ]));
+    const batch = imageUrls.slice(0, 20);
+    const content: Array<Record<string, unknown>> = [];
+    batch.forEach((url, i) => {
+      content.push({ type: "text", text: `IMG_${i}:` });
+      content.push({ type: "image", source: { type: "url", url } });
+    });
+    content.push({
+      type: "text",
+      text: `Brief: "${brief}"\nScore each: vc×0.25+cc×0.25+mp×0.20+dl×0.15+nu×0.10+sc×0.05 (each 1-10)\nReturn ONLY: {"s":[{"i":0,"t":7.85},{"i":1,"t":6.20},...]}`,
+    });
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": anthropicKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 512,
-        messages: [{ role: "user", content: [
-          ...imageContent,
-          { type: "text", text: `You are an expert art director. Score each image 1-10 based on: commercial quality, composition, lighting, clarity, relevance to "${prompt}". Pick the absolute best for professional brand content. Return JSON only: {"scores":[n,n,...]}` },
-        ]}],
-      }),
+      body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 256, messages: [{ role: "user", content }] }),
     });
     if (!res.ok) return imageUrls.slice(0, pickN);
     const d = await res.json();
     const raw = d.content?.[0]?.text ?? "{}";
-    const match = raw.match(/\{[\s\S]*\}/);
-    const scores: number[] = match ? (JSON.parse(match[0]).scores ?? []) : [];
-    const ranked = imageUrls
-      .map((url, i) => ({ url, score: scores[i] ?? 5 }))
+    const match = raw.match(/\{[\s\S]*?\}/);
+    if (!match) return imageUrls.slice(0, pickN);
+    const scores: Array<{ i: number; t: number }> = JSON.parse(match[0]).s ?? [];
+    const scoreMap = new Map(scores.map(s => [s.i, s.t]));
+    return imageUrls
+      .map((url, i) => ({ url, score: scoreMap.get(i) ?? 5 }))
       .sort((a, b) => b.score - a.score)
       .slice(0, pickN)
       .map(x => x.url);
-    return ranked.length > 0 ? ranked : imageUrls.slice(0, pickN);
   } catch {
     return imageUrls.slice(0, pickN);
   }
+}
+
+function claudeScoreImages(imageUrls: string[], prompt: string, anthropicKey: string): Promise<string[]> {
+  return claudeScoreAndPickN(imageUrls, prompt, Math.max(1, Math.ceil(imageUrls.length * 0.15)), anthropicKey);
 }
 
 // OpenAI Sora-2 — video generation for long durations (> 10s)
@@ -270,6 +273,159 @@ async function llamaChat(
   if (!res.ok) throw new Error(`Cloudflare AI error ${res.status}: ${await res.text()}`);
   const data = await res.json();
   return data.result?.response?.trim() ?? "";
+}
+
+// ── Cinematic scene type ──────────────────────────────────────────────────────
+interface CinematicScene {
+  index: number;
+  duration: number; // always 5s (Runway Gen 4 Turbo constraint)
+  image_prompt: string; // Flux Schnell optimized — must have visual continuity markers
+  runway_prompt: string; // Runway motion/camera prompt with continuity cue
+  camera_movement: string;
+  mood: string;
+  continuity_note: string;
+}
+
+// ── Claude Sonnet 4.5 — Senior Cinematographer / Scene Director ───────────────
+// Generates ALL scene prompts in ONE call with enforced visual sequence continuity
+async function claudeSceneDirector(params: {
+  topic: string;
+  objective: string;
+  brandContext: string;
+  totalDuration: number;
+  aspectRatio: string;
+  platform: string;
+  refImageUrls: string[];
+  anthropicKey: string;
+}): Promise<CinematicScene[]> {
+  const { topic, objective, brandContext, totalDuration, aspectRatio, platform, refImageUrls, anthropicKey } = params;
+  const numScenes = Math.min(13, Math.max(4, Math.ceil(totalDuration / 5)));
+
+  const systemPrompt = `You are a senior cinematographer, director of photography, and brand visual director at a top-tier creative agency. You architect precise cinematic shot sequences for commercial brand videos.
+
+Your primary discipline: VISUAL SEQUENCE CONTINUITY. Every scene's image prompt must share locked visual anchors (consistent lighting direction, color grade, subject position, background style) so that Flux Schnell generates a naturally flowing image sequence — and Runway can animate each into a 5-second clip without jarring cuts.
+
+Rules for image prompts:
+- Lock one consistent visual anchor across ALL scenes (e.g. "warm golden hour sidelight" / "dark studio with blue rim light")
+- Use the same subject orientation logic (e.g. center-frame hero, left-thirds product)
+- Vary ONLY: camera distance, angle, foreground props — never the core visual language
+- Each prompt is 50–80 words, Flux Schnell optimized, photorealistic, commercial quality
+
+Rules for runway prompts:
+- Write camera movement + motion direction + transition type
+- Reference the previous/next scene for continuity (e.g. "continue left pan from previous shot")
+- Max 50 words per runway prompt
+
+Return ONLY valid JSON, no explanation, no markdown.`;
+
+  const userPrompt = `Design a ${numScenes}-scene cinematic video breakdown:
+Topic: ${topic}
+Objective: ${objective}
+Brand: ${brandContext}
+Platform: ${platform} (${aspectRatio} format)
+Duration: ${totalDuration}s total (${numScenes} scenes × 5s each)${refImageUrls.length > 0 ? `\nReference images: ${refImageUrls.length} provided — match their visual identity, color grade, and style exactly` : ""}
+
+Design the visual sequence so images flow naturally: scene 1 → 2 → 3 must feel like frames of the same cinematic world.
+
+Return: {"scenes":[{"index":0,"duration":5,"image_prompt":"<flux schnell prompt with locked visual anchors>","runway_prompt":"<runway motion prompt with continuity cue>","camera_movement":"<type>","mood":"<mood>","continuity_note":"<connection to next scene>"},...]}`;
+
+  const userContent: Array<Record<string, unknown>> = [
+    ...refImageUrls.slice(0, 3).map(url => ({ type: "image", source: { type: "url", url } })),
+    { type: "text", text: userPrompt },
+  ];
+
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "x-api-key": anthropicKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-5",
+      max_tokens: 4000,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userContent }],
+    }),
+  });
+  if (!res.ok) throw new Error(`Scene director failed: ${res.status}`);
+  const d = await res.json();
+  const raw = d.content?.[0]?.text ?? "{}";
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error("Scene director: no JSON in response");
+  const parsed = JSON.parse(match[0]);
+  return (parsed.scenes ?? []).slice(0, numScenes) as CinematicScene[];
+}
+
+// ── Batch weighted scene scoring — ONE Claude Haiku call per 20 images ────────
+// No reasoning. Weighted: vc×0.25 + cc×0.25 + mp×0.20 + dl×0.15 + nu×0.10 + sc×0.05
+async function claudeBatchScoreScenes(
+  sceneCandidates: Array<{ sceneIndex: number; urls: string[] }>,
+  brief: string,
+  anthropicKey: string,
+): Promise<string[]> {
+  const flat: Array<{ si: number; url: string }> = [];
+  for (const sc of sceneCandidates) {
+    for (const url of sc.urls) flat.push({ si: sc.sceneIndex, url });
+  }
+  if (flat.length === 0) return sceneCandidates.map(sc => sc.urls[0] ?? "");
+
+  const scoredMap = new Map<string, number>();
+  const BATCH = 20;
+
+  for (let start = 0; start < flat.length; start += BATCH) {
+    const batch = flat.slice(start, start + BATCH);
+    const content: Array<Record<string, unknown>> = [];
+    batch.forEach((item, i) => {
+      content.push({ type: "text", text: `IMG_${start + i}:` });
+      content.push({ type: "image", source: { type: "url", url: item.url } });
+    });
+    content.push({
+      type: "text",
+      text: `Video: "${brief}"\nScore vc×0.25+cc×0.25+mp×0.20+dl×0.15+nu×0.10+sc×0.05 (1-10 each)\nReturn ONLY: {"s":[{"i":${start},"t":7.8},...]}`,
+    });
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "x-api-key": anthropicKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+        body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 300, messages: [{ role: "user", content }] }),
+      });
+      if (!res.ok) continue;
+      const d = await res.json();
+      const raw = d.content?.[0]?.text ?? "";
+      const match = raw.match(/\{[\s\S]*?\}/);
+      if (!match) continue;
+      const arr: Array<{ i: number; t: number }> = JSON.parse(match[0]).s ?? [];
+      for (const { i, t } of arr) {
+        const item = flat[i];
+        if (item) scoredMap.set(item.url, t);
+      }
+    } catch { /* keep default */ }
+  }
+
+  return sceneCandidates.map(sc => {
+    let best = sc.urls[0] ?? "";
+    let bestScore = -1;
+    for (const url of sc.urls) {
+      const s = scoredMap.get(url) ?? 5;
+      if (s > bestScore) { bestScore = s; best = url; }
+    }
+    return best;
+  });
+}
+
+// ── FFmpeg stitch via external Modal endpoint (MODAL_FFMPEG_URL) ──────────────
+async function stitchClips(videoUrls: string[], outputKey: string): Promise<string | null> {
+  if (!MODAL_FFMPEG_URL || videoUrls.length === 0) return videoUrls[0] ?? null;
+  if (videoUrls.length === 1) return videoUrls[0];
+  try {
+    const res = await fetch(MODAL_FFMPEG_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ video_urls: videoUrls, output_key: outputKey }),
+    });
+    if (!res.ok) return videoUrls[0] ?? null;
+    const d = await res.json();
+    return d.url ?? d.video_url ?? videoUrls[0] ?? null;
+  } catch {
+    return videoUrls[0] ?? null;
+  }
 }
 
 // ── today midnight UTC ────────────────────────────────────────────────────────
@@ -748,13 +904,12 @@ Return JSON only: {"caption":"Instagram caption (max 200 chars)","hashtags":["#t
       });
     }
 
-    // ── GENERATE VIDEO (Full Pipeline: scenes → images × 5 → Claude pick → Runway Gen 4) ──
+    // ── GENERATE VIDEO (Cinematic Pipeline: Claude Director → Flux×5 → Batch Score → Runway → Stitch) ──
     if (action === "generate_video") {
       const {
         prompt: rawVideoPrompt, duration = 32, aspect_ratio = "9:16", image_url = "",
         objective = "", platform = "", generate_script = false,
-        generate_music = false, scene_descriptions = null,
-        // New form params
+        generate_music = false,
         topic: videoTopic, description: videoDesc, uploaded_images: videoRefImages,
         include_hashtags: videoIncludeHashtags = false, include_script = false, include_music = false,
       } = data;
@@ -763,43 +918,56 @@ Return JSON only: {"caption":"Instagram caption (max 200 chars)","hashtags":["#t
       const wantVideoMusic = Boolean(generate_music) || Boolean(include_music);
       const wantVideoHashtags = Boolean(videoIncludeHashtags);
 
-      // Auto-generate prompt from topic+objective if no raw prompt
-      let prompt = rawVideoPrompt as string | undefined;
-      if (!prompt && (videoTopic || objective)) {
-        try {
-          const artUser = `Create an optimized Runway Gen 4 Turbo video prompt for:
-- Topic: ${videoTopic || "brand content"}
-- Objective: ${objective || "brand showcase"}
-- Aspect ratio: ${aspect_ratio} video
-${(videoDesc as string) ? `- Brief: ${videoDesc}` : ""}
-Include: camera movement, scene description, mood, lighting, pacing. Write ONE cinematic video prompt (max 100 words). Return ONLY the prompt text.`;
-          const artR = await fetch("https://api.anthropic.com/v1/messages", {
-            method: "POST",
-            headers: { "x-api-key": ANTHROPIC_KEY_V, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-            body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 200, messages: [{ role: "user", content: artUser }] }),
-          });
-          if (artR.ok) { const d = await artR.json(); prompt = d.content?.[0]?.text?.trim() ?? ""; }
-        } catch { /* fall through */ }
-      }
-      if (!prompt) return json({ error: "prompt or topic is required" }, 400);
+      if (!ANTHROPIC_KEY_V) return json({ error: "ANTHROPIC_API_KEY not configured" }, 500);
 
-      // Duration range: 16–64s as set by Claude's art direction
       const totalDuration = Math.min(64, Math.max(16, Number(duration)));
-      const clipDuration = 10 as const; // Runway Gen 4 max per clip
-      // Number of scenes = number of clips needed (each scene produces one clip)
-      const scenes: string[] = Array.isArray(scene_descriptions) && scene_descriptions.length > 0
-        ? (scene_descriptions as string[]).slice(0, 7)
-        : Array.from({ length: Math.max(1, Math.min(7, Math.ceil(totalDuration / clipDuration))) }, (_, i) =>
-            scene_descriptions ? String(prompt) : `${prompt}, scene ${i + 1}, ${objective || "brand"} style, smooth motion`
-          );
-      const numClips = scenes.length;
-
-      // Map aspect ratio to Runway format
+      // Runway Gen 4 Turbo supports 5s or 10s per clip; 5s is closest to 3-6s per scene
+      const clipDuration = 5 as const;
       const ratioMap: Record<string, string> = { "9:16": "720:1280", "1:1": "1280:1280", "16:9": "1280:720" };
       const runwayRatio = ratioMap[String(aspect_ratio)] ?? "720:1280";
       const dbPlatformV = String(platform || (aspect_ratio === "9:16" ? "tiktok" : "youtube"));
+      const videoRefImgUrls = (videoRefImages as string[] | null) ?? [];
 
-      const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
+      // Fetch brand context for scene director
+      const { data: bpV } = await supabase.from("brand_profiles")
+        .select("brand_name, brand_dna, source_of_truth")
+        .eq("id", brand_id).maybeSingle();
+      const brandNameV = (bpV?.brand_name as string) ?? "Brand";
+      const brandDnaV = bpV?.brand_dna as Record<string, unknown> | null;
+      const brandContext = [
+        brandNameV,
+        (brandDnaV?.mission ?? brandDnaV?.brand_essence ?? "") as string,
+        ((bpV?.source_of_truth as Record<string, unknown> | null)?.brand_foundation as Record<string, unknown> | null)?.["voice"] as string ?? "",
+      ].filter(Boolean).join(" — ");
+
+      const briefTopic = (videoTopic as string) || (rawVideoPrompt as string) || objective || "brand content";
+      const briefObj = (objective as string) || "brand showcase";
+
+      // ── STEP 1: Claude Sonnet 4.5 — Scene Director (ALL scenes in ONE call) ──
+      let scenes: CinematicScene[] = [];
+      try {
+        scenes = await claudeSceneDirector({
+          topic: briefTopic, objective: briefObj, brandContext,
+          totalDuration, aspectRatio: String(aspect_ratio), platform: dbPlatformV,
+          refImageUrls: videoRefImgUrls.slice(0, 3), anthropicKey: ANTHROPIC_KEY_V,
+        });
+      } catch (e) {
+        console.error("Scene director failed, using fallback:", e instanceof Error ? e.message : e);
+        const numScenes = Math.min(13, Math.max(4, Math.ceil(totalDuration / 5)));
+        scenes = Array.from({ length: numScenes }, (_, i) => ({
+          index: i,
+          duration: 5,
+          image_prompt: `${briefTopic}, ${i === 0 ? "wide establishing shot" : i === numScenes - 1 ? "hero close-up" : "mid shot"}, warm consistent sidelight, cinematic depth, commercial quality, brand photography`,
+          runway_prompt: `${briefObj} brand video scene ${i + 1}, ${i === 0 ? "slow zoom in" : i === numScenes - 1 ? "gentle pull back" : "smooth pan"}, cinematic motion, seamless flow`,
+          camera_movement: i === 0 ? "slow zoom" : i === numScenes - 1 ? "pull back" : "pan",
+          mood: "cinematic",
+          continuity_note: i < numScenes - 1 ? "continue to next" : "final scene",
+        }));
+      }
+
+      if (scenes.length === 0) return json({ error: "Failed to plan cinematic scenes" }, 500);
+      const numClips = scenes.length;
+
       let task_id: string | null = null;
       let video_url: string | null = null;
       let status = "processing";
@@ -808,56 +976,58 @@ Include: camera movement, scene description, mood, lighting, pacing. Write ONE c
       let extra_task_ids: string[] = [];
       let scene_image_urls: string[] = [];
 
-      // ── FULL PIPELINE: for each scene, generate 5 images → Claude picks best → image-to-video ──
       if (RUNWAY_API_SECRET) {
         try {
-          // Step 1: Generate 5 candidate images per scene (in parallel) via Flux Schnell
+          // ── STEP 2: Flux Schnell — 1-2 candidates per scene, max 15 total ─────
+          // candidatesPerScene: distribute 15 budget across scenes (1-2 per scene)
+          const MAX_IMG_TOTAL = 15;
+          const candidatesPerScene = Math.min(2, Math.max(1, Math.floor(MAX_IMG_TOTAL / scenes.length)));
           const sceneImageBatches = await Promise.all(
-            scenes.map(async (scenePrompt) => {
-              const scenePromptStr = String(scenePrompt);
+            scenes.map(async (scene) => {
               try {
                 let urls: string[] = [];
                 if (MODAL_FLUX_URL) {
-                  urls = await modalFluxGenerate(scenePromptStr, String(aspect_ratio), 5);
+                  urls = await modalFluxGenerate(scene.image_prompt, String(aspect_ratio), candidatesPerScene);
                 } else if (FAL_API_KEY) {
-                  urls = await falFluxSchnell(scenePromptStr, String(aspect_ratio), 5);
+                  urls = await falFluxSchnell(scene.image_prompt, String(aspect_ratio), candidatesPerScene);
                 }
-                return { prompt: scenePromptStr, urls };
+                return { sceneIndex: scene.index, urls };
               } catch {
-                return { prompt: scenePromptStr, urls: [] };
+                return { sceneIndex: scene.index, urls: [] };
               }
             })
           );
 
-          // Step 2: Claude picks best image per scene (1:5 → 1 best)
-          const selectedImages = await Promise.all(
-            sceneImageBatches.map(async ({ prompt: scenePrompt, urls }) => {
-              if (urls.length === 0) return null;
-              if (urls.length === 1 || !ANTHROPIC_KEY) return urls[0];
-              const picked = await claudeScoreAndPickN(urls, scenePrompt, 1, ANTHROPIC_KEY);
-              return picked[0] ?? urls[0];
-            })
-          );
-          scene_image_urls = selectedImages.filter(Boolean) as string[];
+          // ── STEP 3: Batch weighted scoring — ONE Claude Haiku call per 20 images ──
+          const validBatches = sceneImageBatches.filter(b => b.urls.length > 0);
+          const bestPerScene = validBatches.length > 0
+            ? await claudeBatchScoreScenes(validBatches, briefTopic, ANTHROPIC_KEY_V)
+            : [];
 
-          // Step 3: Run Runway Gen 4 image-to-video for each scene's selected image
-          const tasks = await Promise.all(
-            scenes.map((scenePrompt, i) =>
+          const bestUrlBySceneIndex = new Map<number, string>();
+          validBatches.forEach((batch, i) => {
+            if (bestPerScene[i]) bestUrlBySceneIndex.set(batch.sceneIndex, bestPerScene[i]);
+          });
+          scene_image_urls = scenes.map(s => bestUrlBySceneIndex.get(s.index) ?? "").filter(Boolean);
+
+          // ── STEP 4: Runway Gen 4 Turbo per scene with Claude-written runway prompts ──
+          const runwayTasks = await Promise.all(
+            scenes.map((scene, i) =>
               runwayCreateTask({
-                prompt: String(scenePrompt),
-                imageUrl: scene_image_urls[i] ?? (image_url ? String(image_url) : null),
+                prompt: scene.runway_prompt,
+                imageUrl: bestUrlBySceneIndex.get(scene.index) ?? (image_url ? String(image_url) : null),
                 duration: clipDuration,
                 ratio: runwayRatio,
               })
             )
           );
-          task_id = tasks[0].id;
-          extra_task_ids = tasks.slice(1).map(t => t.id);
+          task_id = runwayTasks[0].id;
+          extra_task_ids = runwayTasks.slice(1).map(t => t.id);
           status = "processing";
         } catch (e) {
-          console.error("Runway pipeline failed, falling back to KIE:", e);
+          console.error("Runway cinematic pipeline failed, falling back to KIE:", e);
           generation_mode = "kie"; ai_model = "kling-v2";
-          const kiePayload: Record<string, unknown> = { prompt, duration: 8, aspect_ratio, model: "kling-v2", mode: "standard" };
+          const kiePayload: Record<string, unknown> = { prompt: briefTopic, duration: 8, aspect_ratio, model: "kling-v2", mode: "standard" };
           if (image_url) kiePayload.image_url = image_url;
           const kieRes = await kiePost("/video/generate", kiePayload);
           task_id = kieRes.task_id ?? kieRes.id ?? null;
@@ -866,9 +1036,8 @@ Include: camera movement, scene description, mood, lighting, pacing. Write ONE c
           ai_model = kieRes.model ?? "kling-v2";
         }
       } else {
-        // KIE fallback when RUNWAY_API_SECRET not configured
         generation_mode = "kie"; ai_model = "kling-v2";
-        const kiePayload: Record<string, unknown> = { prompt, duration: 8, aspect_ratio, model: "kling-v2", mode: "standard" };
+        const kiePayload: Record<string, unknown> = { prompt: briefTopic, duration: 8, aspect_ratio, model: "kling-v2", mode: "standard" };
         if (image_url) kiePayload.image_url = image_url;
         const kieRes = await kiePost("/video/generate", kiePayload);
         task_id = kieRes.task_id ?? kieRes.id ?? null;
@@ -877,54 +1046,50 @@ Include: camera movement, scene description, mood, lighting, pacing. Write ONE c
         ai_model = kieRes.model ?? "kling-v2";
       }
 
-      // Generate script + hashtags + music if requested
+      // ── STEP 5: Script + hashtags + music ────────────────────────────────────
       let videoScript: Record<string, unknown> | null = null;
       if ((wantVideoScript || wantVideoHashtags || wantVideoMusic) && ANTHROPIC_KEY_V) {
         try {
-          const { data: bp } = await supabase.from("brand_profiles").select("brand_name").eq("id", brand_id).maybeSingle();
-          const brandName = (bp?.brand_name as string) ?? "Brand";
           const scriptResp = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST",
             headers: { "x-api-key": ANTHROPIC_KEY_V, "anthropic-version": "2023-06-01", "content-type": "application/json" },
             body: JSON.stringify({
               model: "claude-haiku-4-5-20251001",
               max_tokens: 600,
-              messages: [{ role: "user", content: `Create a posting script for ${brandName} video: "${prompt}". Objective: ${objective || (videoTopic as string) || "brand content"}. Platform: ${platform || "TikTok"}. Music: ${wantVideoMusic ? "yes, suggest mood & genre" : "no"}.
-Return JSON only: {"caption":"posting caption (max 200 chars)","hashtags":["#tag1","#tag2","#tag3","#tag4","#tag5","#tag6","#tag7","#tag8","#tag9","#tag10"],"voiceover":"voiceover script (1 sentence per scene)","music_mood":"${wantVideoMusic ? "music mood, genre & tempo recommendation" : ""}","cta":"call to action"}` }],
+              messages: [{ role: "user", content: `Create a posting script for ${brandNameV} video: "${briefTopic}". Objective: ${briefObj}. Platform: ${platform || "TikTok"}. Music: ${wantVideoMusic ? "yes" : "no"}.
+Return JSON only: {"caption":"<200 chars>","hashtags":["#tag1","#tag2","#tag3","#tag4","#tag5","#tag6","#tag7","#tag8","#tag9","#tag10"],"voiceover":"<1 sentence per scene>","music_mood":"${wantVideoMusic ? "mood, genre, tempo" : ""}","cta":"<60 chars>"}` }],
             }),
           });
           if (scriptResp.ok) {
             const sd = await scriptResp.json();
-            const rawScript = sd.content?.[0]?.text ?? "{}";
-            const match = rawScript.match(/\{[\s\S]*\}/);
+            const raw = sd.content?.[0]?.text ?? "{}";
+            const match = raw.match(/\{[\s\S]*\}/);
             if (match) videoScript = JSON.parse(match[0]);
           }
         } catch { /* non-fatal */ }
       }
 
-      const videoRefImgUrls = (videoRefImages as string[] | null) ?? [];
-
-      // Store scene images in gv_image_generations with status "video_scene"
+      // Store scene images
       if (scene_image_urls.length > 0) {
         await Promise.allSettled(scene_image_urls.map((url, i) =>
           supabase.from("gv_image_generations").insert({
-            brand_id, prompt_text: scenes[i] ?? String(prompt),
+            brand_id, prompt_text: scenes[i]?.image_prompt ?? briefTopic,
             aspect_ratio, ai_provider: MODAL_FLUX_URL ? "modal" : FAL_API_KEY ? "fal" : "kie",
             ai_model: "flux-schnell", image_url: url, thumbnail_url: url,
             status: "video_scene", target_platform: dbPlatformV,
-            metadata: { source: "video_pipeline", scene_index: i, objective, platform: dbPlatformV },
+            metadata: { source: "cinematic_pipeline", scene_index: i, mood: scenes[i]?.mood, camera: scenes[i]?.camera_movement, objective: briefObj, platform: dbPlatformV },
           })
         ));
       }
 
       const { data: inserted, error: insertErr } = await supabase.from("gv_video_generations").insert({
-        brand_id, target_platform: dbPlatformV, hook: prompt,
+        brand_id, target_platform: dbPlatformV, hook: briefTopic,
         ai_model, status, generation_mode,
         runway_task_id: task_id, video_url,
         video_thumbnail_url: null, video_aspect_ratio: aspect_ratio, video_status: status,
         topic: (videoTopic as string) || null,
         description: (videoDesc as string) || null,
-        objective: (objective as string) || null,
+        objective: briefObj || null,
         include_hashtags: wantVideoHashtags,
         hashtag_list: wantVideoHashtags && videoScript?.hashtags ? videoScript.hashtags : null,
         include_music: wantVideoMusic,
@@ -932,20 +1097,22 @@ Return JSON only: {"caption":"posting caption (max 200 chars)","hashtags":["#tag
         uploaded_images: videoRefImgUrls.length > 0 ? videoRefImgUrls : null,
         metadata: {
           ...(extra_task_ids.length > 0 ? { extra_task_ids } : {}),
-          num_clips: numClips, total_duration: totalDuration,
-          num_scenes: scenes.length,
-          scene_image_urls,
+          num_clips: numClips, total_duration: totalDuration, clip_duration: clipDuration,
+          num_scenes: scenes.length, scene_image_urls,
+          scenes: scenes.map(s => ({ index: s.index, mood: s.mood, camera: s.camera_movement, continuity: s.continuity_note })),
           ...(videoScript ? { script: videoScript } : {}),
-          objective, platform: dbPlatformV,
+          objective: briefObj, platform: dbPlatformV,
         },
       }).select("id").single();
       if (insertErr) console.error("generate_video DB insert failed:", insertErr.message);
 
       return json({
         success: true, task_id, extra_task_ids, num_clips: numClips,
-        num_scenes: scenes.length, total_duration: totalDuration,
+        num_scenes: scenes.length, total_duration: totalDuration, clip_duration: clipDuration,
         video_url, status, db_id: inserted?.id ?? null, ai_model,
-        scene_image_urls, script: videoScript,
+        scene_image_urls,
+        scenes: scenes.map(s => ({ index: s.index, mood: s.mood, camera: s.camera_movement })),
+        script: videoScript,
         hashtags: wantVideoHashtags ? (videoScript?.hashtags ?? []) : null,
         music_suggestion: wantVideoMusic ? String(videoScript?.music_mood ?? "") : null,
       });
@@ -1059,6 +1226,32 @@ Return JSON only: {"caption":"posting caption (max 200 chars)","hashtags":["#tag
         const pollRes = await runwayPollTask(String(task_id));
         status = pollRes.status;
         video_url = pollRes.video_url;
+
+        // When main clip completes, poll extra clips → auto-stitch if all done
+        if (status === "completed" && db_id) {
+          const { data: dbRow } = await supabase.from("gv_video_generations")
+            .select("metadata").eq("id", db_id).maybeSingle();
+          const extraIds: string[] = ((dbRow?.metadata as Record<string, unknown>)?.extra_task_ids ?? []) as string[];
+          if (extraIds.length > 0) {
+            const extraResults = await Promise.allSettled(extraIds.map(id => runwayPollTask(id)));
+            const allVideoUrls: string[] = [video_url!].filter(Boolean);
+            let allDone = true;
+            for (const r of extraResults) {
+              if (r.status === "fulfilled") {
+                if (r.value.status !== "completed") allDone = false;
+                if (r.value.video_url) allVideoUrls.push(r.value.video_url);
+              } else { allDone = false; }
+            }
+            if (allDone && allVideoUrls.length > 1) {
+              // All clips ready — stitch via Modal FFmpeg (or use first clip if not configured)
+              const stitched = await stitchClips(allVideoUrls, `stitched_${db_id}`);
+              if (stitched) video_url = stitched;
+              status = "completed";
+            } else if (!allDone) {
+              status = "processing"; // extra clips still rendering
+            }
+          }
+        }
       } else if (generation_mode === "openai") {
         const pollRes = await openAISoraPoll(String(task_id));
         status = pollRes.status;
