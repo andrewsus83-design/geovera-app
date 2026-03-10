@@ -23,6 +23,13 @@ const MODAL_FLUX_URL = Deno.env.get("MODAL_FLUX_SCHNELL_URL") ?? ""; // Custom M
 // ── Modal FFmpeg stitch endpoint (optional — concat scene clips into final video) ─
 const MODAL_FFMPEG_URL = Deno.env.get("MODAL_FFMPEG_URL") ?? "";
 
+// ── Cloudflare R2 (image + video permanent storage) ──────────────────────────
+const R2_ACCOUNT_ID = Deno.env.get("CLOUDFLARE_ACCOUNT_ID") ?? "";
+const R2_ACCESS_KEY_ID = Deno.env.get("R2_ACCESS_KEY_ID") ?? "";
+const R2_SECRET_ACCESS_KEY = Deno.env.get("R2_SECRET_ACCESS_KEY") ?? "";
+const R2_BUCKET = Deno.env.get("R2_BUCKET") ?? "geovera-media";
+const R2_PUBLIC_URL = Deno.env.get("R2_PUBLIC_URL") ?? ""; // e.g. https://pub-xxx.r2.dev or custom domain
+
 // Cloudflare Workers AI (Llama) — for training prompt engineering
 const CF_ACCOUNT_ID = Deno.env.get("CLOUDFLARE_ACCOUNT_ID") ?? "";
 const CF_API_TOKEN = Deno.env.get("CLOUDFLARE_API_TOKEN") ?? "";
@@ -31,6 +38,66 @@ const CF_WORKERS_AI = Deno.env.get("CF_AI_GATEWAY_WORKERS_AI")
   || (CF_AI_GATEWAY_BASE ? `${CF_AI_GATEWAY_BASE}/workers-ai` : "");
 const LLAMA_FAST  = "@cf/meta/llama-3.1-8b-instruct";
 const LLAMA_HEAVY = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+
+// ── Cloudflare R2 upload (S3-compatible, AWS Sig V4, no external deps) ───────
+
+async function _sha256hex(data: string | Uint8Array): Promise<string> {
+  const buf = typeof data === "string" ? new TextEncoder().encode(data) : data;
+  const hash = await crypto.subtle.digest("SHA-256", buf);
+  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function _hmac(key: Uint8Array, msg: string): Promise<Uint8Array> {
+  const k = await crypto.subtle.importKey("raw", key, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return new Uint8Array(await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(msg)));
+}
+
+async function uploadToR2(path: string, body: Uint8Array, contentType: string): Promise<string | null> {
+  if (!R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY || !R2_BUCKET || !R2_ACCOUNT_ID) return null;
+  try {
+    const host = `${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, "");          // YYYYMMDD
+    const dtStr  = dateStr + "T" + now.toISOString().slice(11, 19).replace(/:/g, "") + "Z"; // YYYYMMDDTHHmmssZ
+    const bodyHash = await _sha256hex(body);
+
+    const canonHeaders = `content-type:${contentType}\nhost:${host}\nx-amz-content-sha256:${bodyHash}\nx-amz-date:${dtStr}\n`;
+    const signedHdrs = "content-type;host;x-amz-content-sha256;x-amz-date";
+    const canonical  = `PUT\n/${path}\n\n${canonHeaders}\n${signedHdrs}\n${bodyHash}`;
+    const scope      = `${dateStr}/auto/s3/aws4_request`;
+    const sts        = `AWS4-HMAC-SHA256\n${dtStr}\n${scope}\n${await _sha256hex(canonical)}`;
+
+    const enc = new TextEncoder();
+    const k0  = new Uint8Array([...enc.encode(`AWS4${R2_SECRET_ACCESS_KEY}`)]);
+    const k1  = await _hmac(k0, dateStr);
+    const k2  = await _hmac(k1, "auto");
+    const k3  = await _hmac(k2, "s3");
+    const k4  = await _hmac(k3, "aws4_request");
+    const sig = (await _hmac(k4, sts)).reduce((acc, b) => acc + b.toString(16).padStart(2, "0"), "");
+
+    const auth = `AWS4-HMAC-SHA256 Credential=${R2_ACCESS_KEY_ID}/${scope}, SignedHeaders=${signedHdrs}, Signature=${sig}`;
+    const res  = await fetch(`https://${host}/${path}`, {
+      method: "PUT",
+      headers: { "host": host, "content-type": contentType, "x-amz-content-sha256": bodyHash, "x-amz-date": dtStr, "authorization": auth },
+      body,
+    });
+    if (!res.ok) { console.error(`R2 upload failed ${res.status}: await res.text()`); return null; }
+
+    return R2_PUBLIC_URL
+      ? `${R2_PUBLIC_URL.replace(/\/$/, "")}/${path}`
+      : `https://${host}/${R2_BUCKET}/${path}`;
+  } catch (e) { console.error("R2 upload error:", e); return null; }
+}
+
+// Download source URL → upload to R2, fallback to source URL on error
+async function fetchAndUploadToR2(sourceUrl: string, path: string, contentType: string): Promise<string> {
+  try {
+    const res = await fetch(sourceUrl);
+    if (!res.ok) return sourceUrl;
+    const body = new Uint8Array(await res.arrayBuffer());
+    return (await uploadToR2(path, body, contentType)) ?? sourceUrl;
+  } catch { return sourceUrl; }
+}
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -121,9 +188,10 @@ async function modalFluxGenerate(prompt: string, aspectRatio: string, numImages:
   return [];
 }
 
-// ── 6-criteria weighted batch image scoring (no reasoning, one call per 20 imgs) ─
-// Weights: visual_clarity×0.25 + cinematic_composition×0.25 + motion_potential×0.20
-//        + depth_layers×0.15 + narrative_usefulness×0.10 + style_consistency×0.05
+// ── 8-criteria weighted batch image scoring (no reasoning, one call per 20 imgs) ─
+// sc=subject clarity×0.20 + mp=motion potential×0.15 + dl=depth layers×0.10
+// cam=camera consistency×0.15 + lit=lighting consistency×0.15
+// chr=character consistency×0.10 + scon=scene continuity×0.10 + vs=visual simplicity×0.05
 async function claudeScoreAndPickN(imageUrls: string[], brief: string, n: number, anthropicKey: string): Promise<string[]> {
   if (imageUrls.length <= 1) return imageUrls;
   const pickN = Math.min(n, imageUrls.length);
@@ -136,7 +204,7 @@ async function claudeScoreAndPickN(imageUrls: string[], brief: string, n: number
     });
     content.push({
       type: "text",
-      text: `Brief: "${brief}"\nScore each: vc×0.25+cc×0.25+mp×0.20+dl×0.15+nu×0.10+sc×0.05 (each 1-10)\nReturn ONLY: {"s":[{"i":0,"t":7.85},{"i":1,"t":6.20},...]}`,
+      text: `Brief: "${brief}"\nScore each (1-10): sc×0.20+mp×0.15+dl×0.10+cam×0.15+lit×0.15+chr×0.10+scon×0.10+vs×0.05\nReturn ONLY: {"s":[{"i":0,"t":7.85},{"i":1,"t":6.20},...]}`,
     });
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -301,20 +369,31 @@ async function claudeSceneDirector(params: {
   const { topic, objective, brandContext, totalDuration, aspectRatio, platform, refImageUrls, anthropicKey } = params;
   const numScenes = Math.min(13, Math.max(4, Math.ceil(totalDuration / 5)));
 
-  const systemPrompt = `You are a senior cinematographer, director of photography, and brand visual director at a top-tier creative agency. You architect precise cinematic shot sequences for commercial brand videos.
+  const systemPrompt = `You are a senior Art Director, AI Director, and Prompt Optimizer Specialist at senior director level inside a world-class creative agency. You design precise cinematic shot sequences for commercial brand videos optimized for AI image-to-video pipelines (Flux Schnell → Runway Gen 4 Turbo).
 
-Your primary discipline: VISUAL SEQUENCE CONTINUITY. Every scene's image prompt must share locked visual anchors (consistent lighting direction, color grade, subject position, background style) so that Flux Schnell generates a naturally flowing image sequence — and Runway can animate each into a 5-second clip without jarring cuts.
+Every image prompt you write must score 9+ on all 8 quality axes:
+
+1. SUBJECT CLARITY — hero/subject is unmistakably clear, never occluded, always in sharp focus
+2. MOTION POTENTIAL — composition invites natural animation (flowing fabric, smoke, water, breeze, slow zoom)
+3. DEPTH LAYERS — distinct foreground / midground / background layers for cinematic parallax
+4. CAMERA CONSISTENCY — same lens language and focal length feel across ALL scenes
+5. LIGHTING CONSISTENCY — identical light source direction, color temperature, and shadow logic in EVERY scene
+6. CHARACTER CONSISTENCY — if a character/model appears, same ethnicity, outfit, hair, expression style throughout
+7. SCENE CONTINUITY — each scene's framing connects logically to previous and next (no jarring spatial jumps)
+8. VISUAL SIMPLICITY — clean, uncluttered compositions; one clear focal point; no visual noise
+
+OBJECTIVE ALIGNMENT: Every prompt must serve the stated video objective (awareness / conversion / engagement / education / brand story). The opening scene must hook, the closing scene must land the brand message.
 
 Rules for image prompts:
-- Lock one consistent visual anchor across ALL scenes (e.g. "warm golden hour sidelight" / "dark studio with blue rim light")
-- Use the same subject orientation logic (e.g. center-frame hero, left-thirds product)
-- Vary ONLY: camera distance, angle, foreground props — never the core visual language
-- Each prompt is 50–80 words, Flux Schnell optimized, photorealistic, commercial quality
+- Lock ONE visual anchor across ALL scenes (light direction, color grade, background world)
+- Vary ONLY: camera distance, angle, foreground elements — never the core visual language
+- 60–90 words per prompt, Flux Schnell optimized, photorealistic, commercial quality
+- State the locked anchor in scene 0's prompt, then reference it in all subsequent scenes
 
 Rules for runway prompts:
-- Write camera movement + motion direction + transition type
-- Reference the previous/next scene for continuity (e.g. "continue left pan from previous shot")
-- Max 50 words per runway prompt
+- Camera movement + motion direction + transition type
+- Include continuity cue referencing previous scene (e.g. "continue slow push-in from previous")
+- Max 50 words
 
 Return ONLY valid JSON, no explanation, no markdown.`;
 
@@ -323,11 +402,11 @@ Topic: ${topic}
 Objective: ${objective}
 Brand: ${brandContext}
 Platform: ${platform} (${aspectRatio} format)
-Duration: ${totalDuration}s total (${numScenes} scenes × 5s each)${refImageUrls.length > 0 ? `\nReference images: ${refImageUrls.length} provided — match their visual identity, color grade, and style exactly` : ""}
+Duration: ${totalDuration}s total (${numScenes} scenes × 5s each)${refImageUrls.length > 0 ? `\nReference images: ${refImageUrls.length} provided — extract their exact visual identity, color grade, lighting, and style as the locked anchor for ALL scenes` : ""}
 
-Design the visual sequence so images flow naturally: scene 1 → 2 → 3 must feel like frames of the same cinematic world.
+CRITICAL: All 8 criteria (subject clarity, motion potential, depth layers, camera consistency, lighting consistency, character consistency, scene continuity, visual simplicity) must be embedded into every image_prompt. Opening scene hooks for the objective; closing scene lands the brand CTA.
 
-Return: {"scenes":[{"index":0,"duration":5,"image_prompt":"<flux schnell prompt with locked visual anchors>","runway_prompt":"<runway motion prompt with continuity cue>","camera_movement":"<type>","mood":"<mood>","continuity_note":"<connection to next scene>"},...]}`;
+Return: {"scenes":[{"index":0,"duration":5,"image_prompt":"<flux schnell prompt — 60-90 words, all 8 criteria + objective embedded>","runway_prompt":"<runway motion + continuity cue, max 50 words>","camera_movement":"<type>","mood":"<mood>","continuity_note":"<spatial/visual connection to next scene>"},...]}`;
 
   const userContent: Array<Record<string, unknown>> = [
     ...refImageUrls.slice(0, 3).map(url => ({ type: "image", source: { type: "url", url } })),
@@ -354,7 +433,7 @@ Return: {"scenes":[{"index":0,"duration":5,"image_prompt":"<flux schnell prompt 
 }
 
 // ── Batch weighted scene scoring — ONE Claude Haiku call per 20 images ────────
-// No reasoning. Weighted: vc×0.25 + cc×0.25 + mp×0.20 + dl×0.15 + nu×0.10 + sc×0.05
+// No reasoning. 8 criteria: sc×0.20+mp×0.15+dl×0.10+cam×0.15+lit×0.15+chr×0.10+scon×0.10+vs×0.05
 async function claudeBatchScoreScenes(
   sceneCandidates: Array<{ sceneIndex: number; urls: string[] }>,
   brief: string,
@@ -378,7 +457,7 @@ async function claudeBatchScoreScenes(
     });
     content.push({
       type: "text",
-      text: `Video: "${brief}"\nScore vc×0.25+cc×0.25+mp×0.20+dl×0.15+nu×0.10+sc×0.05 (1-10 each)\nReturn ONLY: {"s":[{"i":${start},"t":7.8},...]}`,
+      text: `Video: "${brief}"\nScore (1-10): sc×0.20+mp×0.15+dl×0.10+cam×0.15+lit×0.15+chr×0.10+scon×0.10+vs×0.05\nReturn ONLY: {"s":[{"i":${start},"t":7.8},...]}`,
     });
     try {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -988,6 +1067,14 @@ Return JSON only: {"caption":"Instagram caption (max 200 chars)","hashtags":["#t
                   urls = await modalFluxGenerate(scene.image_prompt, String(aspect_ratio), candidatesPerScene);
                 } else if (FAL_API_KEY) {
                   urls = await falFluxSchnell(scene.image_prompt, String(aspect_ratio), candidatesPerScene);
+                }
+                // Upload to Cloudflare R2 for permanent storage + scoring access
+                if (urls.length > 0 && R2_ACCESS_KEY_ID) {
+                  urls = await Promise.all(
+                    urls.map((url, i) =>
+                      fetchAndUploadToR2(url, `scene-images/${Date.now()}_s${scene.index}_c${i}.webp`, "image/webp")
+                    )
+                  );
                 }
                 return { sceneIndex: scene.index, urls };
               } catch {

@@ -1,14 +1,17 @@
 """
 GeoVera FFmpeg Stitcher — Modal Web Endpoint
-Concatenates Runway video clips into a single stitched video.
+Concatenates Runway video clips and uploads the result to Cloudflare R2.
 
 Deploy:
   modal deploy modal/ffmpeg_stitcher.py
 
-Setup (once):
-  modal secret create geovera-supabase \
-    SUPABASE_URL=https://vozjwptzutolvkvfpknk.supabase.co \
-    SUPABASE_SERVICE_ROLE_KEY=<your_service_role_key>
+Required Modal secrets (create once):
+  modal secret create geovera-r2 \
+    R2_ACCOUNT_ID=<cloudflare_account_id> \
+    R2_ACCESS_KEY_ID=<r2_access_key_id> \
+    R2_SECRET_ACCESS_KEY=<r2_secret_access_key> \
+    R2_BUCKET=geovera-media \
+    R2_PUBLIC_URL=https://pub-xxx.r2.dev   # or your custom R2 domain
 
 After deploy, set the endpoint URL as a Supabase secret:
   supabase secrets set MODAL_FFMPEG_URL=<url_from_deploy_output> --project-ref vozjwptzutolvkvfpknk
@@ -26,13 +29,13 @@ app = modal.App("geovera-ffmpeg-stitcher")
 image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install("ffmpeg")
-    .pip_install("httpx==0.27.0")
+    .pip_install("httpx==0.27.0", "boto3==1.34.0")
 )
 
 
 @app.function(
     image=image,
-    secrets=[modal.Secret.from_name("geovera-supabase")],
+    secrets=[modal.Secret.from_name("geovera-r2")],
     timeout=300,
     memory=2048,
 )
@@ -40,9 +43,11 @@ image = (
 def stitch_videos(request: dict) -> dict:
     """
     Input:  { "video_urls": ["https://...", ...], "output_key": "stitched_abc123" }
-    Output: { "url": "https://...", "clips": N, "duration_s": X }
+    Output: { "url": "https://r2.../stitched_abc123.mp4", "clips": N, "duration_s": X }
     """
     import httpx
+    import boto3
+    from botocore.config import Config
 
     video_urls: list[str] = request.get("video_urls", [])
     output_key: str = request.get("output_key", f"stitched_{int(time.time())}")
@@ -51,19 +56,30 @@ def stitch_videos(request: dict) -> dict:
         return {"error": "no video_urls provided"}
 
     if len(video_urls) == 1:
-        # Nothing to stitch
         return {"url": video_urls[0], "clips": 1, "duration_s": None}
 
-    supabase_url = os.environ["SUPABASE_URL"].rstrip("/")
-    service_key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
-    bucket = "images"
-    storage_path = f"videos/{output_key}.mp4"
+    # ── R2 config ────────────────────────────────────────────────────────────
+    r2_account_id    = os.environ["R2_ACCOUNT_ID"]
+    r2_access_key    = os.environ["R2_ACCESS_KEY_ID"]
+    r2_secret_key    = os.environ["R2_SECRET_ACCESS_KEY"]
+    r2_bucket        = os.environ.get("R2_BUCKET", "geovera-media")
+    r2_public_url    = os.environ.get("R2_PUBLIC_URL", "").rstrip("/")
+    r2_endpoint      = f"https://{r2_account_id}.r2.cloudflarestorage.com"
+
+    s3 = boto3.client(
+        "s3",
+        endpoint_url=r2_endpoint,
+        aws_access_key_id=r2_access_key,
+        aws_secret_access_key=r2_secret_key,
+        region_name="auto",
+        config=Config(signature_version="s3v4"),
+    )
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp = Path(tmpdir)
         clip_paths: list[Path] = []
 
-        # ── 1. Download all clips ─────────────────────────────────────
+        # ── 1. Download all clips ─────────────────────────────────────────────
         with httpx.Client(timeout=120, follow_redirects=True) as client:
             for i, url in enumerate(video_urls):
                 try:
@@ -72,18 +88,17 @@ def stitch_videos(request: dict) -> dict:
                     clip_path = tmp / f"clip_{i:03d}.mp4"
                     clip_path.write_bytes(resp.content)
                     clip_paths.append(clip_path)
+                    print(f"[ffmpeg] Downloaded clip {i}: {len(resp.content) / 1024:.0f} KB")
                 except Exception as e:
-                    print(f"[ffmpeg-stitcher] Skip clip {i}: {e}")
+                    print(f"[ffmpeg] Skip clip {i}: {e}")
 
         if not clip_paths:
             return {"error": "all clip downloads failed", "url": video_urls[0]}
 
         if len(clip_paths) == 1:
-            # Only one clip downloaded successfully — return it directly
             return {"url": video_urls[0], "clips": 1, "duration_s": None}
 
-        # ── 2. Re-encode each clip to uniform codec/resolution ────────
-        # Runway clips can have slightly different resolutions — re-encode for safe concat
+        # ── 2. Re-encode to uniform H.264 + AAC ──────────────────────────────
         reencoded: list[Path] = []
         for i, clip in enumerate(clip_paths):
             out = tmp / f"reenc_{i:03d}.mp4"
@@ -102,15 +117,13 @@ def stitch_videos(request: dict) -> dict:
             if result.returncode == 0 and out.exists():
                 reencoded.append(out)
             else:
-                print(f"[ffmpeg-stitcher] Re-encode failed clip {i}: {result.stderr[-500:]}")
-                reencoded.append(clip)  # fallback: use original
+                print(f"[ffmpeg] Re-encode failed clip {i}: {result.stderr[-300:]}")
+                reencoded.append(clip)
 
-        # ── 3. Build concat list ──────────────────────────────────────
+        # ── 3. Build concat list + stitch ────────────────────────────────────
         concat_list = tmp / "concat.txt"
-        lines = [f"file '{p}'\n" for p in reencoded]
-        concat_list.write_text("".join(lines))
+        concat_list.write_text("".join(f"file '{p}'\n" for p in reencoded))
 
-        # ── 4. FFmpeg concat ──────────────────────────────────────────
         output_path = tmp / "stitched.mp4"
         result = subprocess.run(
             [
@@ -125,46 +138,41 @@ def stitch_videos(request: dict) -> dict:
         )
 
         if result.returncode != 0 or not output_path.exists():
-            print(f"[ffmpeg-stitcher] Concat failed: {result.stderr[-500:]}")
+            print(f"[ffmpeg] Concat failed: {result.stderr[-300:]}")
             return {"error": "ffmpeg concat failed", "url": video_urls[0]}
 
         video_bytes = output_path.read_bytes()
         size_mb = len(video_bytes) / 1024 / 1024
-        print(f"[ffmpeg-stitcher] Stitched {len(reencoded)} clips → {size_mb:.1f} MB")
+        print(f"[ffmpeg] Stitched {len(reencoded)} clips → {size_mb:.1f} MB")
 
-        # ── 5. Get duration ───────────────────────────────────────────
+        # ── 4. Get duration ───────────────────────────────────────────────────
         duration_s: float | None = None
-        dur_result = subprocess.run(
-            [
-                "ffprobe", "-v", "error", "-show_entries", "format=duration",
-                "-of", "default=noprint_wrappers=1:nokey=1", str(output_path),
-            ],
-            capture_output=True,
-            text=True,
+        dur = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", str(output_path)],
+            capture_output=True, text=True,
         )
-        if dur_result.returncode == 0:
+        if dur.returncode == 0:
             try:
-                duration_s = float(dur_result.stdout.strip())
+                duration_s = float(dur.stdout.strip())
             except ValueError:
                 pass
 
-        # ── 6. Upload to Supabase Storage ─────────────────────────────
-        upload_url = f"{supabase_url}/storage/v1/object/{bucket}/{storage_path}"
-        headers = {
-            "Authorization": f"Bearer {service_key}",
-            "Content-Type": "video/mp4",
-            "x-upsert": "true",
-        }
+        # ── 5. Upload to Cloudflare R2 ────────────────────────────────────────
+        r2_key = f"videos/{output_key}.mp4"
+        s3.put_object(
+            Bucket=r2_bucket,
+            Key=r2_key,
+            Body=video_bytes,
+            ContentType="video/mp4",
+        )
 
-        with httpx.Client(timeout=120) as client:
-            upload_resp = client.post(upload_url, content=video_bytes, headers=headers)
-
-        if upload_resp.status_code not in (200, 201):
-            print(f"[ffmpeg-stitcher] Upload failed {upload_resp.status_code}: {upload_resp.text[:300]}")
-            return {"error": "upload failed", "url": video_urls[0]}
-
-        public_url = f"{supabase_url}/storage/v1/object/public/{bucket}/{storage_path}"
-        print(f"[ffmpeg-stitcher] Done → {public_url}")
+        public_url = (
+            f"{r2_public_url}/{r2_key}"
+            if r2_public_url
+            else f"{r2_endpoint}/{r2_bucket}/{r2_key}"
+        )
+        print(f"[ffmpeg] Uploaded → {public_url}")
 
         return {
             "url": public_url,
