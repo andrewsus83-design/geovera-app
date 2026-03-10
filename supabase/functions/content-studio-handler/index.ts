@@ -1274,7 +1274,11 @@ Return ONLY valid JSON:
 
     // ── GENERATE ARTICLE (Claude Sonnet 4.6 direct) ───────────────────────────
     if (action === "generate_article") {
-      const { topic, objective, length, image_urls, brand_context } = data;
+      const {
+        topic, objective, length, image_urls, brand_context,
+        description, uploaded_images, image_count, image_size,
+        include_script, include_hashtags, include_music,
+      } = data;
       const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
       if (!ANTHROPIC_API_KEY) return json({ error: "ANTHROPIC_API_KEY not configured" }, 500);
 
@@ -1293,14 +1297,20 @@ Return ONLY valid JSON:
       const rankingKws = (kwi?.ranking_keywords as string[] ?? []).slice(0, 5).join(", ");
 
       const objectiveLabels: Record<string, string> = {
-        faq: "FAQ format — pertanyaan umum pelanggan dengan jawaban detail",
-        trend: "Trend article — topik viral & trending terkini",
-        tips: "Tips & Tricks — panduan praktis langkah demi langkah",
-        new_product: "Product launch — peluncuran produk baru yang menarik",
-        tutorial: "Tutorial — panduan how-to yang mudah diikuti",
-        updates: "Brand updates — berita & perkembangan terbaru brand",
-        review: "Review & Testimonial — ulasan dan testimoni pelanggan",
-        random: "AI-recommended — konten terbaik berdasarkan rekomendasi AI",
+        faq:                 "FAQ format — pertanyaan umum pelanggan dengan jawaban detail",
+        trend:               "Trend article — topik viral & trending terkini",
+        educational:         "Educational — konten edukatif yang menambah wawasan pembaca",
+        tips:                "Tips & Tricks — panduan praktis langkah demi langkah",
+        tips_tricks:         "Tips & Tricks — panduan praktis langkah demi langkah",
+        new_product:         "Product launch — peluncuran produk baru yang menarik",
+        seasonal_greetings:  "Seasonal Greetings — konten spesial hari raya dan musim",
+        newsletter:          "Newsletter — update berkala yang informatif dan engaging",
+        updates:             "Brand updates — berita & perkembangan terbaru brand",
+        multi_product:       "Multi Product Catalog — showcase beberapa produk secara menarik",
+        ads:                 "Ads copy — teks iklan yang persuasif dan konversi tinggi",
+        tutorial:            "Tutorial — panduan how-to yang mudah diikuti",
+        review:              "Review & Testimonial — ulasan dan testimoni pelanggan",
+        random:              "AI-recommended — konten terbaik berdasarkan rekomendasi AI",
       };
       const objLabel = objectiveLabels[objective as string] ?? "konten brand relevan";
 
@@ -1311,7 +1321,21 @@ Return ONLY valid JSON:
         ? `${topic} (${objLabel})`
         : `${objLabel} untuk ${brandName}`;
 
+      const imgCount = Number(image_count ?? 0);
+      const imgSize = String(image_size ?? "1:1");
+      const wantScript = Boolean(include_script);
+      const wantHashtags = Boolean(include_hashtags);
+      const wantMusic = Boolean(include_music);
+      const uploadedImgUrls = (uploaded_images as string[] | null) ?? (image_urls as string[] | null) ?? [];
+
       const systemMsg = `You are an expert content writer and SEO specialist. Write high-quality, engaging content in Indonesian language (Bahasa Indonesia) for digital brands. You always write in proper JSON format.`;
+
+      const extraJsonFields = [
+        wantHashtags ? `  "hashtags": ["#tag1","#tag2","#tag3","#tag4","#tag5","#tag6","#tag7","#tag8","#tag9","#tag10"],` : "",
+        wantScript ? `  "script": "Full narration script for video/reel (natural spoken tone, 60-90 seconds read time)",` : "",
+        wantMusic ? `  "music_suggestion": "Recommended background music style/genre/mood for this content",` : "",
+        imgCount > 0 ? `  "image_prompts": [${Array.from({length: imgCount}, (_, i) => `"Detailed image generation prompt ${i+1} (${imgSize} aspect ratio) for this article"`).join(",")}],` : "",
+      ].filter(Boolean).join("\n");
 
       const userMsg = `Write a complete ${targetWords}-word article for this brand:
 
@@ -1324,7 +1348,12 @@ Target keywords: ${rankingKws || "brand-related keywords"}
 Topic: ${enrichedTopic}
 Format: ${objLabel}
 Target length: ~${targetWords} words
-${image_urls?.length ? `Reference images provided: ${(image_urls as string[]).length} image(s) — reference their content/context` : ""}
+${(description as string) ? `Additional context/brief: ${description}` : ""}
+${uploadedImgUrls.length > 0 ? `Reference images provided: ${uploadedImgUrls.length} image(s) — incorporate their visual content/context into the article` : ""}
+${imgCount > 0 ? `Image placeholders needed: ${imgCount} image(s) at ${imgSize} aspect ratio` : ""}
+${wantScript ? "Include: full narration script for video/reel" : ""}
+${wantHashtags ? "Include: 10 relevant hashtags" : ""}
+${wantMusic ? "Include: music/background audio suggestion" : ""}
 
 Return ONLY valid JSON (no markdown, no code blocks):
 {
@@ -1343,8 +1372,16 @@ Return ONLY valid JSON (no markdown, no code blocks):
       {"question": "Q2?", "answer": "A2."},
       {"question": "Q3?", "answer": "A3."}
     ]
-  }
+  }${extraJsonFields ? `,\n${extraJsonFields}` : ""}
 }`;
+
+      // Build Claude messages — include uploaded images if provided (vision)
+      type ClaudeContent = { type: "text"; text: string } | { type: "image"; source: { type: "url"; url: string } };
+      const userContent: ClaudeContent[] = [];
+      for (const imgUrl of uploadedImgUrls.slice(0, 8)) {
+        userContent.push({ type: "image", source: { type: "url", url: String(imgUrl) } });
+      }
+      userContent.push({ type: "text", text: userMsg });
 
       const claudeResp = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -1357,7 +1394,7 @@ Return ONLY valid JSON (no markdown, no code blocks):
           model: "claude-sonnet-4-6",
           max_tokens: 8192,
           system: systemMsg,
-          messages: [{ role: "user", content: userMsg }],
+          messages: [{ role: "user", content: uploadedImgUrls.length > 0 ? userContent : userMsg }],
         }),
       });
 
@@ -1376,6 +1413,7 @@ Return ONLY valid JSON (no markdown, no code blocks):
       }
 
       const articleContent = String(articleData.article ?? "");
+      const isVeryLong = (length as string) === "very_long";
 
       // Store in gv_article_generations
       const { data: stored } = await supabase.from("gv_article_generations").insert({
@@ -1383,12 +1421,23 @@ Return ONLY valid JSON (no markdown, no code blocks):
         topic: enrichedTopic,
         objective,
         length,
-        content: articleContent,
+        content: isVeryLong ? null : articleContent,
+        content_very_long: isVeryLong ? articleContent : null,
+        description: (description as string) || null,
+        uploaded_images: uploadedImgUrls.length > 0 ? uploadedImgUrls : null,
+        image_count: imgCount,
+        image_size: imgSize,
+        include_script: wantScript,
+        include_hashtags: wantHashtags,
+        include_music: wantMusic,
         meta_title: String(articleData.meta_title ?? ""),
         meta_description: String(articleData.meta_description ?? ""),
         focus_keywords: articleData.focus_keywords ?? [],
         social: articleData.social ?? {},
         geo: articleData.geo ?? {},
+        hashtag_list: wantHashtags ? (articleData.hashtags ?? []) : null,
+        script_content: wantScript ? String(articleData.script ?? "") : null,
+        music_suggestion: wantMusic ? String(articleData.music_suggestion ?? "") : null,
         status: "done",
       }).select("id").single();
 
@@ -1400,14 +1449,18 @@ Return ONLY valid JSON (no markdown, no code blocks):
           objective,
           length,
           content: articleContent,
-          content_short: articleContent,
-          content_medium: articleContent,
-          content_long: articleContent,
+          description: (description as string) || null,
+          image_count: imgCount,
+          image_size: imgSize,
           meta_title: String(articleData.meta_title ?? ""),
           meta_description: String(articleData.meta_description ?? ""),
           focus_keywords: (articleData.focus_keywords as string[]) ?? [],
           social: (articleData.social as Record<string, string>) ?? {},
           geo: (articleData.geo as Record<string, unknown>) ?? {},
+          hashtags: wantHashtags ? ((articleData.hashtags as string[]) ?? []) : null,
+          script: wantScript ? String(articleData.script ?? "") : null,
+          music_suggestion: wantMusic ? String(articleData.music_suggestion ?? "") : null,
+          image_prompts: imgCount > 0 ? ((articleData.image_prompts as string[]) ?? []) : null,
           created_at: new Date().toISOString(),
         },
       });

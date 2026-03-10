@@ -1,10 +1,9 @@
 "use client";
 import React from "react";
 
-export type AnalyticsSection = "overview" | "seo" | "geo" | "social";
+export type AnalyticsSection = "seo" | "geo" | "social";
 
 interface AnalyticsScores {
-  overall?: number | null;
   seo?: number | null;
   geo?: number | null;
   social?: number | null;
@@ -19,12 +18,6 @@ interface AnalyticsNavProps {
 
 // ── DS v5.8 mode token map ─────────────────────────────────────────
 const MODE_TOKENS = {
-  overview: {
-    accent: "var(--gv7-mode-general-accent)",
-    light:  "var(--gv7-mode-general-light)",
-    border: "var(--gv7-mode-general-border)",
-    text:   "var(--gv7-mode-general-text)",
-  },
   seo: {
     accent: "var(--gv7-mode-seo-accent)",
     light:  "var(--gv7-mode-seo-light)",
@@ -52,19 +45,6 @@ const NAV_ITEMS: {
   icon: React.ReactNode;
 }[] = [
   {
-    key: "overview",
-    label: "Overview",
-    scoreKey: "overall",
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="3" width="7" height="7" rx="1"/>
-        <rect x="14" y="3" width="7" height="7" rx="1"/>
-        <rect x="14" y="14" width="7" height="7" rx="1"/>
-        <rect x="3" y="14" width="7" height="7" rx="1"/>
-      </svg>
-    ),
-  },
-  {
     key: "seo",
     label: "SEO",
     scoreKey: "seo",
@@ -89,7 +69,7 @@ const NAV_ITEMS: {
   },
   {
     key: "social",
-    label: "Social",
+    label: "Social Search",
     scoreKey: "social",
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

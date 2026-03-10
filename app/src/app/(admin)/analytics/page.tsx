@@ -7,7 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { useUserQuota } from "@/hooks/useUserQuota";
 
 // ── Types ────────────────────────────────────────────────────────
-type AnalyticsSection = "overview" | "seo" | "geo" | "social";
+type AnalyticsSection = "seo" | "geo" | "social";
 
 // ── Analytics Report (from analytics_reports table) ───────────────
 interface TodoItem {
@@ -685,106 +685,6 @@ function DetailPanel({ selected, section, analyticsReport }: { selected: Selecte
       .finally(() => setPsLoading(false));
   }, [isPageSpeedFactor]);
   if (!selected) {
-    // Overview empty state — keywords, topics, visibility
-    if (section === "overview") {
-      return (
-        <div className="flex flex-col h-full overflow-y-auto custom-scrollbar px-4 py-4 space-y-5">
-          {/* Keywords Tracking */}
-          {analyticsReport?.keywords_tracking && analyticsReport.keywords_tracking.length > 0 && (
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.1em] mb-2.5" style={{ color: "var(--gv-color-neutral-400)" }}>Keywords Tracking</p>
-              <div className="space-y-1">
-                {analyticsReport.keywords_tracking.map((k, i) => {
-                  const oppColor = k.opportunity === "high" ? "#16A34A" : k.opportunity === "medium" ? "#D97706" : "#9CA3AF";
-                  const typeLabel = k.type === "quick_win" ? "⚡" : k.type === "gap" ? "🎯" : "📊";
-                  return (
-                    <div key={i} className="rounded-[12px] px-3 py-2" style={{ background: "var(--gv-color-neutral-50)", border: "1px solid var(--gv-color-neutral-100)" }}>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[11px]">{typeLabel}</span>
-                        <p className="text-[12px] font-semibold flex-1 min-w-0 truncate" style={{ color: "var(--gv-color-neutral-900)" }}>{k.keyword}</p>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          {k.current_rank ? <span className="text-[11px] font-bold" style={{ color: "var(--gv-color-primary-600)" }}>#{k.current_rank}</span> : <span className="text-[10px]" style={{ color: "var(--gv-color-neutral-400)" }}>—</span>}
-                          <span className="text-[10px] font-bold" style={{ color: oppColor }}>{k.opportunity}</span>
-                        </div>
-                      </div>
-                      <p className="text-[10px] mt-0.5 pl-5" style={{ color: "var(--gv-color-neutral-500)" }}>{k.action}</p>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Topics Tracking */}
-          {analyticsReport?.topics_tracking && analyticsReport.topics_tracking.length > 0 && (
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.1em] mb-2.5" style={{ color: "var(--gv-color-neutral-400)" }}>Topics Tracking</p>
-              <div className="space-y-1.5">
-                {analyticsReport.topics_tracking.map((t, i) => {
-                  const oppColor = t.opportunity === "high" ? "#16A34A" : t.opportunity === "medium" ? "#D97706" : "#9CA3AF";
-                  return (
-                    <div key={i} className="rounded-[12px] px-3 py-2" style={{ background: "var(--gv-color-neutral-50)", border: "1px solid var(--gv-color-neutral-100)" }}>
-                      <div className="flex items-center gap-2 mb-1">
-                        <p className="text-[12px] font-semibold flex-1 min-w-0" style={{ color: "var(--gv-color-neutral-900)" }}>{t.topic}</p>
-                        <span className="text-[10px] font-bold flex-shrink-0" style={{ color: oppColor }}>{t.opportunity}</span>
-                      </div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <div className="flex-1 h-1.5 rounded-full" style={{ background: "var(--gv-color-neutral-200)" }}>
-                          <div className="h-1.5 rounded-full" style={{ background: "var(--gv-color-primary-500)", width: `${t.content_coverage}%` }} />
-                        </div>
-                        <span className="text-[10px]" style={{ color: "var(--gv-color-neutral-500)" }}>{t.content_coverage}%</span>
-                      </div>
-                      <p className="text-[10px]" style={{ color: "var(--gv-color-neutral-500)" }}>{t.action}</p>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Visibility Strategy */}
-          {analyticsReport?.visibility_strategy && (
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.1em] mb-2.5" style={{ color: "var(--gv-color-neutral-400)" }}>Visibility Strategy</p>
-              <div className="space-y-2">
-                {([
-                  { key: "search_visibility" as const, label: "Search Visibility", icon: "🔍" },
-                  { key: "discovery" as const, label: "Discovery", icon: "✨" },
-                  { key: "authority" as const, label: "Authority", icon: "🏛️" },
-                  { key: "timeline_presence" as const, label: "Timeline Presence", icon: "⚡" },
-                ] as const).map(({ key, label, icon }) => {
-                  const pillar = analyticsReport.visibility_strategy?.[key];
-                  if (!pillar) return null;
-                  const scoreColor = pillar.score >= 70 ? "#16A34A" : pillar.score >= 50 ? "#D97706" : "#DC2626";
-                  return (
-                    <div key={key} className="rounded-[12px] p-3" style={{ background: "var(--gv-color-neutral-50)", border: "1px solid var(--gv-color-neutral-100)" }}>
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span className="text-sm">{icon}</span>
-                        <p className="text-[11px] font-semibold flex-1" style={{ color: "var(--gv-color-neutral-900)" }}>{label}</p>
-                        <span className="text-[13px] font-bold" style={{ color: scoreColor }}>{pillar.score}</span>
-                      </div>
-                      <p className="text-[10px] mb-1.5" style={{ color: "var(--gv-color-neutral-500)" }}>{pillar.tactic}</p>
-                      <div className="space-y-0.5">
-                        {pillar.actions?.slice(0, 2).map((a, ai) => (
-                          <p key={ai} className="text-[10px]" style={{ color: "var(--gv-color-neutral-500)" }}>• {a}</p>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {!analyticsReport && (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <p className="text-[13px] font-semibold" style={{ color: "var(--gv-color-neutral-500)" }}>Run an analysis to see insights</p>
-            </div>
-          )}
-        </div>
-      );
-    }
-
     // GEO empty state — show tracked AI platforms
     if (section === "geo") {
       const trackedPlatforms = [
@@ -1818,7 +1718,7 @@ function dbRowToSocialItem(row: DbAnalyticsRow): SocialItem {
 }
 
 export default function AnalyticsPage() {
-  const [activeSection, setActiveSection] = useState<AnalyticsSection>("overview");
+  const [activeSection, setActiveSection] = useState<AnalyticsSection>("seo");
   const [selected, setSelected] = useState<SelectedItem>(null);
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
 
@@ -2161,12 +2061,12 @@ export default function AnalyticsPage() {
   );
 
   // Active score data (use real data when available, fall back to demo)
-  const scores = activeSection !== "overview" ? {
+  const scores = {
     seo: analyticsReport ? { score: analyticsReport.seo_score ?? DEMO_SCORES.seo.score, prev: (analyticsReport.seo_score ?? DEMO_SCORES.seo.score) - (analyticsReport.seo_delta ?? 0), updatedAt: new Date(analyticsReport.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }), nextUpdate: "Biweekly" } : DEMO_SCORES.seo,
     geo: analyticsReport ? { score: analyticsReport.geo_score ?? DEMO_SCORES.geo.score, prev: (analyticsReport.geo_score ?? DEMO_SCORES.geo.score) - (analyticsReport.geo_delta ?? 0), updatedAt: new Date(analyticsReport.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }), nextUpdate: "Biweekly" } : DEMO_SCORES.geo,
     social: analyticsReport ? { score: analyticsReport.social_score ?? DEMO_SCORES.social.score, prev: (analyticsReport.social_score ?? DEMO_SCORES.social.score) - (analyticsReport.social_delta ?? 0), updatedAt: new Date(analyticsReport.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }), nextUpdate: "Biweekly" } : DEMO_SCORES.social,
-  } : DEMO_SCORES;
-  const activeScore = activeSection !== "overview" ? scores[activeSection as "seo" | "geo" | "social"] : scores.seo;
+  };
+  const activeScore = scores[activeSection];
   const activeDelta = activeScore.score - activeScore.prev;
 
   const center = (
@@ -2227,7 +2127,6 @@ export default function AnalyticsPage() {
           activeSection={activeSection}
           onSectionChange={handleSectionChange}
           scores={{
-            overall: analyticsReport?.overall_score,
             seo: analyticsReport?.seo_score,
             geo: analyticsReport?.geo_score,
             social: analyticsReport?.social_score,
@@ -2239,259 +2138,39 @@ export default function AnalyticsPage() {
       {/* ── Scrollable content body ── */}
       <div className="flex-1 overflow-y-auto custom-scrollbar px-5 py-4 space-y-4">
 
-      {/* ── OVERVIEW ── */}
-      {activeSection === "overview" && (
-        <div>
-          {/* Score Cards */}
-          <div className="grid grid-cols-2 gap-2 mb-4">
-            {([
-              { label: "Overall", score: analyticsReport?.overall_score, delta: analyticsReport?.overall_delta, mode: "general" as const },
-              { label: "SEO",     score: analyticsReport?.seo_score,     delta: analyticsReport?.seo_delta,     mode: "seo"     as const },
-              { label: "GEO",     score: analyticsReport?.geo_score,     delta: analyticsReport?.geo_delta,     mode: "geo"     as const },
-              { label: "Social",  score: analyticsReport?.social_score,  delta: analyticsReport?.social_delta,  mode: "social"  as const },
-            ] as { label: string; score?: number | null; delta?: number | null; mode: "general" | "seo" | "geo" | "social" }[]).map((c) => (
-              <div
-                key={c.label}
-                className="rounded-[14px] p-3 flex flex-col gap-1"
-                style={{
-                  background: `var(--gv7-mode-${c.mode}-light)`,
-                  border: `1px solid var(--gv7-mode-${c.mode}-border)`,
-                }}
-              >
-                <p
-                  className="text-[10px] font-bold uppercase tracking-wider"
-                  style={{ color: `var(--gv7-mode-${c.mode}-text)`, opacity: 0.7 }}
-                >
-                  {c.label}
-                </p>
-                <div className="flex items-end gap-1.5">
-                  <span
-                    className="text-[28px] font-bold leading-none"
-                    style={{ color: `var(--gv7-mode-${c.mode}-text)`, fontFamily: "var(--gv-font-heading)" }}
-                  >
-                    {reportLoading ? "—" : c.score ?? "—"}
-                  </span>
-                  {c.delta !== null && c.delta !== undefined && (
-                    <span
-                      className="text-[11px] font-semibold mb-0.5"
-                      style={{ color: c.delta >= 0 ? "var(--gv7-mode-general-text)" : "#DC2626" }}
-                    >
-                      {c.delta >= 0 ? "↑" : "↓"}{Math.abs(c.delta)}
-                    </span>
-                  )}
-                </div>
-                <div
-                  style={{
-                    height: 4,
-                    borderRadius: 99,
-                    background: `var(--gv7-mode-${c.mode}-border)`,
-                  }}
-                >
-                  <div
-                    style={{
-                      height: 4,
-                      borderRadius: 99,
-                      background: `var(--gv7-mode-${c.mode}-accent)`,
-                      width: `${c.score ?? 0}%`,
-                      transition: `width var(--gv-duration-slow) var(--gv-easing-default)`,
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Run Analysis + cycle info */}
-          <div className="rounded-[14px] p-3 mb-4 flex items-center gap-3" style={{ background: "var(--gv-color-neutral-50)", border: "1px solid var(--gv-color-neutral-200)" }}>
-            <div className="flex-1 min-w-0">
-              <p className="text-[12px] font-semibold" style={{ color: "var(--gv-color-neutral-800)" }}>
-                {analyticsReport ? `Cycle #${analyticsReport.cycle_number}` : "No analysis yet"}
-              </p>
-              <p className="text-[10px]" style={{ color: "var(--gv-color-neutral-400)" }}>
-                {analyticsReport
-                  ? `Last run: ${new Date(analyticsReport.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
-                  : "Run your first analysis to get real scores"}
-              </p>
-            </div>
-            <button
-              onClick={handleRunAnalysis}
-              disabled={runAnalysisLoading || !brandId}
-              className="flex items-center gap-1.5 rounded-[10px] px-3 py-1.5 text-[12px] font-semibold transition-colors disabled:opacity-50 flex-shrink-0"
-              style={
-                runAnalysisStatus === "success"
-                  ? { background: "#DCFCE7", color: "#16A34A" }
-                  : runAnalysisStatus === "error"
-                  ? { background: "#FEE2E2", color: "#DC2626" }
-                  : { background: "var(--gv-color-primary-600)", color: "#fff" }
-              }
-            >
-              {runAnalysisLoading ? (
-                <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" strokeOpacity="0.25"/><path d="M21 12a9 9 0 00-9-9" strokeLinecap="round"/></svg>
-              ) : (
-                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-              )}
-              {runAnalysisLoading ? "Analyzing…" : runAnalysisStatus === "success" ? "Done!" : runAnalysisStatus === "error" ? "Failed" : "Run Analysis"}
-            </button>
-          </div>
-
-          {/* Summary */}
-          {analyticsReport?.report_summary?.biggest_opportunity && (
-            <div className="rounded-[14px] p-3 mb-4 flex gap-2.5" style={{ background: "var(--gv-color-primary-50)", border: "1px solid var(--gv-color-primary-100)" }}>
-              <span className="text-base flex-shrink-0 mt-0.5">🎯</span>
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: "var(--gv-color-primary-500)" }}>Biggest Opportunity</p>
-                <p className="text-[12px] leading-relaxed" style={{ color: "var(--gv-color-primary-800)" }}>{analyticsReport.report_summary.biggest_opportunity}</p>
-                {analyticsReport.report_summary.geovera_focus && (
-                  <p className="text-[11px] mt-1 leading-relaxed" style={{ color: "var(--gv-color-primary-600)" }}>{analyticsReport.report_summary.geovera_focus}</p>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Top 5 Performing Content */}
-          {analyticsReport?.top_content && analyticsReport.top_content.length > 0 && (
-            <>
-              <SectionHeader label="Top 5 Performing Content — Claude Impact Score" />
-              <div className="space-y-1.5 mb-4">
-                {analyticsReport.top_content.map((c, i) => {
-                  const platformIcons: Record<string, string> = { website:"✍️", instagram:"📸", tiktok:"🎵", linkedin:"💼", youtube:"▶️" };
-                  const isSelected = selected?.type === "overview-content" && selected.item.title === c.title;
-                  return (
-                    <button
-                      key={i}
-                      onClick={() => handleSelect({ type: "overview-content", item: c })}
-                      className="w-full text-left rounded-[14px] p-3 transition-colors"
-                      style={{
-                        background: isSelected ? "var(--gv-color-primary-50)" : "var(--gv-color-bg-surface)",
-                        border: isSelected ? "1.5px solid var(--gv-color-primary-200)" : "1px solid var(--gv-color-neutral-100)",
-                      }}
-                    >
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ background: "var(--gv-color-primary-100)", color: "var(--gv-color-primary-700)" }}>#{i + 1}</span>
-                        <span className="text-base">{platformIcons[c.platform] ?? "📄"}</span>
-                        <p className="text-[12px] font-semibold flex-1 min-w-0 leading-snug truncate" style={{ color: "var(--gv-color-neutral-900)" }}>{c.title}</p>
-                        <span className="text-[13px] font-bold flex-shrink-0" style={{ color: "#16A34A" }}>{c.overall_impact}</span>
-                      </div>
-                      <div className="flex gap-3 pl-7">
-                        {[
-                          { label: "SEO", score: c.seo_impact, color: "#1D4ED8" },
-                          { label: "GEO", score: c.geo_impact, color: "#7C3AED" },
-                          { label: "Social", score: c.social_impact, color: "#DB2777" },
-                        ].map((s) => (
-                          <div key={s.label} className="flex items-center gap-1">
-                            <span className="text-[9px] font-bold" style={{ color: s.color }}>{s.label}</span>
-                            <span className="text-[10px] font-semibold" style={{ color: "var(--gv-color-neutral-600)" }}>{s.score}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </>
-          )}
-
-          {/* Todo List */}
-          {analyticsReport?.todo_list && analyticsReport.todo_list.length > 0 && (
-            <>
-              <div className="flex items-center justify-between mb-2 px-2">
-                <span className="text-[11px] font-bold uppercase tracking-[0.1em]" style={{ color: "var(--gv-color-neutral-400)" }}>Priority Actions</span>
-                <div className="flex gap-1">
-                  {(["all", "SEO", "GEO", "Social"] as const).map((f) => (
-                    <button
-                      key={f}
-                      onClick={() => setTodoFilter(f)}
-                      className="px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors"
-                      style={{
-                        background: todoFilter === f ? "var(--gv-color-primary-100)" : "var(--gv-color-neutral-100)",
-                        color: todoFilter === f ? "var(--gv-color-primary-700)" : "var(--gv-color-neutral-500)",
-                      }}
-                    >{f}</button>
-                  ))}
-                </div>
-              </div>
-              <div className="space-y-1.5 mb-4">
-                {analyticsReport.todo_list
-                  .filter((t) => todoFilter === "all" || t.category === todoFilter)
-                  .slice(0, 8)
-                  .map((t, i) => {
-                    const catColor = t.category === "SEO" ? "#1D4ED8" : t.category === "GEO" ? "#7C3AED" : "#DB2777";
-                    const catBg   = t.category === "SEO" ? "#EFF6FF"  : t.category === "GEO" ? "#F5F3FF"  : "#FDF2F8";
-                    const isSelected = selected?.type === "overview-todo" && selected.item.id === t.id;
-                    return (
-                      <button
-                        key={i}
-                        onClick={() => handleSelect({ type: "overview-todo", item: t })}
-                        className="w-full text-left rounded-[14px] p-3 transition-colors"
-                        style={{
-                          background: isSelected ? "var(--gv-color-primary-50)" : "var(--gv-color-bg-surface)",
-                          border: isSelected ? "1.5px solid var(--gv-color-primary-200)" : "1px solid var(--gv-color-neutral-100)",
-                        }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: catBg, color: catColor }}>{t.category}</span>
-                          <p className="text-[12px] font-semibold flex-1 min-w-0 leading-snug" style={{ color: "var(--gv-color-neutral-900)" }}>{t.title}</p>
-                          <span className="text-[11px] font-semibold flex-shrink-0" style={{ color: "#16A34A" }}>{t.score_gain_est}</span>
-                        </div>
-                      </button>
-                    );
-                  })}
-              </div>
-            </>
-          )}
-
-          {/* 14-Day Content Plan */}
-          {analyticsReport?.content_plan && analyticsReport.content_plan.length > 0 && (
-            <>
-              <SectionHeader label="14-Day Content Plan" />
-              <div className="space-y-1.5 mb-4">
-                {analyticsReport.content_plan.map((p, i) => {
-                  const catColor = p.category === "SEO" ? "#1D4ED8" : p.category === "GEO" ? "#7C3AED" : "#DB2777";
-                  const catBg   = p.category === "SEO" ? "#EFF6FF"  : p.category === "GEO" ? "#F5F3FF"  : "#FDF2F8";
-                  const platformIcons: Record<string, string> = { website:"✍️", instagram:"📸", tiktok:"🎵", linkedin:"💼", youtube:"▶️" };
-                  const isSelected = selected?.type === "overview-plan" && selected.item.day === p.day;
-                  return (
-                    <button
-                      key={i}
-                      onClick={() => handleSelect({ type: "overview-plan", item: p })}
-                      className="w-full text-left rounded-[14px] p-3 transition-colors"
-                      style={{
-                        background: isSelected ? "var(--gv-color-primary-50)" : "var(--gv-color-bg-surface)",
-                        border: isSelected ? "1.5px solid var(--gv-color-primary-200)" : "1px solid var(--gv-color-neutral-100)",
-                      }}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="flex-shrink-0 w-7 text-center text-[10px] font-bold rounded-[6px] py-0.5" style={{ background: "var(--gv-color-neutral-100)", color: "var(--gv-color-neutral-600)" }}>D{p.day}</span>
-                        <span className="text-sm flex-shrink-0">{platformIcons[p.platform] ?? "📄"}</span>
-                        <p className="text-[12px] font-semibold flex-1 min-w-0 truncate leading-snug" style={{ color: "var(--gv-color-neutral-900)" }}>{p.title}</p>
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0" style={{ background: catBg, color: catColor }}>{p.category}</span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </>
-          )}
-
-          {/* Empty state */}
-          {!reportLoading && !analyticsReport && (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="w-14 h-14 rounded-full mb-4 flex items-center justify-center" style={{ background: "var(--gv-color-neutral-100)" }}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--gv-color-neutral-400)" strokeWidth="1.5">
-                  <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <p className="text-[14px] font-semibold" style={{ color: "var(--gv-color-neutral-700)" }}>No analysis yet</p>
-              <p className="mt-1 text-[12px]" style={{ color: "var(--gv-color-neutral-400)" }}>Click &ldquo;Run Analysis&rdquo; above to generate your first report</p>
-            </div>
-          )}
-          {reportLoading && (
-            <div className="flex items-center justify-center py-16">
-              <svg className="h-6 w-6 animate-spin" style={{ color: "var(--gv-color-primary-500)" }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" strokeOpacity="0.25"/><path d="M21 12a9 9 0 00-9-9" strokeLinecap="round"/></svg>
-            </div>
-          )}
+      {/* ── Run Analysis — always visible ── */}
+      <div className="rounded-[14px] p-3 flex items-center gap-3" style={{ background: "var(--gv-color-neutral-50)", border: "1px solid var(--gv-color-neutral-200)" }}>
+        <div className="flex-1 min-w-0">
+          <p className="text-[12px] font-semibold" style={{ color: "var(--gv-color-neutral-800)" }}>
+            {analyticsReport ? `Cycle #${analyticsReport.cycle_number}` : "No analysis yet"}
+          </p>
+          <p className="text-[10px]" style={{ color: "var(--gv-color-neutral-400)" }}>
+            {analyticsReport
+              ? `Last run: ${new Date(analyticsReport.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+              : "Run your first analysis to get real scores"}
+          </p>
         </div>
-      )}
+        <button
+          onClick={handleRunAnalysis}
+          disabled={runAnalysisLoading || !brandId}
+          className="flex items-center gap-1.5 rounded-[10px] px-3 py-1.5 text-[12px] font-semibold transition-colors disabled:opacity-50 flex-shrink-0"
+          style={
+            runAnalysisStatus === "success"
+              ? { background: "#DCFCE7", color: "#16A34A" }
+              : runAnalysisStatus === "error"
+              ? { background: "#FEE2E2", color: "#DC2626" }
+              : { background: "var(--gv-color-primary-600)", color: "#fff" }
+          }
+        >
+          {runAnalysisLoading ? (
+            <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" strokeOpacity="0.25"/><path d="M21 12a9 9 0 00-9-9" strokeLinecap="round"/></svg>
+          ) : (
+            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          )}
+          {runAnalysisLoading ? "Analyzing…" : runAnalysisStatus === "success" ? "Done!" : runAnalysisStatus === "error" ? "Failed" : "Run Analysis"}
+        </button>
+      </div>
+
 
       {/* ── SEO — Articles & Blog content ── */}
       {activeSection === "seo" && (
@@ -2771,7 +2450,6 @@ export default function AnalyticsPage() {
           activeSection={activeSection}
           onSectionChange={handleSectionChange}
           scores={{
-            overall: analyticsReport?.overall_score,
             seo: analyticsReport?.seo_score,
             geo: analyticsReport?.geo_score,
             social: analyticsReport?.social_score,
