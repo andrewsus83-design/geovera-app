@@ -590,15 +590,44 @@ Return ONLY a valid JSON array of ${count} prompt strings. No explanation, no ma
     // ── GENERATE IMAGE ───────────────────────────────────────────────────────
     if (action === "generate_image") {
       const {
-        prompt, aspect_ratio = "1:1", negative_prompt = "",
-        batch_size = 1, target_count, score_with_claude = false, lora_model = "",
+        prompt: rawPrompt, aspect_ratio = "1:1", negative_prompt = "",
+        batch_size = 1, target_count, score_with_claude = true, lora_model = "",
         generate_script = false, objective = "", platform = "",
+        // New form params
+        topic, description, num_images, include_hashtags = false, uploaded_images: uploadedRefImages,
       } = data;
-      if (!prompt) return json({ error: "prompt is required" }, 400);
       const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
-      // 1:5 ratio — generate 5× requested, Claude picks best target_count
-      const numImages = Math.min(Number(batch_size) || 1, 30);
-      const wantedCount = target_count ? Math.min(Number(target_count), numImages) : numImages;
+
+      // Resolve final image count: num_images (1-8 user pick) → generate 5× for scoring
+      const wantedCount = Math.min(Math.max(1, Number(num_images ?? target_count ?? batch_size ?? 1)), 8);
+      const numImages = Math.min(wantedCount * 5, 30); // 5× candidates for Claude scoring
+
+      // ── Auto-generate art-directed prompt from topic+objective if no raw prompt ──
+      let prompt = rawPrompt as string | undefined;
+      if (!prompt && (topic || objective)) {
+        if (!ANTHROPIC_KEY) return json({ error: "ANTHROPIC_API_KEY not configured" }, 500);
+        try {
+          const refImgUrls = (uploadedRefImages as string[] | null) ?? [];
+          const artUser = `Create an optimized Flux Schnell image generation prompt for:
+- Topic: ${topic || "brand content"}
+- Objective: ${objective || "brand showcase"}
+- Aspect ratio: ${aspect_ratio}
+${(description as string) ? `- Brief: ${description}` : ""}
+${refImgUrls.length > 0 ? `- ${refImgUrls.length} reference image(s) provided — match their visual style/mood` : ""}
+
+Write ONE highly specific, commercially optimized prompt (max 120 words). Include lighting, composition, mood, quality descriptors. Return ONLY the prompt text, no explanation.`;
+          const artResp = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: { "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+            body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 256, messages: [{ role: "user", content: artUser }] }),
+          });
+          if (artResp.ok) {
+            const artData = await artResp.json();
+            prompt = artData.content?.[0]?.text?.trim() ?? "";
+          }
+        } catch { /* fall through */ }
+      }
+      if (!prompt) return json({ error: "prompt or topic is required" }, 400);
 
       let imageUrls: string[] = [];
       let aiProvider = "kie";
@@ -640,9 +669,10 @@ Return ONLY a valid JSON array of ${count} prompt strings. No explanation, no ma
         approvedUrls = imageUrls.slice(0, wantedCount);
       }
 
-      // Generate script+hashtags if requested
-      let scriptData: Record<string, string> | null = null;
-      if (generate_script && ANTHROPIC_KEY) {
+      // Generate script + hashtags if requested
+      let scriptData: Record<string, unknown> | null = null;
+      const wantScriptOrHashtags = Boolean(generate_script) || Boolean(include_hashtags);
+      if (wantScriptOrHashtags && ANTHROPIC_KEY) {
         try {
           const { data: bp } = await supabase.from("brand_profiles").select("brand_name, brand_dna").eq("id", brand_id).maybeSingle();
           const brandName = (bp?.brand_name as string) ?? "Brand";
@@ -651,9 +681,9 @@ Return ONLY a valid JSON array of ${count} prompt strings. No explanation, no ma
             headers: { "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
             body: JSON.stringify({
               model: "claude-haiku-4-5-20251001",
-              max_tokens: 512,
-              messages: [{ role: "user", content: `Create an engaging social media posting script for ${brandName} with image: "${prompt}". Objective: ${objective}. Platform: ${platform || "Instagram/TikTok"}.
-Return JSON only: {"caption":"Instagram caption (max 200 chars)","hashtags":"5-10 hashtags","tiktok_hook":"TikTok opening hook (max 80 chars)","cta":"call to action (max 60 chars)"}` }],
+              max_tokens: 600,
+              messages: [{ role: "user", content: `Create an engaging social media posting script for ${brandName} with image: "${prompt}". Objective: ${objective || (topic as string) || "brand content"}. Platform: ${platform || "Instagram/TikTok"}.
+Return JSON only: {"caption":"Instagram caption (max 200 chars)","hashtags":["#tag1","#tag2","#tag3","#tag4","#tag5","#tag6","#tag7","#tag8","#tag9","#tag10"],"tiktok_hook":"TikTok opening hook (max 80 chars)","cta":"call to action (max 60 chars)"}` }],
             }),
           });
           if (scriptResp.ok) {
@@ -665,16 +695,44 @@ Return JSON only: {"caption":"Instagram caption (max 200 chars)","hashtags":"5-1
         } catch { /* non-fatal */ }
       }
 
+      const refImgUrls = (uploadedRefImages as string[] | null) ?? [];
       const dbPlatform = String(platform || (aspect_ratio === "9:16" ? "instagram" : aspect_ratio === "16:9" ? "youtube" : "instagram"));
       const savedImages = await Promise.all(approvedUrls.map(async (url) => {
         const { data: ins } = await supabase.from("gv_image_generations").insert({
-          brand_id, prompt_text: prompt, negative_prompt, aspect_ratio,
-          ai_provider: aiProvider, ai_model: aiModel,
-          image_url: url, thumbnail_url: url, status: "completed",
-          target_platform: dbPlatform, style_preset: lora_model || null,
+          brand_id,
+          prompt_text: prompt,
+          negative_prompt,
+          aspect_ratio,
+          ai_provider: aiProvider,
+          ai_model: aiModel,
+          image_url: url,
+          thumbnail_url: url,
+          status: "completed",
+          target_platform: dbPlatform,
+          style_preset: lora_model || null,
+          topic: (topic as string) || null,
+          description: (description as string) || null,
+          objective: (objective as string) || null,
+          include_hashtags: Boolean(include_hashtags),
+          hashtag_list: include_hashtags && scriptData?.hashtags ? scriptData.hashtags : null,
+          uploaded_images: refImgUrls.length > 0 ? refImgUrls : null,
           metadata: scriptData ? { script: scriptData, objective, platform: dbPlatform } : null,
         }).select("id").single();
-        return { id: ins?.id ?? null, prompt_text: prompt, image_url: url, thumbnail_url: url, status: "completed", ai_model: aiModel, target_platform: dbPlatform, style_preset: lora_model || null, script: scriptData, created_at: new Date().toISOString() };
+        return {
+          id: ins?.id ?? null,
+          prompt_text: prompt,
+          image_url: url,
+          thumbnail_url: url,
+          status: "completed",
+          ai_model: aiModel,
+          target_platform: dbPlatform,
+          style_preset: lora_model || null,
+          objective: (objective as string) || null,
+          topic: (topic as string) || null,
+          script: scriptData,
+          hashtags: include_hashtags ? (scriptData?.hashtags ?? []) : null,
+          created_at: new Date().toISOString(),
+        };
       }));
 
       return json({
@@ -686,15 +744,44 @@ Return JSON only: {"caption":"Instagram caption (max 200 chars)","hashtags":"5-1
         total_generated: imageUrls.length,
         total_approved: approvedUrls.length,
         script: scriptData,
+        hashtags: include_hashtags ? (scriptData?.hashtags ?? []) : null,
       });
     }
 
     // ── GENERATE VIDEO (Full Pipeline: scenes → images × 5 → Claude pick → Runway Gen 4) ──
     if (action === "generate_video") {
-      const { prompt, duration = 32, aspect_ratio = "9:16", image_url = "",
-              objective = "", platform = "", generate_script = false,
-              generate_music = false, scene_descriptions = null } = data;
-      if (!prompt) return json({ error: "prompt is required" }, 400);
+      const {
+        prompt: rawVideoPrompt, duration = 32, aspect_ratio = "9:16", image_url = "",
+        objective = "", platform = "", generate_script = false,
+        generate_music = false, scene_descriptions = null,
+        // New form params
+        topic: videoTopic, description: videoDesc, uploaded_images: videoRefImages,
+        include_hashtags: videoIncludeHashtags = false, include_script = false, include_music = false,
+      } = data;
+      const ANTHROPIC_KEY_V = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
+      const wantVideoScript = Boolean(generate_script) || Boolean(include_script);
+      const wantVideoMusic = Boolean(generate_music) || Boolean(include_music);
+      const wantVideoHashtags = Boolean(videoIncludeHashtags);
+
+      // Auto-generate prompt from topic+objective if no raw prompt
+      let prompt = rawVideoPrompt as string | undefined;
+      if (!prompt && (videoTopic || objective)) {
+        try {
+          const artUser = `Create an optimized Runway Gen 4 Turbo video prompt for:
+- Topic: ${videoTopic || "brand content"}
+- Objective: ${objective || "brand showcase"}
+- Aspect ratio: ${aspect_ratio} video
+${(videoDesc as string) ? `- Brief: ${videoDesc}` : ""}
+Include: camera movement, scene description, mood, lighting, pacing. Write ONE cinematic video prompt (max 100 words). Return ONLY the prompt text.`;
+          const artR = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: { "x-api-key": ANTHROPIC_KEY_V, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+            body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 200, messages: [{ role: "user", content: artUser }] }),
+          });
+          if (artR.ok) { const d = await artR.json(); prompt = d.content?.[0]?.text?.trim() ?? ""; }
+        } catch { /* fall through */ }
+      }
+      if (!prompt) return json({ error: "prompt or topic is required" }, 400);
 
       // Duration range: 16–64s as set by Claude's art direction
       const totalDuration = Math.min(64, Math.max(16, Number(duration)));
@@ -790,20 +877,20 @@ Return JSON only: {"caption":"Instagram caption (max 200 chars)","hashtags":"5-1
         ai_model = kieRes.model ?? "kling-v2";
       }
 
-      // Generate script if requested
-      let videoScript: Record<string, string> | null = null;
-      if (generate_script && ANTHROPIC_KEY) {
+      // Generate script + hashtags + music if requested
+      let videoScript: Record<string, unknown> | null = null;
+      if ((wantVideoScript || wantVideoHashtags || wantVideoMusic) && ANTHROPIC_KEY_V) {
         try {
           const { data: bp } = await supabase.from("brand_profiles").select("brand_name").eq("id", brand_id).maybeSingle();
           const brandName = (bp?.brand_name as string) ?? "Brand";
           const scriptResp = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST",
-            headers: { "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+            headers: { "x-api-key": ANTHROPIC_KEY_V, "anthropic-version": "2023-06-01", "content-type": "application/json" },
             body: JSON.stringify({
               model: "claude-haiku-4-5-20251001",
-              max_tokens: 512,
-              messages: [{ role: "user", content: `Create a posting script for ${brandName} video: "${prompt}". Objective: ${objective}. Platform: ${platform || "TikTok"}. Music: ${generate_music ? "yes, suggest mood" : "no"}.
-Return JSON only: {"caption":"posting caption (max 200 chars)","hashtags":"5-10 hashtags","voiceover":"optional voiceover script (max 100 chars per scene)","music_mood":"${generate_music ? "music mood & tempo recommendation" : ""}","cta":"call to action"}` }],
+              max_tokens: 600,
+              messages: [{ role: "user", content: `Create a posting script for ${brandName} video: "${prompt}". Objective: ${objective || (videoTopic as string) || "brand content"}. Platform: ${platform || "TikTok"}. Music: ${wantVideoMusic ? "yes, suggest mood & genre" : "no"}.
+Return JSON only: {"caption":"posting caption (max 200 chars)","hashtags":["#tag1","#tag2","#tag3","#tag4","#tag5","#tag6","#tag7","#tag8","#tag9","#tag10"],"voiceover":"voiceover script (1 sentence per scene)","music_mood":"${wantVideoMusic ? "music mood, genre & tempo recommendation" : ""}","cta":"call to action"}` }],
             }),
           });
           if (scriptResp.ok) {
@@ -815,8 +902,9 @@ Return JSON only: {"caption":"posting caption (max 200 chars)","hashtags":"5-10 
         } catch { /* non-fatal */ }
       }
 
+      const videoRefImgUrls = (videoRefImages as string[] | null) ?? [];
+
       // Store scene images in gv_image_generations with status "video_scene"
-      // They appear in image history but are EXCLUDED from image quota counts
       if (scene_image_urls.length > 0) {
         await Promise.allSettled(scene_image_urls.map((url, i) =>
           supabase.from("gv_image_generations").insert({
@@ -834,13 +922,20 @@ Return JSON only: {"caption":"posting caption (max 200 chars)","hashtags":"5-10 
         ai_model, status, generation_mode,
         runway_task_id: task_id, video_url,
         video_thumbnail_url: null, video_aspect_ratio: aspect_ratio, video_status: status,
+        topic: (videoTopic as string) || null,
+        description: (videoDesc as string) || null,
+        objective: (objective as string) || null,
+        include_hashtags: wantVideoHashtags,
+        hashtag_list: wantVideoHashtags && videoScript?.hashtags ? videoScript.hashtags : null,
+        include_music: wantVideoMusic,
+        music_suggestion: wantVideoMusic ? String(videoScript?.music_mood ?? "") : null,
+        uploaded_images: videoRefImgUrls.length > 0 ? videoRefImgUrls : null,
         metadata: {
           ...(extra_task_ids.length > 0 ? { extra_task_ids } : {}),
           num_clips: numClips, total_duration: totalDuration,
           num_scenes: scenes.length,
           scene_image_urls,
           ...(videoScript ? { script: videoScript } : {}),
-          ...(generate_music ? { music_requested: true } : {}),
           objective, platform: dbPlatformV,
         },
       }).select("id").single();
@@ -851,6 +946,8 @@ Return JSON only: {"caption":"posting caption (max 200 chars)","hashtags":"5-10 
         num_scenes: scenes.length, total_duration: totalDuration,
         video_url, status, db_id: inserted?.id ?? null, ai_model,
         scene_image_urls, script: videoScript,
+        hashtags: wantVideoHashtags ? (videoScript?.hashtags ?? []) : null,
+        music_suggestion: wantVideoMusic ? String(videoScript?.music_mood ?? "") : null,
       });
     }
 
@@ -1065,7 +1162,7 @@ Return JSON only: {"caption":"posting caption (max 200 chars)","hashtags":"5-10 
       if (type === "all" || type === "article") {
         const { data: articles } = await supabase
           .from("gv_article_generations")
-          .select("id, topic, objective, length, content, meta_title, meta_description, focus_keywords, social, geo, status, image_url, created_at")
+          .select("id, topic, description, objective, length, content, content_very_long, meta_title, meta_description, focus_keywords, social, geo, hashtag_list, script_content, music_suggestion, image_count, image_size, status, scheduled_at, created_at")
           .eq("brand_id", brand_id)
           .order("created_at", { ascending: false })
           .limit(limit);
@@ -1075,7 +1172,7 @@ Return JSON only: {"caption":"posting caption (max 200 chars)","hashtags":"5-10 
       if (type === "all" || type === "image") {
         const { data: imgs } = await supabase
           .from("gv_image_generations")
-          .select("id, prompt_text, image_url, thumbnail_url, status, ai_model, target_platform, style_preset, created_at, feedback")
+          .select("id, prompt_text, topic, description, objective, image_url, thumbnail_url, status, ai_model, target_platform, style_preset, aspect_ratio, hashtag_list, include_hashtags, scheduled_at, feedback, created_at")
           .eq("brand_id", brand_id)
           .order("created_at", { ascending: false })
           .limit(limit);
@@ -1085,7 +1182,7 @@ Return JSON only: {"caption":"posting caption (max 200 chars)","hashtags":"5-10 
       if (type === "all" || type === "video") {
         const { data: vids } = await supabase
           .from("gv_video_generations")
-          .select("id, hook, video_url, video_thumbnail_url, video_status, ai_model, target_platform, video_aspect_ratio, created_at, feedback")
+          .select("id, hook, topic, description, objective, video_url, video_thumbnail_url, video_status, ai_model, target_platform, video_aspect_ratio, hashtag_list, include_hashtags, include_music, music_suggestion, scheduled_at, feedback, created_at")
           .eq("brand_id", brand_id)
           .order("created_at", { ascending: false })
           .limit(limit);
