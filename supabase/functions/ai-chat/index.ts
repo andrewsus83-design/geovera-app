@@ -108,12 +108,12 @@ Deno.serve(async (req: Request) => {
     // Default to general mode if not specified
     const mode = chat_mode || "general";
 
-    // Verify user owns the brand
+    // Verify user owns the brand via brand_profiles
     const { data: userBrand, error: brandError } = await supabase
-      .from("user_brands")
-      .select("brand_id, role")
+      .from("brand_profiles")
+      .select("id")
       .eq("user_id", userId)
-      .eq("brand_id", brand_id)
+      .eq("id", brand_id)
       .single();
 
     if (brandError || !userBrand) {
