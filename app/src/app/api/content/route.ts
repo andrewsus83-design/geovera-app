@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const SUPABASE_URL =
-  process.env.SUPABASE_URL || "https://vozjwptzutolvkvfpknk.supabase.co";
+const SUPABASE_URL = process.env.SUPABASE_URL || "https://vozjwptzutolvkvfpknk.supabase.co";
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
 const cors = {
@@ -15,32 +14,27 @@ export async function OPTIONS() {
 }
 
 const ALLOWED_ACTIONS = new Set([
+  "generate_article",
   "generate_image",
   "generate_video",
   "generate_avatar_video",
-  "check_task",
-  "train_product",
-  "train_character",
-  "check_training",
-  "get_history",
-  "check_daily_usage",
   "generate_smart_prompt",
-  "generate_synthetics",
-  "submit_feedback",
-  // New content workflow
   "analyze_images",
   "generate_art_directed_prompt",
-  "generate_article",
+  "check_task",
+  "check_daily_usage",
+  "get_history",
+  "submit_feedback",
+  "update_article",
   "update_image",
   "update_video",
-  "update_article",
 ]);
 
 export async function POST(request: NextRequest) {
   try {
-    const authHeader = request.headers.get("authorization");
-    const token = authHeader?.replace("Bearer ", "").trim();
+    const token = request.headers.get("authorization")?.replace("Bearer ", "").trim();
     if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: cors });
+
     const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
     const { data: { user }, error: authError } = await adminClient.auth.getUser(token);
     if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: cors });
@@ -48,14 +42,17 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     if (!body.action || !ALLOWED_ACTIONS.has(body.action)) {
-      return NextResponse.json(
-        { error: "Invalid or missing action" },
-        { status: 400, headers: cors }
-      );
+      return NextResponse.json({ error: "Invalid action" }, { status: 400, headers: cors });
     }
 
+    // Verify brand ownership if brand_id provided
     if (body.brand_id) {
-      const { data: brand } = await adminClient.from("brand_profiles").select("id").eq("id", body.brand_id).eq("user_id", user.id).maybeSingle();
+      const { data: brand } = await adminClient
+        .from("brand_profiles")
+        .select("id")
+        .eq("id", body.brand_id)
+        .eq("user_id", user.id)
+        .maybeSingle();
       if (!brand) return NextResponse.json({ error: "Forbidden" }, { status: 403, headers: cors });
     }
 
@@ -74,19 +71,14 @@ export async function POST(request: NextRequest) {
     const ct = response.headers.get("content-type") ?? "";
     if (!ct.includes("application/json")) {
       return NextResponse.json(
-        { success: false, error: `Upstream error (${response.status}) — edge function unavailable` },
+        { success: false, error: `Edge function error (${response.status})` },
         { status: 502, headers: cors }
       );
     }
+
     const result = await response.json();
-    return NextResponse.json(result, {
-      status: response.ok ? 200 : response.status,
-      headers: cors,
-    });
+    return NextResponse.json(result, { status: response.ok ? 200 : response.status, headers: cors });
   } catch {
-    return NextResponse.json(
-      { success: false, error: "Internal server error" },
-      { status: 500, headers: cors }
-    );
+    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500, headers: cors });
   }
 }

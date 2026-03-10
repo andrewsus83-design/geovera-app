@@ -1031,9 +1031,9 @@ function BrandAssetsGuide() {
         ))}
       </div>
 
-      <button onClick={() => router.push("/content-studio")} className="w-full py-3 rounded-[14px] text-[14px] font-bold text-white"
+      <button onClick={() => router.push("/content")} className="w-full py-3 rounded-[14px] text-[14px] font-bold text-white"
         style={{ background: "linear-gradient(135deg,#7C3AED,#F57422)", boxShadow: "0 4px 14px rgba(124,58,237,0.30)" }}>
-        Go to Content Studio → Upload Brand Assets
+        Go to Content → Upload Brand Assets
       </button>
     </div>
   );
@@ -1201,11 +1201,11 @@ function BuildTrainingGuide() {
       </div>
 
       <button
-        onClick={() => router.push("/content-studio")}
+        onClick={() => router.push("/content")}
         className="w-full py-3 rounded-[14px] text-[14px] font-bold text-white"
         style={{ background: "linear-gradient(135deg, #7C3AED, #F57422)" }}
       >
-        Go to Content Studio → Start Training
+        Go to Content → Start Training
       </button>
     </div>
   );
