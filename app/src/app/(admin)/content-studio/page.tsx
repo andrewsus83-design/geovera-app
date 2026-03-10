@@ -2325,9 +2325,9 @@ function DetailPanel({ item, brandId }: { item: DetailItem; brandId: string }) {
         </div>
         <div className="p-3 space-y-2.5" style={{ borderRadius: "var(--gv-radius-sm)", border: "1px solid var(--gv-color-neutral-200)", background: "var(--gv-color-bg-surface)" }}>
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="gv-badge" style={{ background: isComplete ? "var(--gv-color-success-50)" : "var(--gv-color-warning-50)", color: isComplete ? "var(--gv-color-success-700)" : "var(--gv-color-warning-700)" }}>{img.status}</span>
+            <span className={`gv-badge ${isComplete ? "gv-badge-success" : "gv-badge-warning"}`}>{img.status}</span>
             {img.ai_model && <span className="text-[10px]" style={{ color: "var(--gv-color-neutral-400)" }}>{img.ai_model}</span>}
-            {img.style_preset && <span className="gv-badge" style={{ background: "var(--gv-color-info-50)", color: "var(--gv-color-info-700)" }}>LoRA: {img.style_preset}</span>}
+            {img.style_preset && <span className="gv-badge gv-badge-primary">LoRA: {img.style_preset}</span>}
           </div>
           <div>
             <p className="text-[10px] font-semibold mb-1" style={{ color: "var(--gv-color-neutral-500)" }}>PROMPT</p>
@@ -2359,7 +2359,7 @@ function DetailPanel({ item, brandId }: { item: DetailItem; brandId: string }) {
         </div>
         <div className="p-3 space-y-2.5" style={{ borderRadius: "var(--gv-radius-sm)", border: "1px solid var(--gv-color-neutral-200)", background: "var(--gv-color-bg-surface)" }}>
           <div className="flex gap-2 flex-wrap">
-            <span className="gv-badge" style={{ background: isVidComplete ? "var(--gv-color-success-50)" : "var(--gv-color-warning-50)", color: isVidComplete ? "var(--gv-color-success-700)" : "var(--gv-color-warning-700)" }}>{vid.video_status ?? "processing"}</span>
+            <span className={`gv-badge ${isVidComplete ? "gv-badge-success" : "gv-badge-warning"}`}>{vid.video_status ?? "processing"}</span>
             <span className="gv-badge" style={{ background: "var(--gv-color-neutral-100)", color: "var(--gv-color-neutral-500)" }}>{vid.ai_model}</span>
             <span className="gv-badge" style={{ background: "var(--gv-color-neutral-100)", color: "var(--gv-color-neutral-500)" }}>{vid.video_aspect_ratio}</span>
           </div>
@@ -2420,8 +2420,8 @@ function DetailPanel({ item, brandId }: { item: DetailItem; brandId: string }) {
         {/* Meta header */}
         <div className="p-3 space-y-2" style={{ borderRadius: "var(--gv-radius-sm)", border: "1px solid var(--gv-color-neutral-200)", background: "var(--gv-color-bg-surface)" }}>
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="gv-badge" style={{ background: "var(--gv-color-primary-50)", color: "var(--gv-color-primary-700)" }}>{art.objective}</span>
-            <span className="gv-badge" style={{ background: "var(--gv-color-info-50)", color: "var(--gv-color-info-700)" }}>{art.length}</span>
+            <span className="gv-badge gv-badge-primary">{art.objective}</span>
+            <span className="gv-badge gv-badge-primary">{art.length}</span>
           </div>
           <h4 className="text-sm font-bold leading-tight" style={{ color: "var(--gv-color-neutral-900)" }}>{art.meta_title || art.topic || "Article"}</h4>
           {art.meta_description && <p className="text-[11px] leading-relaxed" style={{ color: "var(--gv-color-neutral-500)" }}>{art.meta_description}</p>}
