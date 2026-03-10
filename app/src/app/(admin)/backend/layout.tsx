@@ -58,11 +58,11 @@ export default function BackendLayout({ children }: { children: React.ReactNode 
 
       const { data: profile } = await supabase
         .from("user_profiles")
-        .select("full_name")
+        .select("full_name, is_admin")
         .eq("id", session.user.id)
         .single();
 
-      if (session.user.email !== "andrewsus83@gmail.com") { window.location.href = "https://app.geovera.xyz/analytics"; return; }
+      if (!profile?.is_admin) { window.location.href = "https://app.geovera.xyz/analytics"; return; }
       setAdminName(profile?.full_name || session.user.email || "Admin");
       setChecking(false);
     }

@@ -11,8 +11,6 @@ import {
 import { useUserQuota } from "@/hooks/useUserQuota";
 import FeatureGate from "@/components/shared/FeatureGate";
 
-const FALLBACK_BRAND_ID =
-  process.env.NEXT_PUBLIC_DEMO_BRAND_ID || "a37dee82-5ed5-4ba4-991a-4d93dde9ff7a";
 
 const VIDEO_TOPICS = [
   { id: "podcast",        label: "🎙️ Podcast",               desc: "Conversational, interview style" },
@@ -2618,7 +2616,7 @@ function HistoryRight({ brandId, historyKey, activeSection, onSelect }: {
 // ══════════════════════════════════════════════════════════════════════════════
 export default function ContentStudioPage() {
   const { quota, loading: quotaLoading } = useUserQuota();
-  const [brandId, setBrandId] = useState(FALLBACK_BRAND_ID);
+  const [brandId, setBrandId] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<StudioSection>("article");
   const [assetSubSection, setAssetSubSection] = useState<AssetSubSection | null>(null);
   const [trainedModels, setTrainedModels] = useState<TrainedModel[]>([]);
@@ -2634,8 +2632,14 @@ export default function ContentStudioPage() {
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) return;
-      const { data: ub } = await supabase.from("user_brands").select("brand_id").eq("user_id", user.id).limit(1).single();
-      if (ub?.brand_id) setBrandId(ub.brand_id);
+      const { data: bp } = await supabase
+        .from("brand_profiles")
+        .select("id")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (bp?.id) setBrandId(bp.id);
     });
   }, []);
 

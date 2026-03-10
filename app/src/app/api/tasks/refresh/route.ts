@@ -13,7 +13,7 @@ const SUPABASE_FUNCTIONS_URL = `${SUPABASE_URL}/functions/v1`;
 const REFRESH_LIMITS: Record<string, number> = {
   basic: 1,
   premium: 2,
-  partner: 3,
+  enterprise: 3,
 };
 
 export async function POST(request: NextRequest) {
@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
       refresh_used: usedRefreshes,
       refresh_limit: refreshLimit,
       cycle_expires_in_hours: hoursLeft,
-      upgrade_available: tier !== "partner",
+      upgrade_available: tier !== "enterprise",
     }, { status: 429 });
   }
 

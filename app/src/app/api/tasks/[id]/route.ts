@@ -55,6 +55,14 @@ export async function PATCH(
 
   const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
+  // Look up user's brand for ownership check
+  const { data: userBrand } = await sb
+    .from("brand_profiles")
+    .select("id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const userBrandId = userBrand?.id ?? null;
+
   // Build update payload based on action
   const now = new Date().toISOString();
   let updatePayload: Record<string, unknown>;
@@ -102,6 +110,7 @@ export async function PATCH(
     .from("gv_tasks")
     .update(updatePayload)
     .eq("id", taskId)
+    .eq("brand_id", userBrandId)
     .select("id, status, updated_at")
     .single();
 
@@ -113,7 +122,7 @@ export async function PATCH(
   // If task was rejected/dismissed — optionally feed to training data for learning loop
   if ((action === "reject" || action === "dismiss") && reason) {
     await sb.from("gv_content_training_data").insert({
-      brand_id: data?.id ?? null,   // Will be resolved below if needed
+      brand_id: userBrandId,
       content_type: "task_feedback",
       feedback_type: action,
       feedback_text: reason,
