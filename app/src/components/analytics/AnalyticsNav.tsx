@@ -282,6 +282,3 @@ export function AnalyticsTabBar({ activeSection, onSectionChange, scores, loadin
     </nav>
   );
 }
-
-// Default export — both variants
-export default { AnalyticsPillNav, AnalyticsTabBar };

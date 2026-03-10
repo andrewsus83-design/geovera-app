@@ -13,10 +13,10 @@ const MODE_TOKENS = {
   video:   { accent: "var(--gv7-mode-geo-accent)",     light: "var(--gv7-mode-geo-light)",     border: "var(--gv7-mode-geo-border)",     text: "var(--gv7-mode-geo-text)"     },
 } as const;
 
-// ── Types ──────────────────────────────────────────────────────────
-interface HistoryArticle { id: string; title: string; body: string; platform: string; created_at: string; status: string; }
-interface HistoryImage   { id: string; image_url: string; prompt: string; created_at: string; }
-interface HistoryVideo   { id: string; video_url: string; prompt: string; created_at: string; status: string; }
+// ── Types — match real Supabase table columns ──────────────────────
+interface HistoryArticle { id: string; topic: string; meta_title: string; content: string; objective: string; status: string; created_at: string; }
+interface HistoryImage   { id: string; image_url: string; prompt_text: string; status: string; created_at: string; }
+interface HistoryVideo   { id: string; video_url: string; hook: string; video_status: string; created_at: string; }
 
 // ── Utilities ──────────────────────────────────────────────────────
 async function fetchSession() {
@@ -301,6 +301,7 @@ function ImageWizard({ brandId, onGenerated }: { brandId: string | null; onGener
 
   const handleGenerate = useCallback(async () => {
     if (!topic.trim()) return;
+    if (!brandId) { setError("Connect a brand profile to generate images."); return; }
     setLoading(true); setError(null); setDone(false);
     try {
       const token = await fetchSession();
@@ -459,6 +460,7 @@ function VideoWizard({ brandId, onGenerated }: { brandId: string | null; onGener
 
   const handleGenerate = useCallback(async () => {
     if (!topic.trim()) return;
+    if (!brandId) { setError("Connect a brand profile to generate videos."); return; }
     setLoading(true); setError(null); setDone(false);
     try {
       const token = await fetchSession();
@@ -560,16 +562,26 @@ function HistoryPanel({ activeSection, refreshKey, brandId }: { activeSection: C
       if (!brandId) return;
       setLoading(true);
       try {
-        const token = await fetchSession();
-        if (!token) return;
         const [aRes, iRes, vRes] = await Promise.all([
-          supabase.from("gv_content_library").select("id,title,body,platform,created_at,status").eq("brand_id", brandId).eq("content_type", "article").order("created_at", { ascending: false }).limit(20),
-          supabase.from("gv_content_library").select("id,image_url,prompt,created_at").eq("brand_id", brandId).eq("content_type", "image").order("created_at", { ascending: false }).limit(20),
-          supabase.from("gv_content_library").select("id,video_url,prompt,created_at,status").eq("brand_id", brandId).eq("content_type", "video").order("created_at", { ascending: false }).limit(20),
+          supabase.from("gv_article_generations")
+            .select("id,topic,meta_title,content,objective,status,created_at")
+            .eq("brand_id", brandId)
+            .order("created_at", { ascending: false })
+            .limit(20),
+          supabase.from("gv_image_generations")
+            .select("id,image_url,prompt_text,status,created_at")
+            .eq("brand_id", brandId)
+            .order("created_at", { ascending: false })
+            .limit(20),
+          supabase.from("gv_video_generations")
+            .select("id,video_url,hook,video_status,created_at")
+            .eq("brand_id", brandId)
+            .order("created_at", { ascending: false })
+            .limit(20),
         ]);
-        if (aRes.data) setArticles(aRes.data as HistoryArticle[]);
-        if (iRes.data) setImages(iRes.data as HistoryImage[]);
-        if (vRes.data) setVideos(vRes.data as HistoryVideo[]);
+        if (!aRes.error && aRes.data) setArticles(aRes.data as HistoryArticle[]);
+        if (!iRes.error && iRes.data) setImages(iRes.data as HistoryImage[]);
+        if (!vRes.error && vRes.data) setVideos(vRes.data as HistoryVideo[]);
       } finally {
         setLoading(false);
       }
@@ -622,12 +634,12 @@ function HistoryPanel({ activeSection, refreshKey, brandId }: { activeSection: C
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                    <p style={{ fontSize: 12, fontWeight: 600, color: "var(--gv-color-neutral-800)", lineHeight: 1.3, flex: 1 }}>{a.title || "Untitled"}</p>
-                    <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 99, background: m.light, color: m.text, whiteSpace: "nowrap", flexShrink: 0 }}>{a.platform || "blog"}</span>
+                    <p style={{ fontSize: 12, fontWeight: 600, color: "var(--gv-color-neutral-800)", lineHeight: 1.3, flex: 1 }}>{a.meta_title || a.topic || "Untitled"}</p>
+                    <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 99, background: m.light, color: m.text, whiteSpace: "nowrap", flexShrink: 0 }}>{a.objective || "blog"}</span>
                   </div>
                   {expanded === a.id && (
                     <p style={{ fontSize: 11, color: "var(--gv-color-neutral-500)", marginTop: 6, lineHeight: 1.5 }}>
-                      {a.body?.slice(0, 200)}{(a.body?.length ?? 0) > 200 ? "…" : ""}
+                      {a.content?.slice(0, 200)}{(a.content?.length ?? 0) > 200 ? "…" : ""}
                     </p>
                   )}
                   <p style={{ fontSize: 10, color: "var(--gv-color-neutral-300)", marginTop: 4 }}>
@@ -697,7 +709,7 @@ function HistoryPanel({ activeSection, refreshKey, brandId }: { activeSection: C
                   ) : (
                     <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <span style={{ fontSize: 11, color: "var(--gv-color-neutral-400)" }}>
-                        {v.status === "processing" ? "Rendering…" : "Processing"}
+                        {v.video_status === "processing" ? "Rendering…" : "Processing"}
                       </span>
                     </div>
                   )}
@@ -731,7 +743,7 @@ export default function ContentPage() {
   const [activeSection, setActiveSection] = useState<ContentSection>("article");
   const [brandId, setBrandId]             = useState<string | null>(null);
   const [refreshKey, setRefreshKey]       = useState(0);
-  const quota = useUserQuota();
+  const { quota: userQuota, loading: quotaLoading } = useUserQuota();
 
   // Load brand
   useEffect(() => {
@@ -799,7 +811,7 @@ export default function ContentPage() {
       {/* Wizard body */}
       <div className="custom-scrollbar" style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
         {/* Quota gate */}
-        {quota.loaded && !quota.feature_content_enabled ? (
+        {!quotaLoading && !userQuota.feature_content_enabled ? (
           <div
             style={{
               padding: "20px",

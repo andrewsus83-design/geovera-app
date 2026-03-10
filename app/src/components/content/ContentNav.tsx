@@ -246,4 +246,3 @@ export function ContentSideNav({ active, onChange }: ContentNavProps) {
   );
 }
 
-export default { ContentPillNav, ContentSideNav };
