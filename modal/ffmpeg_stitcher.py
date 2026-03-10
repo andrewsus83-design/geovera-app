@@ -29,7 +29,7 @@ app = modal.App("geovera-ffmpeg-stitcher")
 image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install("ffmpeg")
-    .pip_install("httpx==0.27.0", "boto3==1.34.0")
+    .pip_install("httpx==0.27.0", "boto3==1.34.0", "fastapi[standard]")
 )
 
 
@@ -77,7 +77,8 @@ def stitch_videos(request: dict) -> dict:
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp = Path(tmpdir)
-        clip_paths: list[Path] = []
+        # Track (path, original_url) pairs to preserve URL mapping after partial failures
+        clip_pairs: list[tuple[Path, str]] = []
 
         # ── 1. Download all clips ─────────────────────────────────────────────
         with httpx.Client(timeout=120, follow_redirects=True) as client:
@@ -87,16 +88,18 @@ def stitch_videos(request: dict) -> dict:
                     resp.raise_for_status()
                     clip_path = tmp / f"clip_{i:03d}.mp4"
                     clip_path.write_bytes(resp.content)
-                    clip_paths.append(clip_path)
+                    clip_pairs.append((clip_path, url))
                     print(f"[ffmpeg] Downloaded clip {i}: {len(resp.content) / 1024:.0f} KB")
                 except Exception as e:
                     print(f"[ffmpeg] Skip clip {i}: {e}")
 
-        if not clip_paths:
+        if not clip_pairs:
             return {"error": "all clip downloads failed", "url": video_urls[0]}
 
-        if len(clip_paths) == 1:
-            return {"url": video_urls[0], "clips": 1, "duration_s": None}
+        if len(clip_pairs) == 1:
+            return {"url": clip_pairs[0][1], "clips": 1, "duration_s": None}
+
+        clip_paths = [p for p, _ in clip_pairs]
 
         # ── 2. Re-encode to uniform H.264 + AAC ──────────────────────────────
         reencoded: list[Path] = []
@@ -117,8 +120,8 @@ def stitch_videos(request: dict) -> dict:
             if result.returncode == 0 and out.exists():
                 reencoded.append(out)
             else:
-                print(f"[ffmpeg] Re-encode failed clip {i}: {result.stderr[-300:]}")
-                reencoded.append(clip)
+                # Skip clips that fail re-encoding — mixing raw codecs in copy-concat produces corrupt output
+                print(f"[ffmpeg] Re-encode failed clip {i}, skipping: {result.stderr[-300:]}")
 
         # ── 3. Build concat list + stitch ────────────────────────────────────
         concat_list = tmp / "concat.txt"
@@ -160,12 +163,16 @@ def stitch_videos(request: dict) -> dict:
 
         # ── 5. Upload to Cloudflare R2 ────────────────────────────────────────
         r2_key = f"videos/{output_key}.mp4"
-        s3.put_object(
-            Bucket=r2_bucket,
-            Key=r2_key,
-            Body=video_bytes,
-            ContentType="video/mp4",
-        )
+        try:
+            s3.put_object(
+                Bucket=r2_bucket,
+                Key=r2_key,
+                Body=video_bytes,
+                ContentType="video/mp4",
+            )
+        except Exception as e:
+            print(f"[ffmpeg] R2 upload failed: {e}")
+            return {"error": f"R2 upload failed: {str(e)[:200]}", "url": video_urls[0]}
 
         public_url = (
             f"{r2_public_url}/{r2_key}"

@@ -19,6 +19,16 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  // Verify internal caller — must send X-Internal-Secret matching INTERNAL_HANDLER_SECRET
+  const internalSecret = Deno.env.get("INTERNAL_HANDLER_SECRET") ?? "";
+  const callerSecret = req.headers.get("x-internal-secret") ?? "";
+  if (!internalSecret || callerSecret !== internalSecret) {
+    return new Response(JSON.stringify({ error: "Forbidden" }), {
+      status: 403,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   try {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",

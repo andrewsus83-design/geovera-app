@@ -270,6 +270,20 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Verify ownership: confirm this brand_profile_id actually belongs to user_id
+    const { data: ownerCheck } = await supabase
+      .from("brand_profiles")
+      .select("id")
+      .eq("id", brand_profile_id)
+      .eq("user_id", user_id)
+      .maybeSingle();
+    if (!ownerCheck) {
+      return new Response(
+        JSON.stringify({ error: "Forbidden: brand profile not found or not owned by user" }),
+        { status: 403, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
     // Check CF credentials
     if (!CF_ACCOUNT_ID || !CF_API_TOKEN) {
       console.error("[brand-vectorize] Missing CLOUDFLARE_ACCOUNT_ID or CLOUDFLARE_API_TOKEN");
