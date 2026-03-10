@@ -675,7 +675,7 @@ function DetailPanel({ selected, section, analyticsReport }: { selected: Selecte
   React.useEffect(() => {
     if (!isPageSpeedFactor || psData.mobile) return;
     setPsLoading(true);
-    const base = "https://vozjwptzutolvkvfpknk.supabase.co/functions/v1/pagespeed-check";
+    const base = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/pagespeed-check`;
     Promise.all([
       fetch(`${base}?url=https://geovera.xyz&strategy=mobile`).then((r) => r.json()),
       fetch(`${base}?url=https://geovera.xyz&strategy=desktop`).then((r) => r.json()),
@@ -1824,7 +1824,6 @@ export default function AnalyticsPage() {
   // ── Auth & subscription ──────────────────────────────────────────
   const { hasActivePlan, loading: quotaLoading } = useUserQuota();
   const [brandId, setBrandId] = useState<string | null>(null);
-  const [brandProfileId, setBrandProfileId] = useState<string | null>(null);
   const hasAccess = hasActivePlan;
 
   // ── Analytics report state ────────────────────────────────────────
@@ -1849,7 +1848,6 @@ export default function AnalyticsPage() {
           .maybeSingle();
         if (bp?.id) {
           setBrandId(bp.id);
-          setBrandProfileId(bp.id);
           setReportLoading(true);
           const { data: report } = await supabase
             .from("analytics_reports")
@@ -1868,14 +1866,14 @@ export default function AnalyticsPage() {
   }, []);
 
   const handleRunAnalysis = async () => {
-    if (!brandProfileId) return;
+    if (!brandId) return;
     setRunAnalysisLoading(true);
     setRunAnalysisStatus("running");
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("No session");
       const res = await supabase.functions.invoke("brand-analytics-scorer", {
-        body: { brand_profile_id: brandProfileId, user_id: session.user.id },
+        body: { brand_profile_id: brandId },
       });
       if (res.error) throw res.error;
       setRunAnalysisStatus("success");
@@ -1883,7 +1881,7 @@ export default function AnalyticsPage() {
       const { data: report } = await supabase
         .from("analytics_reports")
         .select("*")
-        .eq("brand_profile_id", brandProfileId)
+        .eq("brand_profile_id", brandId)
         .eq("status", "ready")
         .order("cycle_number", { ascending: false })
         .limit(1)
@@ -1906,15 +1904,21 @@ export default function AnalyticsPage() {
   // Load from Supabase on mount (only when brandId is set)
   useEffect(() => {
     if (!brandId) return;
-    fetch(`/api/analytics/sync?brand_id=${brandId}`)
-      .then((r) => r.json())
-      .then((res: { success: boolean; data?: DbAnalyticsRow[] }) => {
-        if (res.success && res.data && res.data.length > 0) {
-          setLiveSocialItems(res.data.map(dbRowToSocialItem));
-          setLastSyncAt(res.data[0].synced_at || null);
-        }
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      fetch(`/api/analytics/sync?brand_id=${brandId}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
       })
-      .catch(() => {/* fall back to demo data */});
+        .then((r) => r.json())
+        .then((res: { success: boolean; data?: DbAnalyticsRow[] }) => {
+          if (res.success && res.data && res.data.length > 0) {
+            setLiveSocialItems(res.data.map(dbRowToSocialItem));
+            setLastSyncAt(res.data[0].synced_at || null);
+          }
+        })
+        .catch(() => {/* fall back to demo data */});
+    })();
   }, [brandId]);
 
   // Trigger sync from Late API
@@ -1923,16 +1927,19 @@ export default function AnalyticsPage() {
     setSyncLoading(true);
     setSyncStatus("idle");
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("No session");
+      const authHeader = { Authorization: `Bearer ${session.access_token}` };
       const res = await fetch("/api/analytics/sync", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeader },
         body: JSON.stringify({ brand_id: brandId }),
       });
       const data = await res.json() as { success: boolean; synced?: number; error?: string };
       if (data.success) {
         setSyncStatus("success");
         // Reload from DB
-        const getRes = await fetch(`/api/analytics/sync?brand_id=${brandId}`);
+        const getRes = await fetch(`/api/analytics/sync?brand_id=${brandId}`, { headers: authHeader });
         const getData = await getRes.json() as { success: boolean; data?: DbAnalyticsRow[] };
         if (getData.success && getData.data && getData.data.length > 0) {
           setLiveSocialItems(getData.data.map(dbRowToSocialItem));
@@ -2291,7 +2298,7 @@ export default function AnalyticsPage() {
             </div>
             <button
               onClick={handleRunAnalysis}
-              disabled={runAnalysisLoading || !brandProfileId}
+              disabled={runAnalysisLoading || !brandId}
               className="flex items-center gap-1.5 rounded-[10px] px-3 py-1.5 text-[12px] font-semibold transition-colors disabled:opacity-50 flex-shrink-0"
               style={
                 runAnalysisStatus === "success"

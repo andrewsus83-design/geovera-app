@@ -139,11 +139,41 @@ Where each s is an integer 0-100. No explanation, just JSON.`;
   }
 }
 
+// ── JWT helper ────────────────────────────────────────────────────────────────
+async function verifyAndOwnsBrand(
+  request: NextRequest,
+  brandId: string,
+): Promise<{ ok: true } | { ok: false; response: NextResponse }> {
+  const token = request.headers.get("authorization")?.replace("Bearer ", "").trim();
+  if (!token) {
+    return { ok: false, response: NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: cors }) };
+  }
+  const adminClient = createClient(SUPABASE_URL, SUPABASE_KEY);
+  const { data: { user }, error } = await adminClient.auth.getUser(token);
+  if (error || !user) {
+    return { ok: false, response: NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: cors }) };
+  }
+  // Confirm the authenticated user owns this brand
+  const { data: brand } = await adminClient
+    .from("brand_profiles")
+    .select("id")
+    .eq("id", brandId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!brand) {
+    return { ok: false, response: NextResponse.json({ error: "Forbidden" }, { status: 403, headers: cors }) };
+  }
+  return { ok: true };
+}
+
 // ── Main POST handler ──────────────────────────────────────────────────────────
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({})) as { brand_id?: string };
     const brandId = body.brand_id || DEMO_BRAND_ID;
+
+    const auth = await verifyAndOwnsBrand(request, brandId);
+    if (!auth.ok) return auth.response;
 
     if (!LATE_API_KEY) {
       return NextResponse.json({ success: false, error: "LATE_API_KEY not configured" }, { status: 500, headers: cors });
@@ -293,6 +323,10 @@ export async function POST(request: NextRequest) {
 // ── GET: load analytics from Supabase ────────────────────────────────────────
 export async function GET(request: NextRequest) {
   const brandId = request.nextUrl.searchParams.get("brand_id") || DEMO_BRAND_ID;
+
+  const auth = await verifyAndOwnsBrand(request, brandId);
+  if (!auth.ok) return auth.response;
+
   if (!SUPABASE_KEY) {
     return NextResponse.json({ success: true, data: [] }, { headers: cors });
   }

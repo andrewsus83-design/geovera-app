@@ -208,7 +208,7 @@ export default function AutoReplyPage() {
     // Fetch historical stats from edge function
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.access_token && brandId) {
-      fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/social-auto-reply`, {
+      await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/social-auto-reply`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
         body: JSON.stringify({ action: "get_stats", brand_id: brandId }),
@@ -250,7 +250,10 @@ export default function AutoReplyPage() {
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
   }, [comments, repliedComments, selectedDateKey, filter, platformFilter]);
 
-  const selectedComment = [...comments, ...repliedComments].find(c => c.id === selectedId) ?? null;
+  const selectedComment = useMemo(
+    () => [...comments, ...repliedComments].find(c => c.id === selectedId) ?? null,
+    [comments, repliedComments, selectedId],
+  );
 
   const todayDateKey = new Date().toISOString().slice(0, 10);
 
@@ -558,7 +561,7 @@ export default function AutoReplyPage() {
             return (
               <button
                 key={f.key}
-                onClick={() => setFilter(f.key)}
+                onClick={() => { setFilter(f.key); setPlatformFilter("all"); }}
                 className="flex-1 text-center text-[13px] font-semibold transition-all duration-200"
                 style={{
                   borderRadius: "var(--gv-radius-full)",
