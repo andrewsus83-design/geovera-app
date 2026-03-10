@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import ThreeColumnLayout from "@/components/shared/ThreeColumnLayout";
 import NavColumn from "@/components/shared/NavColumn";
+import { AnalyticsPillNav, AnalyticsTabBar } from "@/components/analytics/AnalyticsNav";
 import { supabase } from "@/lib/supabase";
 import { useUserQuota } from "@/hooks/useUserQuota";
 
@@ -2222,33 +2223,17 @@ export default function AnalyticsPage() {
           </div>
 
         {/* ── Section nav pills ── */}
-        <div className="flex gap-1.5 mt-0">
-          {([
-            { key: "overview", label: "Overview", score: analyticsReport?.overall_score, color: "#16A34A" },
-            { key: "seo",      label: "SEO",      score: analyticsReport?.seo_score,     color: "#1D4ED8" },
-            { key: "geo",      label: "GEO",      score: analyticsReport?.geo_score,     color: "#7C3AED" },
-            { key: "social",   label: "Social",   score: analyticsReport?.social_score,  color: "#DB2777" },
-          ] as { key: AnalyticsSection; label: string; score?: number | null; color: string }[]).map(({ key, label, score, color }) => {
-            const isActive = activeSection === key;
-            return (
-              <button
-                key={key}
-                onClick={() => handleSectionChange(key)}
-                className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-semibold transition-all"
-                style={{
-                  background: isActive ? color + "15" : "var(--gv-color-neutral-100)",
-                  color: isActive ? color : "var(--gv-color-neutral-500)",
-                  border: `1.5px solid ${isActive ? color + "40" : "transparent"}`,
-                }}
-              >
-                {label}
-                {score !== null && score !== undefined && (
-                  <span className="text-[10px] font-bold opacity-80">{score}</span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+        <AnalyticsPillNav
+          activeSection={activeSection}
+          onSectionChange={handleSectionChange}
+          scores={{
+            overall: analyticsReport?.overall_score,
+            seo: analyticsReport?.seo_score,
+            geo: analyticsReport?.geo_score,
+            social: analyticsReport?.social_score,
+          }}
+          loading={reportLoading}
+        />
       </div>
 
       {/* ── Scrollable content body ── */}
@@ -2259,26 +2244,58 @@ export default function AnalyticsPage() {
         <div>
           {/* Score Cards */}
           <div className="grid grid-cols-2 gap-2 mb-4">
-            {[
-              { label: "Overall", score: analyticsReport?.overall_score, delta: analyticsReport?.overall_delta, color: "#16A34A", bg: "#DCFCE7" },
-              { label: "SEO", score: analyticsReport?.seo_score, delta: analyticsReport?.seo_delta, color: "#1D4ED8", bg: "#EFF6FF" },
-              { label: "GEO", score: analyticsReport?.geo_score, delta: analyticsReport?.geo_delta, color: "#7C3AED", bg: "#F5F3FF" },
-              { label: "Social", score: analyticsReport?.social_score, delta: analyticsReport?.social_delta, color: "#DB2777", bg: "#FDF2F8" },
-            ].map((c) => (
-              <div key={c.label} className="rounded-[14px] p-3 flex flex-col gap-1" style={{ background: c.bg, border: `1px solid ${c.color}22` }}>
-                <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: `${c.color}99` }}>{c.label}</p>
+            {([
+              { label: "Overall", score: analyticsReport?.overall_score, delta: analyticsReport?.overall_delta, mode: "general" as const },
+              { label: "SEO",     score: analyticsReport?.seo_score,     delta: analyticsReport?.seo_delta,     mode: "seo"     as const },
+              { label: "GEO",     score: analyticsReport?.geo_score,     delta: analyticsReport?.geo_delta,     mode: "geo"     as const },
+              { label: "Social",  score: analyticsReport?.social_score,  delta: analyticsReport?.social_delta,  mode: "social"  as const },
+            ] as { label: string; score?: number | null; delta?: number | null; mode: "general" | "seo" | "geo" | "social" }[]).map((c) => (
+              <div
+                key={c.label}
+                className="rounded-[14px] p-3 flex flex-col gap-1"
+                style={{
+                  background: `var(--gv7-mode-${c.mode}-light)`,
+                  border: `1px solid var(--gv7-mode-${c.mode}-border)`,
+                }}
+              >
+                <p
+                  className="text-[10px] font-bold uppercase tracking-wider"
+                  style={{ color: `var(--gv7-mode-${c.mode}-text)`, opacity: 0.7 }}
+                >
+                  {c.label}
+                </p>
                 <div className="flex items-end gap-1.5">
-                  <span className="text-[28px] font-bold leading-none" style={{ color: c.color, fontFamily: "var(--gv-font-heading)" }}>
+                  <span
+                    className="text-[28px] font-bold leading-none"
+                    style={{ color: `var(--gv7-mode-${c.mode}-text)`, fontFamily: "var(--gv-font-heading)" }}
+                  >
                     {reportLoading ? "—" : c.score ?? "—"}
                   </span>
                   {c.delta !== null && c.delta !== undefined && (
-                    <span className="text-[11px] font-semibold mb-0.5" style={{ color: c.delta >= 0 ? "#16A34A" : "#DC2626" }}>
+                    <span
+                      className="text-[11px] font-semibold mb-0.5"
+                      style={{ color: c.delta >= 0 ? "var(--gv7-mode-general-text)" : "#DC2626" }}
+                    >
                       {c.delta >= 0 ? "↑" : "↓"}{Math.abs(c.delta)}
                     </span>
                   )}
                 </div>
-                <div style={{ height: 4, borderRadius: 99, background: `${c.color}22` }}>
-                  <div style={{ height: 4, borderRadius: 99, background: c.color, width: `${c.score ?? 0}%`, transition: "width 0.4s" }} />
+                <div
+                  style={{
+                    height: 4,
+                    borderRadius: 99,
+                    background: `var(--gv7-mode-${c.mode}-border)`,
+                  }}
+                >
+                  <div
+                    style={{
+                      height: 4,
+                      borderRadius: 99,
+                      background: `var(--gv7-mode-${c.mode}-accent)`,
+                      width: `${c.score ?? 0}%`,
+                      transition: `width var(--gv-duration-slow) var(--gv-easing-default)`,
+                    }}
+                  />
                 </div>
               </div>
             ))}
@@ -2750,60 +2767,17 @@ export default function AnalyticsPage() {
 
       {/* ── Sticky bottom tabs — Overview / SEO / GEO / Social ── */}
       <div className="flex-shrink-0 overflow-hidden rounded-b-xl" style={{ borderTop: "1px solid var(--gv-color-neutral-200)" }}>
-        <div className="flex h-full">
-          {([
-            {
-              key: "overview" as AnalyticsSection,
-              label: "Overview",
-              icon: (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
-                </svg>
-              ),
-            },
-            {
-              key: "seo" as AnalyticsSection,
-              label: "SEO",
-              icon: (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-                </svg>
-              ),
-            },
-            {
-              key: "geo" as AnalyticsSection,
-              label: "GEO",
-              icon: (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
-                </svg>
-              ),
-            },
-            {
-              key: "social" as AnalyticsSection,
-              label: "Social",
-              icon: (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-                </svg>
-              ),
-            },
-          ]).map(({ key, icon, label }) => (
-            <button
-              key={key}
-              onClick={() => handleSectionChange(key)}
-              className="flex-1 flex flex-col items-center justify-center gap-0.5 py-3 text-[11px] font-medium transition-colors border-r last:border-r-0"
-              style={{
-                borderColor: "var(--gv-color-neutral-200)",
-                background: activeSection === key ? "var(--gv-color-primary-50)" : "var(--gv-color-bg-surface)",
-                color: activeSection === key ? "var(--gv-color-primary-600)" : "var(--gv-color-neutral-400)",
-              }}
-            >
-              {icon}
-              <span>{label}</span>
-            </button>
-          ))}
-        </div>
+        <AnalyticsTabBar
+          activeSection={activeSection}
+          onSectionChange={handleSectionChange}
+          scores={{
+            overall: analyticsReport?.overall_score,
+            seo: analyticsReport?.seo_score,
+            geo: analyticsReport?.geo_score,
+            social: analyticsReport?.social_score,
+          }}
+          loading={reportLoading}
+        />
       </div>
     </div>
   );
