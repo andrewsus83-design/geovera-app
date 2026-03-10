@@ -5,9 +5,7 @@ const SUPABASE_URL =
   process.env.SUPABASE_URL || "https://vozjwptzutolvkvfpknk.supabase.co";
 // Use the anon key for JWT verification — no server-side secret required in Vercel.
 // The edge function creates its own admin client with the auto-injected service key.
-const SUPABASE_ANON_KEY =
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZvemp3cHR6dXRvbHZrdmZwa25rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk4ODI0NzcsImV4cCI6MjA4NTQ1ODQ3N30.p-RiTR1Iva9Y4KiZu8gnF2CZjvnMWNAHUVCbp57PDF8";
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
