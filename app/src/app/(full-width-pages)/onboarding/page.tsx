@@ -119,7 +119,7 @@ export default function OnboardingPage() {
         .eq("id", session.user.id)
         .single()
         .then(({ data }) => {
-          if (data?.onboarding_completed) router.replace("/subscription");
+          if (data?.onboarding_completed) router.replace("/start");
         });
     });
   }, [router]);
@@ -197,7 +197,7 @@ export default function OnboardingPage() {
     }
 
     setDone(true);
-    setTimeout(() => router.replace("/subscription"), 2500);
+    setTimeout(() => router.replace("/start"), 2500);
   }
 
   if (!userId) {
