@@ -978,10 +978,8 @@ Return JSON only: {"caption":"Instagram caption (max 200 chars)","hashtags":["#t
 
       if (RUNWAY_API_SECRET) {
         try {
-          // ── STEP 2: Flux Schnell — 1-2 candidates per scene, max 15 total ─────
-          // candidatesPerScene: distribute 15 budget across scenes (1-2 per scene)
-          const MAX_IMG_TOTAL = 15;
-          const candidatesPerScene = Math.min(2, Math.max(1, Math.floor(MAX_IMG_TOTAL / scenes.length)));
+          // ── STEP 2: Flux Schnell — 2 candidates per scene, max 10 scenes → 20 imgs → 1 scoring call ─────
+          const candidatesPerScene = 2;
           const sceneImageBatches = await Promise.all(
             scenes.map(async (scene) => {
               try {
