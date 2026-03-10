@@ -117,6 +117,7 @@ export default function AutoReplyPage() {
   const [aiEnabled, setAIEnabled]       = useState(true);
   const [aiTone, setAITone]             = useState<"professional" | "friendly" | "casual">("friendly");
   const [filter, setFilter]             = useState<"all" | "unreplied" | "replied">("unreplied");
+  const [platformFilter, setPlatformFilter] = useState<string>("all");
   const [sending, setSending]           = useState(false);
   const [syncing, setSyncing]           = useState(false);
   const [replyingAll, setReplyingAll]   = useState(false);
@@ -242,15 +243,22 @@ export default function AutoReplyPage() {
 
   const filteredComments = useMemo(() => {
     const byDate = (arr: CommentItem[]) => arr.filter(c => toDateKey(c.created_at) === selectedDateKey);
-    if (filter === "unreplied") return byDate(comments);
-    if (filter === "replied")   return byDate(repliedComments);
-    return [...byDate(comments), ...byDate(repliedComments)]
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  }, [comments, repliedComments, selectedDateKey, filter]);
+    const byPlatform = (arr: CommentItem[]) => platformFilter === "all" ? arr : arr.filter(c => c.platform.toLowerCase() === platformFilter);
+    if (filter === "unreplied") return byPlatform(byDate(comments));
+    if (filter === "replied")   return byPlatform(byDate(repliedComments));
+    return byPlatform([...byDate(comments), ...byDate(repliedComments)]
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
+  }, [comments, repliedComments, selectedDateKey, filter, platformFilter]);
 
   const selectedComment = [...comments, ...repliedComments].find(c => c.id === selectedId) ?? null;
 
   const todayDateKey = new Date().toISOString().slice(0, 10);
+
+  /* ── Available platforms (for filter pills) ── */
+  const availablePlatforms = useMemo(() => {
+    const platforms = new Set([...comments, ...repliedComments].map(c => c.platform.toLowerCase()));
+    return Array.from(platforms);
+  }, [comments, repliedComments]);
 
   /* ── Tab counts ── */
   const countUnreplied = useMemo(() => comments.filter(c => toDateKey(c.created_at) === selectedDateKey).length, [comments, selectedDateKey]);
@@ -572,6 +580,31 @@ export default function AutoReplyPage() {
           })}
         </div>
       </div>
+
+      {/* ─── Platform filter pills (only when multiple platforms) ─── */}
+      {availablePlatforms.length > 1 && (
+        <div className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 overflow-x-auto no-scrollbar"
+          style={{ borderBottom: "1px solid var(--gv-color-neutral-100)" }}>
+          {["all", ...availablePlatforms].map((p) => {
+            const isActive = platformFilter === p;
+            return (
+              <button
+                key={p}
+                onClick={() => setPlatformFilter(p)}
+                className="flex-shrink-0 flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize transition-all"
+                style={{
+                  background: isActive ? "var(--gv-color-primary-100)" : "var(--gv-color-neutral-100)",
+                  color: isActive ? "var(--gv-color-primary-700)" : "var(--gv-color-neutral-500)",
+                  border: `1px solid ${isActive ? "var(--gv-color-primary-200)" : "transparent"}`,
+                }}
+              >
+                {p !== "all" && <PlatformIcon id={p} size={12} />}
+                {p === "all" ? "All Platforms" : p}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* ─── Comment list — dynamic height ─── */}
       <div
