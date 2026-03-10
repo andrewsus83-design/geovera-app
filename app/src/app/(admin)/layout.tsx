@@ -4,7 +4,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 // Routes inside (admin) that don't need an active subscription
-const OPEN_PATHS = ["/backend", "/pricing"];
+const OPEN_PATHS = ["/backend", "/subscription"];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -33,8 +33,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       // Active users get in
       if (profile?.status === "active") { setReady(true); return; }
 
-      // Everyone else → pricing / waiting
-      router.replace("/pricing");
+      // Everyone else → start (brand intelligence teaser + subscription CTA)
+      router.replace("/start");
     }
     gate();
   }, [pathname, router]);
