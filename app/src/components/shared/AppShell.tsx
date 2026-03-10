@@ -83,10 +83,10 @@ const NAV_ITEMS = [
 
 /* Submenu items per section */
 const SUBMENUS: Record<string, string[]> = {
-  "/start":           [],
-  "/ai-chat":         ["Chat", "Documents", "History"],
+  "/start":           ["101 Brand", "Chronicle", "Connect", "Subscription"],
+  "/ai-chat":         ["Chat", "Docs", "History"],
   "/content-studio":  ["Article", "Image", "Video"],
-  "/auto-reply":      ["Manual Reply", "Auto Reply", "Setting"],
+  "/auto-reply":      ["Manual", "Auto", "Setting"],
   "/analytics":       ["SEO", "GEO", "Social Search"],
 };
 
