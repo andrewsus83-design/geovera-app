@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
     const verifiedBody = { ...body, user_id: user.id };
 
     // ── Forward to edge function ─────────────────────────────────────
-    // manual-payment-handler has verify_jwt:false and creates its own admin client
+    // manual-payment-handler has verify_jwt:false — protected by X-Internal-Secret
     const response = await fetch(
       `${SUPABASE_URL}/functions/v1/manual-payment-handler`,
       {
@@ -71,6 +71,7 @@ export async function POST(request: NextRequest) {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          "x-internal-secret": process.env.INTERNAL_HANDLER_SECRET ?? "",
         },
         body: JSON.stringify(verifiedBody),
       }

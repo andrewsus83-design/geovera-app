@@ -385,8 +385,8 @@ Deno.serve(async (req: Request) => {
       .eq("id", brandProfileId);
 
     // 4. Determine if this is a refresh run and build previous context
-    const currentVersion = profile.research_version ?? 1;
-    const isRefresh = currentVersion > 1 && !!profile.research_data;
+    const currentVersion = profile.research_version ?? 0;
+    const isRefresh = currentVersion > 0 && !!profile.research_data && !!profile.research_hash;
     const previousData = profile.research_data as Record<string, unknown> ?? {};
     const previousContext = isRefresh
       ? buildPreviousContext(previousData, currentVersion, profile.research_completed_at ?? "")
@@ -402,7 +402,7 @@ Deno.serve(async (req: Request) => {
     };
 
     const systemInstruction = buildSystem(profile.country, isRefresh);
-    const nextVersion = currentVersion + (isRefresh ? 1 : 0);
+    const nextVersion = currentVersion + 1;
 
     console.log(`[brand-indexer-gemini] Starting v${nextVersion} ${isRefresh ? "REFRESH" : "INITIAL"}: ${profile.brand_name} (${profile.country})`);
     console.log(`[brand-indexer-gemini] Hash: ${newHash}`);

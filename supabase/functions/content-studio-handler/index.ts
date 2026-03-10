@@ -81,11 +81,11 @@ async function uploadToR2(path: string, body: Uint8Array, contentType: string): 
       headers: { "host": host, "content-type": contentType, "x-amz-content-sha256": bodyHash, "x-amz-date": dtStr, "authorization": auth },
       body,
     });
-    if (!res.ok) { console.error(`R2 upload failed ${res.status}: await res.text()`); return null; }
+    if (!res.ok) { console.error(`R2 upload failed ${res.status}: ${await res.text()}`); return null; }
 
     return R2_PUBLIC_URL
       ? `${R2_PUBLIC_URL.replace(/\/$/, "")}/${path}`
-      : `https://${host}/${R2_BUCKET}/${path}`;
+      : `https://${host}/${path}`;
   } catch (e) { console.error("R2 upload error:", e); return null; }
 }
 
@@ -468,7 +468,7 @@ async function claudeBatchScoreScenes(
       if (!res.ok) continue;
       const d = await res.json();
       const raw = d.content?.[0]?.text ?? "";
-      const match = raw.match(/\{[\s\S]*?\}/);
+      const match = raw.match(/\{[\s\S]*\}/);
       if (!match) continue;
       const arr: Array<{ i: number; t: number }> = JSON.parse(match[0]).s ?? [];
       for (const { i, t } of arr) {
@@ -1096,8 +1096,8 @@ Return JSON only: {"caption":"Instagram caption (max 200 chars)","hashtags":["#t
           scene_image_urls = scenes.map(s => bestUrlBySceneIndex.get(s.index) ?? "").filter(Boolean);
 
           // ── STEP 4: Runway Gen 4 Turbo per scene with Claude-written runway prompts ──
-          const runwayTasks = await Promise.all(
-            scenes.map((scene, i) =>
+          const runwayResults = await Promise.allSettled(
+            scenes.map((scene) =>
               runwayCreateTask({
                 prompt: scene.runway_prompt,
                 imageUrl: bestUrlBySceneIndex.get(scene.index) ?? (image_url ? String(image_url) : null),
@@ -1106,8 +1106,12 @@ Return JSON only: {"caption":"Instagram caption (max 200 chars)","hashtags":["#t
               })
             )
           );
-          task_id = runwayTasks[0].id;
-          extra_task_ids = runwayTasks.slice(1).map(t => t.id);
+          const successfulTasks = runwayResults
+            .map((r) => (r.status === "fulfilled" ? r.value : null))
+            .filter((t): t is { id: string } => t !== null && !!t.id);
+          if (successfulTasks.length === 0) throw new Error("All Runway task creations failed");
+          task_id = successfulTasks[0].id;
+          extra_task_ids = successfulTasks.slice(1).map(t => t.id);
           status = "processing";
         } catch (e) {
           console.error("Runway cinematic pipeline failed, falling back to KIE:", e);
@@ -1323,8 +1327,9 @@ Return JSON only: {"caption":"<200 chars>","hashtags":["#tag1","#tag2","#tag3","
             let allDone = true;
             for (const r of extraResults) {
               if (r.status === "fulfilled") {
-                if (r.value.status !== "completed") allDone = false;
-                if (r.value.video_url) allVideoUrls.push(r.value.video_url);
+                if (r.value.status !== "completed") { allDone = false; }
+                else if (r.value.video_url) { allVideoUrls.push(r.value.video_url); }
+                else { allDone = false; } // completed but no URL — treat as not done
               } else { allDone = false; }
             }
             if (allDone && allVideoUrls.length > 1) {
@@ -1665,7 +1670,7 @@ Return ONLY valid JSON:
         .maybeSingle();
 
       const brandName = bp?.brand_name ?? (brand_context as Record<string, string> | null)?.brand_name ?? "Brand";
-      const country = bp?.brand_country ?? (brand_context as Record<string, string> | null)?.country ?? "Indonesia";
+      const country = bp?.country ?? (brand_context as Record<string, string> | null)?.country ?? "Indonesia";
       const dna = (bp?.brand_dna ?? {}) as Record<string, unknown>;
       const sot = (bp?.source_of_truth ?? {}) as Record<string, unknown>;
       const kwi = sot.keyword_intelligence as Record<string, unknown> | null;

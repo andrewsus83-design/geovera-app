@@ -342,14 +342,11 @@ ${JSON.stringify(sot, null, 2).slice(0, 12000)}
 - When discussing competitors, name them and explain what to do differently
 - End responses with 2-3 clear "Next Steps" the user can take today`;
 
-      // Build Claude messages
-      const claudeMessages = [
-        ...(conversationHistory || []).map((msg: { role: string; message: string }) => ({
-          role: msg.role as "user" | "assistant",
-          content: msg.message,
-        })),
-        { role: "user" as const, content: message },
-      ];
+      // Build Claude messages — history already includes the current user message (inserted above)
+      const claudeMessages = (conversationHistory || []).map((msg: { role: string; message: string }) => ({
+        role: msg.role as "user" | "assistant",
+        content: msg.message,
+      }));
 
       const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -469,7 +466,7 @@ ${JSON.stringify(sot, null, 2).slice(0, 12000)}
     }
 
     const openaiData = await openaiResponse.json();
-    const aiResponse = openaiData.choices[0].message.content;
+    const aiResponse = openaiData.choices?.[0]?.message?.content ?? "";
     const tokensUsed = openaiData.usage?.total_tokens || 0;
     const promptTokens = openaiData.usage?.prompt_tokens || 0;
     const completionTokens = openaiData.usage?.completion_tokens || 0;
