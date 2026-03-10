@@ -188,6 +188,12 @@ Deno.serve(async (req) => {
 
       if (error) throw error;
 
+      // Grant dashboard access
+      await supabase
+        .from("user_profiles")
+        .update({ status: "active" })
+        .eq("id", user_id);
+
       return new Response(JSON.stringify({ success: true, message: "Free trial activated" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
