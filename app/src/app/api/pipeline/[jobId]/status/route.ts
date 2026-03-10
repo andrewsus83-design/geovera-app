@@ -26,20 +26,17 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: cors });
     }
     const token = authHeader.slice(7);
-    const userClient = createClient(SUPABASE_URL, ANON_KEY, {
-      global: { headers: { Authorization: `Bearer ${token}` } },
-    });
-    const { data: { user }, error: authError } = await userClient.auth.getUser();
+    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+    const { data: { user }, error: authError } = await admin.auth.getUser(token);
     if (authError || !user) {
       return NextResponse.json({ error: "Invalid session" }, { status: 401, headers: cors });
     }
 
-    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-
     // Get brand_id for this user
     const { data: userBrand } = await admin
-      .from("user_brands").select("brand_id").eq("user_id", user.id).single();
+      .from("brand_profiles").select("id").eq("user_id", user.id).maybeSingle();
     if (!userBrand) return NextResponse.json({ error: "No brand" }, { status: 400, headers: cors });
+    const brandId = userBrand.id;
 
     // Fetch job (must belong to this brand)
     const { data: job, error: jobErr } = await admin
@@ -55,7 +52,7 @@ export async function GET(
         created_at, updated_at
       `)
       .eq("id", jobId)
-      .eq("brand_id", userBrand.brand_id)
+      .eq("brand_id", brandId)
       .eq("is_visual_pipeline", true)
       .single();
 
@@ -77,7 +74,7 @@ export async function GET(
 
     // Quota for display
     const { data: quota } = await admin
-      .rpc("get_visual_quota", { p_brand_id: userBrand.brand_id });
+      .rpc("get_visual_quota", { p_brand_id: brandId });
 
     return NextResponse.json({
       job_id:              job.id,
@@ -113,8 +110,8 @@ export async function GET(
       updated_at:          job.updated_at,
     }, { headers: cors });
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[pipeline/status]", err);
-    return NextResponse.json({ error: err.message }, { status: 500, headers: cors });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500, headers: cors });
   }
 }

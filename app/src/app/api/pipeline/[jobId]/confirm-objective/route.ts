@@ -26,19 +26,16 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: cors });
     }
     const token = authHeader.slice(7);
-    const userClient = createClient(SUPABASE_URL, ANON_KEY, {
-      global: { headers: { Authorization: `Bearer ${token}` } },
-    });
-    const { data: { user }, error: authError } = await userClient.auth.getUser();
+    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+    const { data: { user }, error: authError } = await admin.auth.getUser(token);
     if (authError || !user) {
       return NextResponse.json({ error: "Invalid session" }, { status: 401, headers: cors });
     }
 
-    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
     const { data: userBrand } = await admin
-      .from("user_brands").select("brand_id").eq("user_id", user.id).single();
+      .from("brand_profiles").select("id").eq("user_id", user.id).maybeSingle();
     if (!userBrand) return NextResponse.json({ error: "No brand" }, { status: 400, headers: cors });
-    const brand_id = userBrand.brand_id;
+    const brand_id = userBrand.id;
 
     const { data: job } = await admin
       .from("gv_content_jobs")
@@ -56,11 +53,17 @@ export async function POST(
       }, { status: 409, headers: cors });
     }
 
-    // ── Validate objectives ───────────────────────────────────────────────────
     const body = await request.json();
     const { objectives } = body;
-    // objectives: [{objective_type: string, weight: number}]
 
+    // ── "← Change images" cancel/refund path — check BEFORE objective validation ─
+    if (body.cancel === true) {
+      await admin.from("gv_content_jobs").update({ status: "cancelled" }).eq("id", jobId);
+      await admin.rpc("refund_visual_submission", { p_brand_id: brand_id });
+      return NextResponse.json({ success: true, refunded: true }, { headers: cors });
+    }
+
+    // ── Validate objectives ───────────────────────────────────────────────────
     if (!objectives || !Array.isArray(objectives) || objectives.length === 0) {
       return NextResponse.json({ error: "At least one objective required" }, { status: 400, headers: cors });
     }
@@ -71,19 +74,12 @@ export async function POST(
       }, { status: 403, headers: cors });
     }
 
-    const totalWeight = objectives.reduce((s: number, o: any) => s + (o.weight || 0), 0);
+    const totalWeight = objectives.reduce((s: number, o: { weight?: number }) => s + (o.weight || 0), 0);
     if (Math.abs(totalWeight - 1.0) > 0.01) {
       return NextResponse.json({
         error: `Objective weights must sum to 1.0 (got ${totalWeight.toFixed(2)})`,
         code: "INVALID_WEIGHTS",
       }, { status: 400, headers: cors });
-    }
-
-    // ── "← Change images" refund path ────────────────────────────────────────
-    if (body.cancel === true) {
-      await admin.from("gv_content_jobs").update({ status: "cancelled" }).eq("id", jobId);
-      await admin.rpc("refund_visual_submission", { p_brand_id: brand_id });
-      return NextResponse.json({ success: true, refunded: true }, { headers: cors });
     }
 
     // ── Update job + trigger Stage 1 ─────────────────────────────────────────
@@ -105,8 +101,8 @@ export async function POST(
 
     return NextResponse.json({ success: true, status: "confirmed" }, { headers: cors });
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[pipeline/confirm-objective]", err);
-    return NextResponse.json({ error: err.message }, { status: 500, headers: cors });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500, headers: cors });
   }
 }

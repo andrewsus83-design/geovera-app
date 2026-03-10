@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...body, user_id: user.id }),
       }
     );
 
@@ -54,10 +54,9 @@ export async function POST(request: NextRequest) {
       status: response.ok ? 200 : response.status,
       headers: cors,
     });
-  } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : "Internal server error";
+  } catch {
     return NextResponse.json(
-      { success: false, error: msg },
+      { success: false, error: "Internal server error" },
       { status: 500, headers: cors }
     );
   }

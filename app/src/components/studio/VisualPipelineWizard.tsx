@@ -33,7 +33,6 @@ interface JobStatus {
   video_outputs: { cdn_url: string; duration_sec: number }[];
   quota: { submissions_remaining: number; reset_at: string } | null;
 }
-interface GvTask { id: string; title: string; status: string; }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const OBJECTIVES: { key: ObjectiveKey; label: string; desc: string; icon: string }[] = [
@@ -466,8 +465,6 @@ export default function VisualPipelineWizard({ brandId, plan }: {
   const [platforms, setPlatforms]       = useState<PlatformKey[]>(["tiktok_9_16", "instagram_1_1"]);
   const [videoRequested, setVideoReq]   = useState(false);
   const [brandNotes, setBrandNotes]     = useState("");
-  const [linkedTaskId, setLinkedTaskId] = useState<string>("");
-  const [tasks, setTasks]               = useState<GvTask[]>([]);
 
   // Quota
   const [quota, setQuota]   = useState<QuotaInfo | null>(null);
@@ -483,22 +480,13 @@ export default function VisualPipelineWizard({ brandId, plan }: {
   const maxObj       = quota?.max_objectives || (plan === "partner" ? 3 : plan === "premium" ? 2 : 1);
   const videoAllowed = quota?.video_available || false;
 
-  // ── Load quota + tasks ────────────────────────────────────────────────────
+  // ── Load quota ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!brandId) return;
     setLoadingQ(true);
     apiFetch("/api/quota/visual")
       .then((d) => { if (d.quota) setQuota(d.quota); })
       .finally(() => setLoadingQ(false));
-
-    // Load tasks for linking
-    supabase.from("gv_tasks")
-      .select("id, title, status")
-      .eq("brand_id", brandId)
-      .eq("status", "todo")
-      .order("created_at", { ascending: false })
-      .limit(20)
-      .then(({ data }) => setTasks(data || []));
   }, [brandId]);
 
   // ── Poll job status ───────────────────────────────────────────────────────
@@ -541,7 +529,6 @@ export default function VisualPipelineWizard({ brandId, plan }: {
           target_platforms: platforms,
           video_requested: videoRequested && videoAllowed && platforms.includes("tiktok_9_16"),
           brand_notes: brandNotes || undefined,
-          linked_task_id: linkedTaskId || undefined,
         }),
       });
 
@@ -566,7 +553,7 @@ export default function VisualPipelineWizard({ brandId, plan }: {
   const resetForm = () => {
     setImages([]); setObjectives([{ objective_type: "brand_campaign", weight: 1.0 }]);
     setPlatforms(["tiktok_9_16", "instagram_1_1"]); setVideoReq(false);
-    setBrandNotes(""); setLinkedTaskId(""); setJobId(null);
+    setBrandNotes(""); setJobId(null);
     setJobStatus(null); setError(null); setStep("form");
     // Refresh quota
     apiFetch("/api/quota/visual").then((d) => { if (d.quota) setQuota(d.quota); });
@@ -644,30 +631,6 @@ export default function VisualPipelineWizard({ brandId, plan }: {
             </div>
           </label>
         )}
-
-        {/* 5. Link to Task */}
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-wider mb-2"
-            style={{ color: "var(--gv-color-neutral-500)" }}>
-            4 · Link to Task <span className="font-normal normal-case" style={{ color: "var(--gv-color-neutral-400)" }}>(optional)</span>
-          </p>
-          <select
-            value={linkedTaskId}
-            onChange={(e) => setLinkedTaskId(e.target.value)}
-            className="w-full px-3 py-2 text-[12px]"
-            style={{
-              borderRadius: "var(--gv-radius-sm)", outline: "none",
-              border: "1px solid var(--gv-color-neutral-200)",
-              background: "var(--gv-color-bg-surface)",
-              color: "var(--gv-color-neutral-700)",
-            }}
-          >
-            <option value="">— No task link —</option>
-            {tasks.map((t) => (
-              <option key={t.id} value={t.id}>{t.title}</option>
-            ))}
-          </select>
-        </div>
 
         {/* 5. Brand notes */}
         <div>

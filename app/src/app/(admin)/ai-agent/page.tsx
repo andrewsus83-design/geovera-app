@@ -140,20 +140,20 @@ export default function AIAgentPage() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
-        const { data: ub } = await supabase
-          .from("user_brands")
-          .select("brand_id")
+        const { data: bp } = await supabase
+          .from("brand_profiles")
+          .select("id")
           .eq("user_id", user.id)
-          .order("created_at", { ascending: true })
+          .order("created_at", { ascending: false })
           .limit(1)
-          .single();
-        if (!ub?.brand_id) return;
-        setBrandId(ub.brand_id);
+          .maybeSingle();
+        if (!bp?.id) return;
+        setBrandId(bp.id);
         // Fetch subscription tier
         const res = await fetch("/api/payment", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "get_subscription", brand_id: ub.brand_id }),
+          body: JSON.stringify({ action: "get_subscription", brand_id: bp.id }),
         });
         const sub = await res.json();
         if (sub.success) {

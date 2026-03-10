@@ -1950,15 +1950,19 @@ export default function GettingStartedPage() {
       }
     });
 
-    supabase
-      .from("gv_brands")
-      .select("name, subscription_tier")
-      .eq("id", FALLBACK_BRAND_ID)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data?.name) setBrandName(data.name);
-        if (data?.subscription_tier) setBrandTier(data.subscription_tier);
-      });
+    supabase.auth.getUser().then(({ data: { user: u } }) => {
+      if (!u) return;
+      supabase
+        .from("brand_profiles")
+        .select("brand_name")
+        .eq("user_id", u.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data?.brand_name) setBrandName(data.brand_name);
+        });
+    });
 
     // Fetch connected platform count from Supabase
     supabase

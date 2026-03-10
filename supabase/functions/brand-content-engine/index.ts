@@ -131,35 +131,23 @@ Deno.serve(async (req: Request) => {
       very_long: 3000,
     };
 
-    // Look up brand in gv_brands to use with existing generate-article function
-    const { data: gvBrand } = await supabase
-      .from("gv_brands")
-      .select("id")
-      .eq("user_id", user_id)
-      .single();
-
-    if (gvBrand?.id) {
-      // Use existing generate-article pipeline (GPT-4o + Claude parallel)
-      supabase.functions.invoke("generate-article", {
-        body: {
-          brand_id: gvBrand.id,
-          topic: selectedTopic,
-          target_platform: selectedPlatform,
-          target_length: wordCountMap[format],
-          target_keyword: targetKeyword,
-          brand_context: brandContext,
-          auto_generate_image: true,
-          auto_generate_video: false,
-        },
-      }).then(() => {
-        console.log(`[brand-content-engine] generate-article invoked for "${selectedTopic}"`);
-      }).catch((e: Error) => {
-        console.error(`[brand-content-engine] generate-article failed: ${e.message}`);
-      });
-    } else {
-      // No gv_brands entry yet — log and skip (user needs to complete full setup)
-      console.log(`[brand-content-engine] No gv_brands entry for user ${user_id} — content queued for later`);
-    }
+    // Call content-studio-handler (generate_article action) — fire and forget
+    supabase.functions.invoke("content-studio-handler", {
+      body: {
+        action: "generate_article",
+        brand_id: brand_profile_id,
+        user_id,
+        topic: selectedTopic,
+        target_platform: selectedPlatform,
+        target_length: wordCountMap[format],
+        target_keyword: targetKeyword,
+        brand_context: brandContext,
+      },
+    }).then(() => {
+      console.log(`[brand-content-engine] content-studio-handler invoked for "${selectedTopic}"`);
+    }).catch((e: Error) => {
+      console.error(`[brand-content-engine] content-studio-handler failed: ${e.message}`);
+    });
 
     // Queue content for all formats (all 4 lengths will be generated over time)
     const contentCalendar = (sot.content_calendar as Record<string, unknown>)?.recommended_topics as Array<Record<string, unknown>> ?? [];
@@ -178,7 +166,6 @@ Deno.serve(async (req: Request) => {
       target_keyword: targetKeyword,
       calendar_topics_available: contentCalendar.length,
       queued_formats: queuedFormats,
-      gv_brand_linked: !!gvBrand?.id,
     }), { status: 200, headers: { "Content-Type": "application/json" } });
 
   } catch (err: unknown) {
