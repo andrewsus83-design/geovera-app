@@ -27,17 +27,33 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   try {
-    const { user_id, action, amount = 1 } = await req.json() as {
-      user_id: string;
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const token = authHeader.replace("Bearer ", "").trim();
+    if (!token) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...cors, "Content-Type": "application/json" },
+      });
+    }
+    const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+    const { data: { user }, error: authErr } = await adminClient.auth.getUser(token);
+    if (authErr || !user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...cors, "Content-Type": "application/json" },
+      });
+    }
+
+    const { action, amount = 1 } = await req.json() as {
       action: string;
       amount?: number;
     };
 
-    if (!user_id || !action) {
-      return new Response(JSON.stringify({ error: "user_id and action are required" }), {
+    if (!action) {
+      return new Response(JSON.stringify({ error: "action is required" }), {
         status: 400, headers: { ...cors, "Content-Type": "application/json" },
       });
     }
+
+    const safeAmount = Math.min(Math.max(1, Math.floor(Number(amount ?? 1))), 100);
 
     const map = ACTION_MAP[action];
     if (!map) {
@@ -46,7 +62,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const supa = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+    const supa = adminClient;
     const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
     const monthStart = today.slice(0, 7) + "-01"; // YYYY-MM-01
 
@@ -54,7 +70,7 @@ Deno.serve(async (req: Request) => {
     const { data: existing } = await supa
       .from("user_quota_usage")
       .select("*")
-      .eq("user_id", user_id)
+      .eq("user_id", user.id)
       .single();
 
     let newCount: number;
@@ -64,24 +80,24 @@ Deno.serve(async (req: Request) => {
       // Daily counter
       const lastDate = existing ? (existing[map.dateCol] as string | null) : null;
       const currentVal = lastDate === today ? (existing![map.usageCol] as number ?? 0) : 0;
-      newCount = currentVal + amount;
+      newCount = currentVal + safeAmount;
       updates[map.usageCol] = newCount;
       updates[map.dateCol] = today;
     } else {
       // Monthly counter
       const periodStart = existing ? (existing.period_start as string | null) : null;
       const currentVal = periodStart === monthStart ? (existing![map.usageCol] as number ?? 0) : 0;
-      newCount = currentVal + amount;
+      newCount = currentVal + safeAmount;
       updates[map.usageCol] = newCount;
       updates.period_start = monthStart;
     }
 
     if (existing) {
-      await supa.from("user_quota_usage").update(updates).eq("user_id", user_id);
+      await supa.from("user_quota_usage").update(updates).eq("user_id", user.id);
     } else {
       // Insert with defaults for all counters
       await supa.from("user_quota_usage").insert({
-        user_id,
+        user_id: user.id,
         period_start: monthStart,
         ai_chat_messages_today: 0,
         ai_chat_messages_date: today,
@@ -104,7 +120,7 @@ Deno.serve(async (req: Request) => {
 
   } catch (err) {
     console.error("[increment-quota-usage] error:", err);
-    return new Response(JSON.stringify({ error: String(err) }), {
+    return new Response(JSON.stringify({ error: "Internal server error" }), {
       status: 500, headers: { ...cors, "Content-Type": "application/json" },
     });
   }

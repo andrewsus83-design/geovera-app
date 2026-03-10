@@ -284,16 +284,40 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const supabase = createClient(
+    const adminClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    const { brand_profile_id, user_id } = await req.json();
-    if (!brand_profile_id || !user_id) {
-      return new Response(JSON.stringify({ error: "brand_profile_id and user_id required" }),
+    // Extract user_id from JWT
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const token = authHeader.replace("Bearer ", "").trim();
+    const { data: { user }, error: authErr } = await adminClient.auth.getUser(token);
+    if (authErr || !user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    const userId = user.id;
+
+    const { brand_profile_id } = await req.json();
+    if (!brand_profile_id) {
+      return new Response(JSON.stringify({ error: "brand_profile_id required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
+
+    // Verify brand ownership
+    const { data: brandCheck } = await adminClient
+      .from("brand_profiles")
+      .select("id")
+      .eq("id", brand_profile_id)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (!brandCheck) {
+      return new Response(JSON.stringify({ error: "Forbidden" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    const supabase = adminClient;
 
     // ── Mark as processing ───────────────────────────────────────────────
     // Get current cycle number
@@ -315,7 +339,7 @@ Deno.serve(async (req) => {
 
     const { data: report, error: insertErr } = await supabase
       .from("analytics_reports")
-      .insert({ brand_profile_id, user_id, cycle_number: cycle, status: "processing" })
+      .insert({ brand_profile_id, user_id: userId, cycle_number: cycle, status: "processing" })
       .select("id")
       .single();
 
@@ -402,9 +426,8 @@ Deno.serve(async (req) => {
     }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    console.error("[analytics-scorer] error:", msg);
-    return new Response(JSON.stringify({ error: msg }),
+    console.error("[analytics-scorer] error:", err instanceof Error ? err.message : String(err));
+    return new Response(JSON.stringify({ error: "Internal server error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });

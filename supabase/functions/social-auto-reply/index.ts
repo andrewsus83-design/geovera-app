@@ -307,11 +307,12 @@ RULES:
 
 // ── Action: fetch_and_classify ─────────────────────────────────────────────────
 
-async function fetchAndClassify(supabase: ReturnType<typeof createClient>, brandId: string) {
+async function fetchAndClassify(supabase: ReturnType<typeof createClient>, brandId: string, userId: string) {
   const { data: brand } = await supabase
     .from("brand_profiles")
     .select("brand_name, late_api_config, brand_dna")
     .eq("id", brandId)
+    .eq("user_id", userId)
     .single();
 
   const lateConfig  = (brand?.late_api_config ?? {}) as Record<string, unknown>;
@@ -560,7 +561,16 @@ async function sendSingle(
 
 // ── Action: get_stats ──────────────────────────────────────────────────────────
 
-async function getStats(supabase: ReturnType<typeof createClient>, brandId: string) {
+async function getStats(supabase: ReturnType<typeof createClient>, brandId: string, userId: string) {
+  // Verify brand ownership before returning stats
+  const { data: brandCheck } = await supabase
+    .from("brand_profiles")
+    .select("id")
+    .eq("id", brandId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (!brandCheck) return jsonErr({ error: "Forbidden" }, 403);
+
   const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
   const todayISO = todayStart.toISOString();
 
@@ -608,12 +618,12 @@ Deno.serve(async (req: Request) => {
   if (!brand_id) return jsonErr({ error: "brand_id is required" }, 400);
 
   switch (action) {
-    case "fetch_and_classify": return await fetchAndClassify(supabase, brand_id);
+    case "fetch_and_classify": return await fetchAndClassify(supabase, brand_id, user.id);
     case "send_replies":       return await sendReplies(supabase, brand_id, user.id, limit ?? 20);
     case "send_single":
       if (!queue_id || !reply_text) return jsonErr({ error: "queue_id and reply_text required" }, 400);
       return await sendSingle(supabase, brand_id, queue_id, reply_text, source ?? "queue");
-    case "get_stats":          return await getStats(supabase, brand_id);
+    case "get_stats":          return await getStats(supabase, brand_id, user.id);
     default:                   return jsonErr({ error: `Unknown action: ${action}` }, 400);
   }
 });

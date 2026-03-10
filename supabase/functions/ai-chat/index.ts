@@ -292,6 +292,7 @@ If user asks specific questions about SEO, GEO, or Social Search, suggest they s
         .from("brand_profiles")
         .select("brand_name, source_of_truth, research_status")
         .eq("user_id", userId)
+        .eq("id", brand_id)
         .single();
 
       if (profileErr || !brandProfile) {
@@ -538,7 +539,6 @@ ${JSON.stringify(sot, null, 2).slice(0, 12000)}
     console.error("Unexpected error:", err);
     return new Response(JSON.stringify({
       error: "Internal server error",
-      details: err instanceof Error ? err.message : String(err)
     }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
