@@ -1,12 +1,9 @@
 import ResetPasswordForm from "@/components/auth/ResetPasswordForm";
 import { Metadata } from "next";
 
-
 export const metadata: Metadata = {
-  title: "Next.js Reset Password | TailAdmin - Next.js Dashboard Template",
-  description:
-    "This is Next.js Password Reset page for TailAdmin Dashboard Template",
-  // other metadata
+  title: "Reset Password — GeoVera",
+  description: "Reset password akun GeoVera kamu",
 };
 
 export default function ResetPasswordPage() {

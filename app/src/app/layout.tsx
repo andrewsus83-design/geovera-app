@@ -1,11 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Manrope } from "next/font/google";
 import "./globals.css";
-import "swiper/swiper-bundle.css";
-import "simplebar-react/dist/simplebar.min.css";
-import "flatpickr/dist/flatpickr.css";
-import { SidebarProvider } from "@/context/SidebarContext";
-import { ThemeProvider } from "@/context/ThemeContext";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -37,10 +32,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} ${manrope.variable} font-sans dark:bg-gray-950`}>
-        <ThemeProvider>
-          <SidebarProvider>{children}</SidebarProvider>
-        </ThemeProvider>
+      <body className={`${inter.variable} ${manrope.variable} font-sans`}>
+        {children}
       </body>
     </html>
   );

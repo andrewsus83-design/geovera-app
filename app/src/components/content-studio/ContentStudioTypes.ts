@@ -35,16 +35,16 @@ export const PLATFORM_ICON: Record<string, string> = {
 };
 
 export const PLATFORM_COLOR: Record<string, string> = {
-  instagram: "bg-pink-50 text-pink-600 dark:bg-pink-500/10 dark:text-pink-400",
-  tiktok: "bg-gray-900 text-white dark:bg-gray-700",
-  blog: "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400",
-  youtube: "bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400",
-  linkedin: "bg-sky-50 text-sky-600 dark:bg-sky-500/10 dark:text-sky-400",
-  general: "bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400",
+  instagram: "bg-pink-50 text-pink-600",
+  tiktok: "bg-gray-900 text-white",
+  blog: "bg-blue-50 text-blue-600",
+  youtube: "bg-red-50 text-red-600",
+  linkedin: "bg-sky-50 text-sky-600",
+  general: "bg-brand-50 text-brand-600",
 };
 
 export const STATUS_COLOR: Record<string, string> = {
-  draft:     "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400",
-  scheduled: "bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400",
-  published: "bg-green-50 text-green-600 dark:bg-green-500/10 dark:text-green-400",
+  draft:     "bg-gray-100 text-gray-500",
+  scheduled: "bg-amber-50 text-amber-600",
+  published: "bg-green-50 text-green-600",
 };

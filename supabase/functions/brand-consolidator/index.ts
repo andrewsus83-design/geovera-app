@@ -422,7 +422,8 @@ OUTPUT this exact JSON structure (no other text):
         sot_updated_at: new Date().toISOString(),
         research_status: newStatus,
       })
-      .eq("id", brand_profile_id);
+      .eq("id", brand_profile_id)
+      .eq("user_id", user_id);
 
     if (updateErr) throw new Error(`DB update failed: ${updateErr.message}`);
 

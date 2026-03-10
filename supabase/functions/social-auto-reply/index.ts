@@ -606,7 +606,7 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return jsonErr({ error: "Method not allowed" }, 405);
 
   const authHeader = req.headers.get("Authorization") ?? "";
-  const token = authHeader.replace("Bearer ", "");
+  const token = authHeader.replace("Bearer ", "").trim();
   if (!token) return jsonErr({ error: "Missing Authorization" }, 401);
 
   const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
