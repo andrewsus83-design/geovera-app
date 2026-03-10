@@ -69,11 +69,13 @@ export default function ProofUploadPage({ params }: { params: Promise<{ invoiceN
 
       const { data: { publicUrl } } = supabase.storage.from("payment-proofs").getPublicUrl(path);
 
-      await supabase.from("subscriptions").update({
+      const { error: dbErr } = await supabase.from("subscriptions").update({
         proof_url: publicUrl,
         proof_uploaded_at: new Date().toISOString(),
         status: "proof_uploaded",
       }).eq("id", subId);
+
+      if (dbErr) throw dbErr;
 
       setDone(true);
     } catch (err: unknown) {
