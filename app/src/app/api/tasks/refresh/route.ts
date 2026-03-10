@@ -37,12 +37,14 @@ export async function POST(request: NextRequest) {
   // Get brand_id for this user
   let { brand_id } = await request.json().catch(() => ({})) as { brand_id?: string };
   if (!brand_id) {
-    const { data: ub } = await sb
-      .from("user_brands")
-      .select("brand_id")
+    const { data: bp } = await sb
+      .from("brand_profiles")
+      .select("id")
       .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
-    brand_id = ub?.brand_id;
+    brand_id = bp?.id;
   }
   if (!brand_id) {
     return NextResponse.json({ error: "No brand found for this user" }, { status: 404 });
