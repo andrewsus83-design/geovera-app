@@ -1,2797 +1,816 @@
 "use client";
-import React, { useState, useEffect, useCallback } from "react";
-import ThreeColumnLayout from "@/components/shared/ThreeColumnLayout";
-import NavColumn from "@/components/shared/NavColumn";
-import { AnalyticsPillNav, AnalyticsTabBar } from "@/components/analytics/AnalyticsNav";
+import { useState, useEffect, useCallback } from "react";
+import AppShell from "@/components/shared/AppShell";
 import { supabase } from "@/lib/supabase";
-import { useUserQuota } from "@/hooks/useUserQuota";
 
-// ── Types ────────────────────────────────────────────────────────
-type AnalyticsSection = "overview" | "seo" | "geo" | "social";
-
-// ── Analytics Report (from analytics_reports table) ───────────────
-interface TodoItem {
-  id: string;
-  category: "SEO" | "GEO" | "Social";
-  title: string;
-  description: string;
-  geovera_service: string;
-  impact: number;
-  effort: number;
-  priority_score: number;
-  metric_affected: string;
-  score_gain_est: string;
-}
-interface ContentPlanItem {
-  day: number;
-  title: string;
-  type: string;
-  platform: string;
-  category: "SEO" | "GEO" | "Social";
-  target_keyword: string;
-  goal: string;
-  brief: string;
-}
-interface KeywordTrackingItem {
-  keyword: string;
-  current_rank: number | null;
-  search_volume: number;
-  opportunity: "high" | "medium" | "low";
-  action: string;
-  seo_impact: number;
-  type: "ranking" | "gap" | "quick_win";
-}
-interface TopicTrackingItem {
-  topic: string;
-  content_coverage: number;
-  opportunity: "high" | "medium" | "low";
-  action: string;
-  geo_impact: number;
-  social_impact: number;
-}
-interface TopContentItem {
-  title: string;
-  type: string;
-  platform: string;
-  seo_impact: number;
-  geo_impact: number;
-  social_impact: number;
-  overall_impact: number;
-  why_it_works: string;
-  replicate_insight: string;
-}
-interface VisibilityPillar {
-  score: number;
-  tactic: string;
-  actions: string[];
-}
-interface AnalyticsReport {
-  id: string;
-  cycle_number: number;
-  status: string;
-  overall_score: number | null;
-  seo_score: number | null;
-  geo_score: number | null;
-  social_score: number | null;
-  overall_delta: number | null;
-  seo_delta: number | null;
-  geo_delta: number | null;
-  social_delta: number | null;
-  seo_breakdown: { score: number; metrics: Record<string, { score: number; status: string; finding: string }> } | null;
-  geo_breakdown: { score: number; metrics: Record<string, { score: number; status: string; finding: string }> } | null;
-  social_breakdown: { score: number; metrics: Record<string, { score: number; status: string; finding: string }> } | null;
-  todo_list: TodoItem[] | null;
-  content_plan: ContentPlanItem[] | null;
-  keywords_tracking: KeywordTrackingItem[] | null;
-  topics_tracking: TopicTrackingItem[] | null;
-  visibility_strategy: { search_visibility?: VisibilityPillar; discovery?: VisibilityPillar; authority?: VisibilityPillar; timeline_presence?: VisibilityPillar } | null;
-  top_content: TopContentItem[] | null;
-  report_summary: { overall_score?: number; strongest_area?: string; weakest_area?: string; biggest_opportunity?: string; geovera_focus?: string } | null;
-  created_at: string;
+/* ─────────────────── Types ─────────────────── */
+interface BrandData {
+  research_status: string;
+  source_of_truth?: {
+    brand_foundation?: { brand_name?: string; digital_presence?: { website?: string } };
+    brand_presence?: { digital_footprint_score?: number; whats_working?: string[]; whats_broken?: string[] };
+    keyword_intelligence?: { ranking_keywords?: string[]; gap?: string[]; quick_win?: string[] };
+    competitor_intelligence?: Array<{
+      name: string; seo_rank?: number; social_presence?: string;
+      strengths?: string[]; weaknesses?: string[]; threat_level?: string;
+    }>;
+    trend_intelligence?: { trending_now?: string[]; emerging?: string[]; declining?: string[] };
+    content_intelligence?: {
+      top_topics?: string[]; content_gaps?: string[];
+      platform_strategies?: { instagram?: string; tiktok?: string; blog?: string };
+    };
+    market_intelligence?: { category_size?: string; growth?: string };
+    opportunity_map?: { immediate_wins?: string[]; prioritized_actions?: Array<{ topic?: string; priority?: string }> };
+  };
+  serpapi_data?: {
+    brand_rankings?: { found_in?: Array<{ query: string; position: number }>; avg_position?: number };
+    keyword_intelligence?: { ranking_keywords?: string[]; gap?: string[]; quick_wins?: string[] };
+    whats_good?: string[]; whats_bad?: string[];
+    news_coverage?: Array<{ title: string; source: string; date?: string }>;
+  };
+  perplexity_data?: {
+    competitor_research?: { competitors?: Array<{ name: string; strengths?: string[]; digital_presence?: string }> };
+    trend_research?: { trending_now?: string[]; emerging_trends?: string[] };
+    opportunity_research?: { gaps_found?: string[]; quick_wins?: string[] };
+    citations?: Array<{ url: string; title: string; snippet?: string }>;
+  };
+  apify_data?: {
+    instagram?: { avg_engagement?: number; posting_frequency?: string; top_topics?: string[] };
+    tiktok?: { avg_views?: number; top_topics?: string[] };
+    content_patterns?: { best_performing_topics?: string[]; best_posting_times?: string; engagement_patterns?: string };
+  };
+  firecrawl_data?: {
+    content_intelligence?: { content_depth?: string; seo_quality?: string; topic_coverage?: string[] };
+    opportunities?: string[];
+  };
 }
 
-// SEO — content performance items
-interface ContentItem {
-  id: string;
-  title: string;
-  platform: string;
-  platformIcon: string;
-  type: "post" | "article" | "video" | "reel";
-  publishedDate: string;
-  reach: number;
-  engagement: number;
-  saves: number;
-  comments: number;
-  trend: "up" | "down" | "flat";
-  trendPct: number;
-}
+/* ─────────────────── Helpers ─────────────────── */
+function pct(val: number, max: number) { return Math.min(100, Math.round((val / max) * 100)); }
 
-// GEO — AI platform visibility
-interface GeoItem {
-  id: string;
-  engine: string;
-  engineIcon: string;
-  visibilityScore: number;
-  queriesMentioned: number;
-  totalQueries: number;
-  avgPosition: number;
-  topQuery: string;
-  trend: "up" | "down" | "flat";
-  trendPct: number;
-  lastChecked: string;
-  status: "active" | "improving" | "declining";
-}
-
-// Social — social media posts
-interface SocialItem {
-  id: string;
-  title: string;
-  caption: string;       // post caption/description
-  hashtags: string[];    // e.g. ["#AIMarketing", "#GeoVera"]
-  platform: string;
-  platformIcon: string;
-  type: "post" | "reel" | "story" | "tweet";
-  publishedDate: string;
-  timestamp: string;     // e.g. "Feb 23, 2026 · 19:14"
-  imageBg: string;       // tailwind bg gradient class for placeholder image
-  imageEmoji: string;    // large emoji shown in placeholder
-  reach: number;
-  likes: number;
-  comments: number;
-  shares: number;
-  saves: number;
-  watchRetention: number; // % watch time retention (0-100)
-  ctr: number;            // click-through rate %
-  trend: "up" | "down" | "flat";
-  trendPct: number;
-  factorScores: number[]; // scores[0..9] = score for each of 10 social factors
-}
-
-// Social — top 10 algorithm factors
-interface PostScore {
-  postId: string;
-  score: number;
-  note: string;
-}
-interface SocialFactor {
-  rank: number;
-  label: string;
-  score: number;              // channel-level aggregate score
-  status: "good" | "warn" | "low";
-  icon: string;
-  tip: string;                // short channel summary
-  detail: string;             // explanation of the factor
-  actions: string[];
-  postScores: PostScore[];    // per-post evaluation on this factor
-  consistencyNote: string;    // assessment based on publish frequency
-}
-
-// ── Demo Data ────────────────────────────────────────────────────
-const contentItems: ContentItem[] = [
-  { id: "c1", title: "Why AI Marketing Is the Future of Brand Growth", platform: "Blog", platformIcon: "✍️", type: "article", publishedDate: "Feb 23", reach: 12400, engagement: 8.4, saves: 342, comments: 87, trend: "up", trendPct: 34 },
-  { id: "c2", title: "5 Signs Your Brand Is Ready for AI Automation", platform: "Blog", platformIcon: "✍️", type: "article", publishedDate: "Feb 24", reach: 15800, engagement: 9.7, saves: 483, comments: 122, trend: "up", trendPct: 41 },
-  { id: "c3", title: "The CMO's Guide to AI Content Calendars", platform: "Blog", platformIcon: "✍️", type: "article", publishedDate: "Feb 25", reach: 18900, engagement: 10.2, saves: 621, comments: 97, trend: "up", trendPct: 55 },
-  { id: "c4", title: "How to Build a Brand Voice Your Audience Remembers", platform: "Blog", platformIcon: "✍️", type: "article", publishedDate: "Feb 26", reach: 8900, engagement: 7.4, saves: 267, comments: 71, trend: "flat", trendPct: 3 },
-  { id: "c5", title: "Brand Intelligence Insight — AI Marketing Trend", platform: "Blog", platformIcon: "✍️", type: "article", publishedDate: "Feb 23", reach: 4200, engagement: 5.1, saves: 89, comments: 31, trend: "flat", trendPct: 2 },
-  { id: "c6", title: "How We Generate a Market Report in 5 Minutes", platform: "Blog", platformIcon: "✍️", type: "article", publishedDate: "Feb 24", reach: 9400, engagement: 7.8, saves: 298, comments: 84, trend: "up", trendPct: 22 },
-  { id: "c7", title: "AI Marketing Automation: The Complete 2025 Guide", platform: "Blog", platformIcon: "✍️", type: "article", publishedDate: "Feb 21", reach: 21200, engagement: 11.1, saves: 712, comments: 134, trend: "up", trendPct: 67 },
-  { id: "c8", title: "What Is GeoVera? Platform Overview for Marketers", platform: "Blog", platformIcon: "✍️", type: "article", publishedDate: "Feb 20", reach: 6800, engagement: 6.3, saves: 178, comments: 45, trend: "up", trendPct: 18 },
-];
-
-const geoItems: GeoItem[] = [
-  { id: "g1", engine: "ChatGPT", engineIcon: "🤖", visibilityScore: 72, queriesMentioned: 18, totalQueries: 25, avgPosition: 2.4, topQuery: "best AI marketing platform for startups", trend: "up", trendPct: 28, lastChecked: "2h ago", status: "improving" },
-  { id: "g2", engine: "Perplexity", engineIcon: "🔍", visibilityScore: 84, queriesMentioned: 21, totalQueries: 25, avgPosition: 1.8, topQuery: "AI brand management tools 2025", trend: "up", trendPct: 41, lastChecked: "2h ago", status: "active" },
-  { id: "g3", engine: "Gemini", engineIcon: "✨", visibilityScore: 58, queriesMentioned: 14, totalQueries: 24, avgPosition: 3.7, topQuery: "automated content publishing for brands", trend: "up", trendPct: 15, lastChecked: "3h ago", status: "improving" },
-  { id: "g4", engine: "Claude", engineIcon: "🧠", visibilityScore: 63, queriesMentioned: 15, totalQueries: 24, avgPosition: 3.1, topQuery: "AI agent for social media marketing", trend: "flat", trendPct: 4, lastChecked: "3h ago", status: "active" },
-  { id: "g5", engine: "Copilot", engineIcon: "💡", visibilityScore: 41, queriesMentioned: 10, totalQueries: 24, avgPosition: 5.2, topQuery: "marketing intelligence platform comparison", trend: "down", trendPct: 9, lastChecked: "4h ago", status: "declining" },
-  { id: "g6", engine: "Grok", engineIcon: "⚡", visibilityScore: 34, queriesMentioned: 8, totalQueries: 23, avgPosition: 6.1, topQuery: "AI tools for brand growth", trend: "up", trendPct: 22, lastChecked: "5h ago", status: "improving" },
-];
-
-const socialItems: SocialItem[] = [
-  {
-    id: "s1", title: "3 Things AI Does for Your Brand While You Sleep",
-    caption: "Bayangkan: brand kamu tetap aktif, menjawab, dan berkembang — bahkan saat kamu tidur. Ini bukan mimpi. Ini AI Marketing. 🤖✨",
-    hashtags: ["#AIMarketing", "#BrandAutomation", "#GeoVera", "#MarketingAI", "#DigitalMarketing"],
-    platform: "Instagram", platformIcon: "📸", type: "reel", publishedDate: "Feb 23", timestamp: "Feb 23, 2026 · 19:14",
-    imageBg: "from-purple-500 to-indigo-600", imageEmoji: "🤖",
-    reach: 28600, likes: 2140, comments: 204, shares: 312, saves: 891, watchRetention: 78, ctr: 6.2, trend: "up", trendPct: 67,
-    factorScores: [82, 79, 71, 80, 74, 76, 85, 72, 90, 68],
-  },
-  {
-    id: "s2", title: "How We Generate a Market Report in 5 Minutes",
-    caption: "5 menit. Satu klik. Laporan market intelligence lengkap yang biasanya butuh 2 hari kerja. Inilah kekuatan GeoVera AI. 📊⚡",
-    hashtags: ["#MarketIntelligence", "#AIReport", "#GeoVera", "#ProductivityHack", "#StartupTips"],
-    platform: "Instagram", platformIcon: "📸", type: "reel", publishedDate: "Feb 24", timestamp: "Feb 24, 2026 · 18:30",
-    imageBg: "from-brand-500 to-cyan-500", imageEmoji: "📊",
-    reach: 34200, likes: 3180, comments: 318, shares: 489, saves: 1240, watchRetention: 84, ctr: 7.8, trend: "up", trendPct: 89,
-    factorScores: [89, 85, 82, 86, 79, 83, 91, 80, 88, 76],
-  },
-  {
-    id: "s3", title: "Day in the Life of an AI Marketing Agent",
-    caption: "Jam 07.00 — Agent mulai analisis. Jam 08.00 — Konten sudah terjadwal. Jam 09.00 — Report siap. Kamu baru bangun, tapi brand kamu sudah bekerja keras 💪",
-    hashtags: ["#AIAgent", "#MarketingAutomation", "#BehindTheScenes", "#GeoVera", "#FutureOfMarketing"],
-    platform: "Instagram", platformIcon: "📸", type: "reel", publishedDate: "Feb 25", timestamp: "Feb 25, 2026 · 20:00",
-    imageBg: "from-green-500 to-emerald-600", imageEmoji: "🌅",
-    reach: 41800, likes: 4120, comments: 427, shares: 623, saves: 1680, watchRetention: 91, ctr: 9.4, trend: "up", trendPct: 112,
-    factorScores: [94, 91, 88, 90, 84, 89, 95, 86, 92, 82],
-  },
-  {
-    id: "s4", title: "Friday Tip — 1 Marketing Hack That Changes Everything",
-    caption: "Friday tip 🔥 Satu perubahan kecil di strategi kontenmu yang bisa meningkatkan organic reach hingga 3x. Thread di bawah 👇",
-    hashtags: ["#FridayTip", "#MarketingHack", "#ContentStrategy", "#GrowthHacking", "#AIMarketing"],
-    platform: "Instagram", platformIcon: "📸", type: "reel", publishedDate: "Feb 26", timestamp: "Feb 26, 2026 · 17:45",
-    imageBg: "from-orange-400 to-red-500", imageEmoji: "💡",
-    reach: 22400, likes: 1890, comments: 189, shares: 241, saves: 720, watchRetention: 72, ctr: 5.1, trend: "up", trendPct: 28,
-    factorScores: [74, 72, 64, 73, 68, 71, 78, 65, 82, 61],
-  },
-  {
-    id: "s5", title: "GeoVera Platform Feature Spotlight",
-    caption: "Meet GeoVera's newest feature: real-time brand intelligence dashboard. Track your visibility across 6 AI engines — all in one place. 🎯",
-    hashtags: ["#ProductUpdate", "#GeoVera", "#BrandIntelligence", "#GEO", "#AITools"],
-    platform: "Instagram", platformIcon: "📸", type: "post", publishedDate: "Feb 23", timestamp: "Feb 23, 2026 · 12:00",
-    imageBg: "from-slate-600 to-gray-800", imageEmoji: "✨",
-    reach: 9800, likes: 728, comments: 63, shares: 94, saves: 284, watchRetention: 0, ctr: 3.4, trend: "up", trendPct: 18,
-    factorScores: [0, 68, 52, 72, 65, 70, 62, 58, 75, 44],
-  },
-  {
-    id: "s6", title: "Customer Story — Brand Before & After",
-    caption: "Sebelum GeoVera: 12 hours/minggu untuk riset manual. Setelah GeoVera: 45 menit. ROI +340% dalam 3 bulan pertama. Ini bukan klaim — ini data nyata klien kami 📈",
-    hashtags: ["#CustomerSuccess", "#CaseStudy", "#ROI", "#AIMarketing", "#GeoVera"],
-    platform: "Instagram", platformIcon: "📸", type: "post", publishedDate: "Feb 24", timestamp: "Feb 24, 2026 · 10:15",
-    imageBg: "from-teal-500 to-cyan-600", imageEmoji: "📈",
-    reach: 7600, likes: 541, comments: 54, shares: 67, saves: 198, watchRetention: 0, ctr: 2.8, trend: "up", trendPct: 22,
-    factorScores: [0, 65, 49, 74, 62, 80, 58, 55, 78, 40],
-  },
-  {
-    id: "s7", title: "What Top Brands Are Doing This Week That You're Not",
-    caption: "3 hal yang dilakukan brand terbaik minggu ini yang hampir pasti tidak kamu lakukan. Thread 🧵",
-    hashtags: ["#BrandStrategy", "#MarketingInsights", "#CompetitiveIntel", "#AIMarketing"],
-    platform: "X (Twitter)", platformIcon: "𝕏", type: "tweet", publishedDate: "Feb 24", timestamp: "Feb 24, 2026 · 08:30",
-    imageBg: "from-gray-800 to-gray-900", imageEmoji: "🔍",
-    reach: 11200, likes: 342, comments: 148, shares: 287, saves: 94, watchRetention: 0, ctr: 4.1, trend: "down", trendPct: 8,
-    factorScores: [0, 71, 58, 68, 72, 62, 54, 60, 80, 38],
-  },
-  {
-    id: "s8", title: "AI Marketing Thread: 10 Things Brands Get Wrong",
-    caption: "10 kesalahan AI marketing yang masih dilakukan 90% brand di Indonesia. Thread panjang tapi worth it 🧵👇",
-    hashtags: ["#AIMarketing", "#MarketingMistakes", "#BrandStrategy", "#Thread", "#GeoVera"],
-    platform: "X (Twitter)", platformIcon: "𝕏", type: "tweet", publishedDate: "Feb 22", timestamp: "Feb 22, 2026 · 21:00",
-    imageBg: "from-violet-600 to-purple-700", imageEmoji: "🧵",
-    reach: 18400, likes: 892, comments: 231, shares: 564, saves: 312, watchRetention: 0, ctr: 5.6, trend: "up", trendPct: 45,
-    factorScores: [0, 82, 68, 78, 76, 74, 66, 70, 85, 52],
-  },
-  {
-    id: "s9", title: "Why Your Content Strategy Needs an AI Agent",
-    caption: "Content strategy tanpa AI agent di 2026 = navigasi tanpa GPS. Artikel mendalam tentang mengapa ini bukan lagi pilihan tapi keharusan.",
-    hashtags: ["#ContentStrategy", "#AIAgent", "#B2BMarketing", "#DigitalTransformation", "#GeoVera"],
-    platform: "LinkedIn", platformIcon: "💼", type: "post", publishedDate: "Feb 25", timestamp: "Feb 25, 2026 · 09:00",
-    imageBg: "from-blue-600 to-blue-800", imageEmoji: "📝",
-    reach: 6200, likes: 412, comments: 67, shares: 138, saves: 156, watchRetention: 0, ctr: 3.9, trend: "up", trendPct: 33,
-    factorScores: [0, 74, 61, 76, 70, 77, 60, 64, 82, 46],
-  },
-];
-
-// ── Social Factor data ────────────────────────────────────────────
-const socialFactors: SocialFactor[] = [
-  {
-    rank: 1, label: "Watch Time Retention", score: 84, status: "good", icon: "▶️",
-    tip: "Avg retention 81% · 4 reels melampaui 80% threshold",
-    detail: "Watch time retention adalah sinyal terkuat algoritma platform video. Semakin tinggi persentase video yang ditonton, semakin sering konten didistribusikan ke audiens baru. Threshold 'aman' adalah 70%+; di atas 85% biasanya masuk viral loop.",
-    actions: ["Hook 3 detik pertama harus langsung ke inti masalah", "Gunakan pattern interrupt setiap 7-10 detik", "Akhiri dengan cliffhanger atau CTA yang memotivasi rewatch", "Hindari intro logo / bumper panjang"],
-    consistencyNote: "4 dari 4 Reel yang dipublish mencapai retention baik. Konsistensi format 'hook langsung' di semua reel terbukti efektif.",
-    postScores: [
-      { postId: "s1", score: 82, note: "Retention 78% — kuat, hook 'saat tidur' memancing rasa penasaran" },
-      { postId: "s2", score: 89, note: "Retention 84% — demo produk visual sangat efektif di 15 detik pertama" },
-      { postId: "s3", score: 94, note: "Retention 91% — terbaik bulan ini, narasi alur 'hari kerja AI' intuitif" },
-      { postId: "s4", score: 74, note: "Retention 72% — drop di detik ke-18, transisi terlalu cepat" },
-      { postId: "s5", score: 0, note: "N/A — format post statis, tidak ada watch time" },
-      { postId: "s6", score: 0, note: "N/A — format post statis" },
-      { postId: "s7", score: 0, note: "N/A — format tweet, tidak berlaku" },
-      { postId: "s8", score: 0, note: "N/A — format thread teks" },
-      { postId: "s9", score: 0, note: "N/A — format artikel LinkedIn" },
-    ],
-  },
-  {
-    rank: 2, label: "Engagement Aktif (Like, Comment, Share, Save/DM)", score: 78, status: "good", icon: "💬",
-    tip: "Avg engagement rate 9.1% · Save rate tertinggi di Reel",
-    detail: "Algoritma membobot engagement secara berbeda: Save dan Share paling kuat (distribusi organik), Comment menunjukkan percakapan, Like adalah sinyal dasar. DM dari konten adalah sinyal sangat kuat yang sering diabaikan brand.",
-    actions: ["Akhiri setiap konten dengan pertanyaan spesifik untuk memancing comment", "Buat konten 'save-worthy': tips list, template, checklist", "Balas semua comment dalam 1 jam pertama untuk boost distribusi", "Gunakan 'tag teman yang perlu ini' untuk mendorong share organik"],
-    consistencyNote: "9 konten dipublish dengan gap posting rata-rata 1.5 hari — frekuensi baik untuk mempertahankan engagement channel.",
-    postScores: [
-      { postId: "s1", score: 79, note: "2,140 likes · 204 comments · 891 saves — rasio save/reach 3.1% sangat baik" },
-      { postId: "s2", score: 85, note: "3,180 likes · 318 comments · 1,240 saves — terbaik kedua, high DM signal" },
-      { postId: "s3", score: 91, note: "4,120 likes · 427 comments · 1,680 saves — viral engagement loop aktif" },
-      { postId: "s4", score: 72, note: "1,890 likes · 189 comments — engagement oke tapi saves relatif rendah" },
-      { postId: "s5", score: 68, note: "728 likes · 63 comments · 284 saves — engagement rate 9.9% solid untuk post statis" },
-      { postId: "s6", score: 65, note: "541 likes · 54 comments — engagement rate 9.0%, saves rendah untuk story format" },
-      { postId: "s7", score: 71, note: "342 likes · 148 comments · 287 RT — comment rate tinggi untuk thread debat" },
-      { postId: "s8", score: 82, note: "892 likes · 231 comments · 564 RT — engagement tertinggi di X bulan ini" },
-      { postId: "s9", score: 74, note: "412 likes · 67 comments · 138 shares — LinkedIn engagement rate 9.9% di atas rata-rata" },
-    ],
-  },
-  {
-    rank: 3, label: "CTR & Hook Awal", score: 65, status: "warn", icon: "🎣",
-    tip: "Avg CTR 5.4% · Hook terbaik: 'How We' format",
-    detail: "CTR (thumbnail + judul) menentukan apakah konten mendapat kesempatan ditonton. Di video, 3 detik pertama adalah hook yang menentukan apakah penonton lanjut atau scroll. Hook yang baik memancing rasa penasaran, FOMO, atau insight instan.",
-    actions: ["A/B test thumbnail: wajah ekspresif vs text overlay vs product close-up", "Mulai dengan pertanyaan yang relevan atau statemen mengejutkan", "Gunakan angka spesifik di judul (misal '5 Menit' bukan 'Cepat')", "Hindari judul clickbait yang tidak sesuai isi — meningkatkan drop rate"],
-    consistencyNote: "CTR bervariasi signifikan (2.8%–9.4%) menunjukkan inkonsistensi hook strategy. Perlu standarisasi template hook antar format.",
-    postScores: [
-      { postId: "s1", score: 71, note: "CTR 6.2% — 'Saat Tidur' hook efektif menciptakan FOMO" },
-      { postId: "s2", score: 82, note: "CTR 7.8% — '5 Menit' angka spesifik + demo visual = kombinasi terkuat" },
-      { postId: "s3", score: 88, note: "CTR 9.4% — hook 'Day in the Life' universally relatable, CTR terbaik" },
-      { postId: "s4", score: 64, note: "CTR 5.1% — 'Friday Tip' terlalu generic, kurang urgency" },
-      { postId: "s5", score: 52, note: "CTR 3.4% — feature spotlight kurang hook emosional, terlalu product-centric" },
-      { postId: "s6", score: 49, note: "CTR 2.8% — 'Before & After' seharusnya lebih kuat, thumbnail perlu dioptimasi" },
-      { postId: "s7", score: 58, note: "CTR 4.1% — judul provocative tapi tidak didukung visual kuat" },
-      { postId: "s8", score: 68, note: "CTR 5.6% — '10 Things' list format selalu perform, tapi bisa lebih spesifik" },
-      { postId: "s9", score: 61, note: "CTR 3.9% — LinkedIn artikel, CTR cukup untuk platform B2B" },
-    ],
-  },
-  {
-    rank: 4, label: "Relevansi Konten", score: 80, status: "good", icon: "🎯",
-    tip: "Niche AI marketing sangat relevan · Topik trending dimanfaatkan",
-    detail: "Algoritma mendistribusikan konten berdasarkan kecocokan dengan interest audiens. Konten yang relevan dengan niche spesifik lebih konsisten mendapat distribusi ke audiens yang tepat dibanding konten yang terlalu broad.",
-    actions: ["Gunakan keyword niche di caption dan hashtag secara konsisten", "Pantau trending topics di niche AI marketing setiap minggu", "Buat content pillars yang jelas: Edukasi, Behind-the-scenes, Produk, Case Study", "Analisis konten kompetitor yang viral untuk gap topik"],
-    consistencyNote: "Semua 9 konten konsisten dalam niche AI marketing — channel memiliki identitas topik yang kuat dan tidak melenceng.",
-    postScores: [
-      { postId: "s1", score: 80, note: "Relevan: AI benefit untuk brand — topik broad tapi tetap on-niche" },
-      { postId: "s2", score: 86, note: "Sangat relevan: demo fitur produk — audiens target langsung melihat value" },
-      { postId: "s3", score: 90, note: "Sangat relevan: behind-the-scenes AI agent — curiosity + edukasi" },
-      { postId: "s4", score: 73, note: "Relevan tapi generic — 'marketing hack' kurang spesifik ke AI niche" },
-      { postId: "s5", score: 72, note: "Relevan: product feature — cukup spesifik tapi kurang storytelling" },
-      { postId: "s6", score: 74, note: "Relevan: customer story — social proof kuat untuk konversi" },
-      { postId: "s7", score: 68, note: "Relevan tapi terlalu broad — 'top brands' tidak spesifik ke AI marketing" },
-      { postId: "s8", score: 78, note: "Relevan: specific pain points di AI marketing yang banyak dialami target" },
-      { postId: "s9", score: 76, note: "Relevan untuk LinkedIn audience B2B — positioning tepat" },
-    ],
-  },
-  {
-    rank: 5, label: "Personalisasi & Behaviour User", score: 72, status: "good", icon: "🧠",
-    tip: "Profil audiens stabil · High return viewer rate di Reel",
-    detail: "Algoritma mempelajari behaviour individu pengguna. Konten yang sering mendapat 'second watch', di-save, atau membuat pengguna mengunjungi profil setelah menonton adalah sinyal personal affinity yang kuat — konten tersebut akan diprioritaskan untuk user tersebut.",
-    actions: ["Buat seri konten bersambung untuk mendorong return visit", "Gunakan call-to-action 'follow untuk bagian selanjutnya'", "Pin konten terbaik di profil untuk first-impression yang kuat", "Analisis 'audience insight' untuk memahami demografi yang paling engaged"],
-    consistencyNote: "Pola posting konsisten di rentang waktu yang sama menciptakan 'habitual viewing'. 5 dari 9 konten tayang antara Feb 23-25 — clustering ini optimal.",
-    postScores: [
-      { postId: "s1", score: 74, note: "Return viewer rate 34% — audiens mengenal format dan kembali untuk konten serupa" },
-      { postId: "s2", score: 79, note: "Profile visit setelah tonton 8.2% — sangat kuat, indikator high-intent viewer" },
-      { postId: "s3", score: 84, note: "Highest profile visit rate 11.4% — konten ini membuat orang ingin tahu lebih" },
-      { postId: "s4", score: 68, note: "Return viewer 28% — sedikit lebih rendah, konten kurang memorable" },
-      { postId: "s5", score: 65, note: "Profile visit 4.1% — wajar untuk product post, bukan konten discovery" },
-      { postId: "s6", score: 62, note: "Profile visit 3.8% — customer story kurang mendorong profile exploration" },
-      { postId: "s7", score: 72, note: "Retweet dari follower lama 62% — base audience sangat loyal di X" },
-      { postId: "s8", score: 76, note: "Thread dibaca sampai selesai 71% — strong completion signal untuk X algo" },
-      { postId: "s9", score: 70, note: "Connection request setelah post 18 baru — strong B2B affinity signal" },
-    ],
-  },
-  {
-    rank: 6, label: "Quality Content (Satisfaction)", score: 76, status: "good", icon: "⭐",
-    tip: "Survey satisfaction 4.2/5 · Low skip rate di 3 reel terbaik",
-    detail: "Platform mengukur 'satisfaction signal' melalui: rewatch, shares ke Story/Chat pribadi, komentar positif vs negatif, dan low skip rate. Konten berkualitas tinggi yang benar-benar memberi nilai mendapatkan distribusi jangka panjang (evergreen).",
-    actions: ["Investasi di produksi: pencahayaan, audio jernih, editing clean", "Tambahkan nilai nyata di setiap konten — 1 insight yang bisa langsung diaplikasikan", "Minta feedback eksplisit: 'Apakah ini membantu? Comment di bawah'", "Buat konten evergreen yang masih relevan 6 bulan ke depan"],
-    consistencyNote: "Kualitas konten konsisten dan meningkat — 3 konten terbaru memiliki skor tertinggi, menunjukkan iterasi dan improvement yang konsisten.",
-    postScores: [
-      { postId: "s1", score: 76, note: "Produksi baik, nilai edukasi tinggi, komentar positif dominan" },
-      { postId: "s2", score: 83, note: "Demo produk yang clear dan clean — langsung dipahami audience" },
-      { postId: "s3", score: 89, note: "Tertinggi: cerita yang relatable + nilai praktis + produksi premium" },
-      { postId: "s4", score: 71, note: "Nilai cukup tapi terasa 'terburu-buru' — bisa lebih dalam di tip-nya" },
-      { postId: "s5", score: 70, note: "Visual bersih, informatif, tapi kurang storytelling element" },
-      { postId: "s6", score: 80, note: "Customer story sangat convincing — data before/after jelas dan believable" },
-      { postId: "s7", score: 62, note: "Konten opinionated, memancing diskusi — quality dinilai subjektif" },
-      { postId: "s8", score: 74, note: "Thread informatif dengan struktur baik — setiap poin bernilai" },
-      { postId: "s9", score: 77, note: "Artikel LinkedIn paling polished — format B2B yang professional" },
-    ],
-  },
-  {
-    rank: 7, label: "Timing & Early Velocity", score: 81, status: "good", icon: "⚡",
-    tip: "Avg early velocity tinggi · 3 konten viral dalam 2 jam pertama",
-    detail: "Algoritma mengevaluasi 'early velocity' — seberapa cepat sebuah konten mendapat engagement dalam 15-60 menit pertama setelah publish. Konten yang cepat mendapat likes, comments, dan shares langsung mendapat push distribusi masif.",
-    actions: ["Post saat audiens paling aktif: Selasa-Kamis pukul 18.00-21.00", "Minta tim atau komunitas loyal untuk engage dalam 15 menit pertama", "Gunakan Instagram Close Friends untuk first-wave engagement", "Reply comment sendiri segera setelah post untuk trigger notification"],
-    consistencyNote: "Pola posting Feb 23-26 mengindikasikan waktu publish yang terencana baik. Konten yang tayang di jam prime (18-21.00) konsisten mendapat early velocity lebih tinggi.",
-    postScores: [
-      { postId: "s1", score: 85, note: "1.2K likes dalam 1 jam pertama — launch timing Senin sore optimal" },
-      { postId: "s2", score: 91, note: "2.1K likes dalam 45 menit — best early velocity bulan ini" },
-      { postId: "s3", score: 95, note: "2.8K likes dalam 30 menit — konten langsung masuk Explore page" },
-      { postId: "s4", score: 78, note: "1.1K likes dalam 1 jam — Jumat sore lebih rendah dari ekspektasi" },
-      { postId: "s5", score: 62, note: "380 likes dalam 1 jam — post statis lebih lambat, wajar" },
-      { postId: "s6", score: 58, note: "280 likes dalam 1 jam — timing kurang optimal, tengah hari kerja" },
-      { postId: "s7", score: 60, note: "Retweet lambat dalam 1 jam pertama — topik kontroversial butuh 'trigger' awal" },
-      { postId: "s8", score: 70, note: "Thread viral setelah 2 jam — mulai lambat tapi snowball effect kuat" },
-      { postId: "s9", score: 64, note: "LinkedIn post peak engagement di hari ke-2 — normal untuk platform B2B" },
-    ],
-  },
-  {
-    rank: 8, label: "Konsistensi Posting & Sinyal Channel", score: 68, status: "warn", icon: "📅",
-    tip: "9 konten in 5 hari · Gap posting 1-2 hari — perlu lebih konsisten",
-    detail: "Algoritma 'memberi reward' pada channel yang posting secara konsisten dan terjadwal. Channel aktif mendapat 'account health score' lebih tinggi yang berpengaruh pada distribusi baseline semua konten, bukan hanya konten terbaru.",
-    actions: ["Buat content calendar 4 minggu ke depan dan jadwalkan via Meta Business Suite", "Target minimum 5 konten per minggu di Instagram, 3 tweet per hari di X", "Jangan pernah ada gap posting lebih dari 3 hari berturut-turut", "Gunakan Reels + Story + Carousel untuk variasi format dalam 1 hari"],
-    consistencyNote: "9 konten dipublish dalam rentang Feb 22-26 (5 hari) — frekuensi baik namun semua terkonsentrasi dalam periode pendek. Diperlukan distribusi yang lebih merata sepanjang bulan.",
-    postScores: [
-      { postId: "s1", score: 72, note: "Feb 23 — slot pertama di periode aktif, channel signal baik" },
-      { postId: "s2", score: 80, note: "Feb 24 — posting berturut-turut memperkuat sinyal channel aktif" },
-      { postId: "s3", score: 86, note: "Feb 25 — konsistensi 3 hari berturut-turut dibalas distribusi lebih luas" },
-      { postId: "s4", score: 65, note: "Feb 26 — masih konsisten tapi frekuensi mulai terasa dipaksakan" },
-      { postId: "s5", score: 70, note: "Feb 23 — double posting di 1 hari: bisa saling kanibalisasi" },
-      { postId: "s6", score: 68, note: "Feb 24 — double posting day: reach terbagi antar konten" },
-      { postId: "s7", score: 60, note: "Feb 24 (X) — aktif di multi-platform di hari sama: efisien tapi perlu monitoring" },
-      { postId: "s8", score: 55, note: "Feb 22 — paling awal, gap 2 hari sebelumnya menurunkan channel warmth" },
-      { postId: "s9", score: 64, note: "Feb 25 (LinkedIn) — konsisten cross-platform, bagus untuk brand authority" },
-    ],
-  },
-  {
-    rank: 9, label: "Originalitas & Kepatuhan Aturan", score: 88, status: "good", icon: "✅",
-    tip: "0 copyright strike · Semua konten original · No shadowban signal",
-    detail: "Platform secara otomatis mendeteksi konten yang melanggar hak cipta (musik, video, gambar), menggunakan template terlalu umum, atau berulang (repost). Konten original yang unik mendapat distribusi prioritas vs konten yang direcycle atau menyerupai konten lain.",
-    actions: ["Gunakan hanya musik dari Instagram/TikTok music library atau royalty-free", "Ciptakan visual style unik yang tidak menyerupai kompetitor langsung", "Hindari repost konten lama — edit signifikan sebelum reupload", "Pantau Community Guidelines update setiap kuartal"],
-    consistencyNote: "Track record originalitas sempurna — 0 strike, 0 konten dihapus platform. Sinyal kesehatan akun sangat kuat untuk distribusi jangka panjang.",
-    postScores: [
-      { postId: "s1", score: 90, note: "Original concept, musik licensed — sinyal bersih dari platform" },
-      { postId: "s2", score: 88, note: "Demo screen recording original — tidak ada konten third-party" },
-      { postId: "s3", score: 92, note: "Fully original narrative, zero compliance issue" },
-      { postId: "s4", score: 82, note: "Original tapi format 'tip' sering digunakan — perlu lebih diferensiasi" },
-      { postId: "s5", score: 88, note: "Product screenshot original, branding konsisten" },
-      { postId: "s6", score: 90, note: "Customer testimony dengan izin — compliance sempurna" },
-      { postId: "s7", score: 85, note: "Tweet opini original — perlu hati-hati dengan klaim yang bisa dipermasalahkan" },
-      { postId: "s8", score: 88, note: "Thread informatif tanpa sumber yang perlu di-cite — safe" },
-      { postId: "s9", score: 82, note: "Artikel LinkedIn original, tidak ada plagiarism signal" },
-    ],
-  },
-  {
-    rank: 10, label: "Kemampuan Membangun Session & Binge Watching", score: 54, status: "warn", icon: "🔄",
-    tip: "Avg session depth 1.4 konten · Belum ada seri konten bersambung",
-    detail: "Algoritma sangat menghargai channel yang membuat penonton menonton beberapa konten secara berturut-turut dalam satu session. Ini terjadi ketika ada seri konten, ending yang memotivasi lanjut ke konten berikutnya, atau profil yang sangat terkurasi sehingga penonton terus scroll.",
-    actions: ["Buat seri konten eksplisit: 'Part 1/5', 'Part 2/5' dll", "Akhiri setiap reel dengan 'Lanjut di video berikutnya...'", "Pin konten terbaik secara strategis agar urutan profil terasa seperti playlist", "Gunakan fitur Instagram Guide atau LinkedIn Newsletter untuk bundling konten"],
-    consistencyNote: "Belum ada strategi seri konten yang terstruktur. Konten saat ini berdiri sendiri — oportunitas besar untuk meningkatkan session depth dan binge signal.",
-    postScores: [
-      { postId: "s1", score: 68, note: "Tidak ada CTA ke konten lanjutan — penonton berhenti setelah menonton" },
-      { postId: "s2", score: 76, note: "Penonton 34% lanjut ke profil — cukup baik tapi belum ada seri eksplisit" },
-      { postId: "s3", score: 82, note: "Terbaik: 41% profil visit, banyak yang menonton konten lama juga" },
-      { postId: "s4", score: 61, note: "Rendah — konten berdiri sendiri, tidak ada link ke konten lain" },
-      { postId: "s5", score: 44, note: "Feature spotlight harusnya bagian dari seri, tapi tidak ada CTA ke seri" },
-      { postId: "s6", score: 40, note: "Customer story isolated — tidak ada referensi ke konten terkait lainnya" },
-      { postId: "s7", score: 38, note: "Tweet tidak mendorong exploration profil — low session contribution" },
-      { postId: "s8", score: 52, note: "Thread mendorong follow tapi tidak ada deep link ke profil/konten lain" },
-      { postId: "s9", score: 46, note: "LinkedIn artikel terisolasi dari content series — missed opportunity" },
-    ],
-  },
-];
-
-// ── Score data (biweekly) — static fallback for demo tabs ─────────
-const DEMO_SCORES = {
-  seo: { score: 74, prev: 68, updatedAt: "Feb 16, 2026", nextUpdate: "Mar 2, 2026" },
-  geo: { score: 59, prev: 54, updatedAt: "Feb 16, 2026", nextUpdate: "Mar 2, 2026" },
-  social: { score: 82, prev: 79, updatedAt: "Feb 16, 2026", nextUpdate: "Mar 2, 2026" },
+const LAYER_COLORS = {
+  l0: { border: "#10B981", badge_bg: "var(--gv-color-success-50)",  badge_c: "var(--gv-color-success-700)", bar: "var(--gv-color-success-500)", role_bg: "var(--gv-color-success-50)", role_c: "var(--gv-color-success-700)" },
+  l1: { border: "#3B82F6", badge_bg: "var(--gv-color-info-50)",     badge_c: "var(--gv-color-info-700)",    bar: "var(--gv-color-info-500)",    role_bg: "var(--gv-color-info-50)",    role_c: "var(--gv-color-info-700)"    },
+  l2: { border: "var(--gv-color-primary-500)", badge_bg: "var(--gv-color-primary-50)", badge_c: "var(--gv-color-primary-700)", bar: "var(--gv-color-primary-500)", role_bg: "var(--gv-color-primary-50)", role_c: "var(--gv-color-primary-700)" },
+  l3: { border: "#F59E0B", badge_bg: "var(--gv-color-warning-50)",  badge_c: "var(--gv-color-warning-700)", bar: "var(--gv-color-warning-500)", role_bg: "var(--gv-color-warning-50)", role_c: "var(--gv-color-warning-700)" },
 };
 
-// ── Helpers ──────────────────────────────────────────────────────
-function TrendBadge({ trend, pct }: { trend: "up" | "down" | "flat"; pct: number }) {
-  if (trend === "up") return <span className="inline-flex items-center gap-0.5 text-[10px] font-medium" style={{ color: "#16A34A" }}>↑ {pct}%</span>;
-  if (trend === "down") return <span className="inline-flex items-center gap-0.5 text-[10px] font-medium" style={{ color: "#DC2626" }}>↓ {pct}%</span>;
-  return <span className="text-[10px] font-medium" style={{ color: "var(--gv-color-neutral-400)" }}>→ {pct}%</span>;
-}
+const ENGINE_COLORS: Record<string, string> = {
+  GPT: "#10A37F", Px: "#7C3AED", Gm: "#1A73E8", Co: "#0078D4", Ma: "#0082FB",
+};
 
-function formatNum(n: number) {
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
-  return n.toString();
-}
-
-function SectionHeader({ label }: { label: string }) {
+/* ─────────────────── Card Shell ─────────────────── */
+function Card({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
-    <div className="mb-2 px-2">
-      <span className="text-[11px] font-bold uppercase tracking-[0.1em] mb-2" style={{ color: "var(--gv-color-neutral-400)" }}>{label}</span>
+    <div style={{
+      background: "var(--gv-color-bg-surface)",
+      borderRadius: "var(--gv-radius-lg)",
+      padding: "20px",
+      border: "1px solid var(--gv-color-neutral-200)",
+      boxShadow: "var(--gv-shadow-card)",
+      position: "relative",
+      overflow: "hidden",
+      ...style,
+    }}>
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "var(--gv-gradient-primary)" }} />
+      {children}
     </div>
   );
 }
 
-// ── SEO Factor type ───────────────────────────────────────────────
-interface KeywordData {
-  keyword: string;
-  position: number;
-  volume: number;
-  status: "monitored" | "optimized" | "suggested";
+function CardLabel({ label, title }: { label: string; title: string }) {
+  return (
+    <>
+      <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: 11, fontWeight: 500, color: "var(--gv-color-primary-500)", letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 2 }}>{label}</div>
+      <div style={{ fontFamily: "var(--gv-font-heading)", fontSize: 15, fontWeight: 700, color: "var(--gv-color-neutral-900)", marginBottom: 14, letterSpacing: "-.01em" }}>{title}</div>
+    </>
+  );
 }
 
-interface TechIssue {
-  label: string;
-  severity: "ok" | "warn" | "error";
-  detail: string;
+function EmptyState({ text }: { text: string }) {
+  return (
+    <div style={{ textAlign: "center", padding: "32px 16px", color: "var(--gv-color-neutral-400)", fontSize: 13, fontFamily: "var(--gv-font-body)" }}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="32" height="32" style={{ margin: "0 auto 8px", display: "block", opacity: 0.4 }}>
+        <circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>
+      </svg>
+      {text}
+    </div>
+  );
 }
 
-interface BacklinkData {
-  domain: string;
-  da: number; // Domain Authority 0-100
-  type: "editorial" | "guest" | "directory" | "mention";
-  anchorText: string;
-  doFollow: boolean;
+/* ══════════════════════════════════════════════════
+   A13 — Signal Layers
+══════════════════════════════════════════════════ */
+function SignalLayers({ data }: { data: BrandData }) {
+  const sot = data.source_of_truth;
+  const serpapi = data.serpapi_data;
+
+  const layers = [
+    {
+      key: "l0" as const, badge: "L0", name: "Origin / Authenticity Gate", role: "Auth Gate",
+      desc: "Verifikasi domain, E-E-A-T signals, schema markup & author credentials.",
+      metrics: [
+        { val: sot?.keyword_intelligence?.ranking_keywords?.length ?? 0, lbl: "Keywords" },
+        { val: sot?.brand_presence?.whats_working?.length ?? 0, lbl: "Strengths" },
+        { val: serpapi?.brand_rankings?.found_in?.length ?? 0, lbl: "Ranked" },
+      ],
+      score: Math.min(98, (sot?.brand_presence?.digital_footprint_score ?? 0.7) * 100),
+      status: "ok",
+    },
+    {
+      key: "l1" as const, badge: "L1", name: "Stability Amplifier", role: "Amplifier",
+      desc: "Backlink stability, content freshness & domain age signals. Memperkuat L0.",
+      metrics: [
+        { val: serpapi?.brand_rankings?.avg_position ? Math.round(10 / Math.max(1, serpapi.brand_rankings.avg_position) * 100) : 72, lbl: "Stability" },
+        { val: serpapi?.keyword_intelligence?.ranking_keywords?.length ?? 0, lbl: "Kw Ranking" },
+        { val: sot?.content_intelligence?.top_topics?.length ?? 0, lbl: "Topics" },
+      ],
+      score: serpapi?.brand_rankings?.avg_position ? Math.min(95, 100 - (serpapi.brand_rankings.avg_position - 1) * 5) : 75,
+      status: "ok",
+    },
+    {
+      key: "l2" as const, badge: "L2", name: "Strategic Signal ★ Primary", role: "Primary Source",
+      desc: "Sumber utama insight GeoVera. GEO citations, topic authority, AI mention frequency.",
+      metrics: [
+        { val: sot?.competitor_intelligence?.length ?? 0, lbl: "Competitors" },
+        { val: sot?.trend_intelligence?.trending_now?.length ?? 0, lbl: "Trending" },
+        { val: sot?.opportunity_map?.immediate_wins?.length ?? 0, lbl: "Quick Wins" },
+      ],
+      score: sot ? 72 : 0,
+      status: sot ? "ok" : "warn",
+    },
+    {
+      key: "l3" as const, badge: "L3", name: "Pulse / Volatility", role: "Volatile",
+      desc: "Social trending, real-time mentions, viral content. Monitoring only.",
+      metrics: [
+        { val: data.apify_data?.instagram?.avg_engagement ?? 0, lbl: "IG Engage" },
+        { val: data.apify_data?.tiktok?.avg_views ?? 0, lbl: "TK Views" },
+        { val: data.apify_data?.content_patterns?.best_performing_topics?.length ?? 0, lbl: "Top Topics" },
+      ],
+      score: data.apify_data ? 66 : 0,
+      status: data.apify_data ? "warn" : "blocked",
+    },
+  ];
+
+  return (
+    <Card>
+      <CardLabel label="A13 · Signal Layer Status" title="L0 · L1 · L2 · L3 Signal Layers" />
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {layers.map((layer) => {
+          const col = LAYER_COLORS[layer.key];
+          return (
+            <div key={layer.key} style={{
+              display: "flex", alignItems: "flex-start", gap: 12,
+              padding: "12px 14px", borderRadius: "var(--gv-radius-md)",
+              border: "1px solid var(--gv-color-neutral-200)",
+              background: "var(--gv-color-bg-surface-elevated)",
+              position: "relative", overflow: "hidden",
+              cursor: "pointer",
+            }}>
+              <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, background: col.border }} />
+              <div style={{ width: 36, height: 36, borderRadius: "var(--gv-radius-sm)", background: col.badge_bg, color: col.badge_c, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--gv-font-mono)", fontSize: 12, fontWeight: 800, flexShrink: 0 }}>{layer.badge}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+                  <span style={{ fontFamily: "var(--gv-font-heading)", fontSize: 14, fontWeight: 700, color: "var(--gv-color-neutral-900)" }}>{layer.name}</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, padding: "1px 6px", borderRadius: "var(--gv-radius-full)", background: col.role_bg, color: col.role_c, fontFamily: "var(--gv-font-body)", textTransform: "uppercase", letterSpacing: ".04em" }}>{layer.role}</span>
+                </div>
+                <div style={{ fontSize: 12, color: "var(--gv-color-neutral-500)", lineHeight: 1.5, marginBottom: 8 }}>{layer.desc}</div>
+                <div style={{ display: "flex", gap: 16, marginBottom: 8 }}>
+                  {layer.metrics.map((m) => (
+                    <div key={m.lbl}>
+                      <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: 15, fontWeight: 800, color: "var(--gv-color-neutral-900)", lineHeight: 1 }}>{m.val}</div>
+                      <div style={{ fontSize: 11, color: "var(--gv-color-neutral-400)", textTransform: "uppercase", letterSpacing: ".05em" }}>{m.lbl}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ height: 4, background: "var(--gv-color-neutral-100)", borderRadius: "var(--gv-radius-full)", overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${layer.score}%`, background: col.bar, borderRadius: "var(--gv-radius-full)", transition: "width 0.8s ease" }} />
+                </div>
+              </div>
+              <div style={{ width: 9, height: 9, borderRadius: "50%", flexShrink: 0, alignSelf: "center",
+                background: layer.status === "ok" ? "var(--gv-color-success-500)" : layer.status === "warn" ? "var(--gv-color-warning-500)" : "var(--gv-color-danger-500)",
+                animation: layer.status === "ok" ? "pulse-dot 2.2s infinite" : "none",
+              }} />
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
 }
 
-interface SeoFactor {
-  rank: number;
-  label: string;
-  score: number;
-  status: "good" | "warn" | "low";
-  icon: string;
-  tip: string;
-  detail: string;
-  actions: string[];
-  keywords?: KeywordData[];
-  techIssues?: TechIssue[];
-  backlinks?: BacklinkData[];
+/* ══════════════════════════════════════════════════
+   A14 — Content Score
+══════════════════════════════════════════════════ */
+function ContentScore({ data }: { data: BrandData }) {
+  const sot = data.source_of_truth;
+  const fc = data.firecrawl_data;
+
+  const rows: Array<{ label: string; hint: string; status: "good"|"warn"|"bad"|"neutral"; score: number; max: number }> = [
+    { label: "E-E-A-T Signals", hint: "Author bio, credentials, citations", status: "good", score: sot?.brand_presence?.whats_working?.length ? 18 : 10, max: 20 },
+    { label: "Structured Data / Schema", hint: "FAQ, Product, Organization schema", status: sot ? "good" : "warn", score: sot ? 17 : 8, max: 20 },
+    { label: "Keyword Density & Placement", hint: "Heading, intro, alt text coverage", status: data.serpapi_data ? "warn" : "neutral", score: data.serpapi_data?.keyword_intelligence?.ranking_keywords?.length ? 15 : 10, max: 20 },
+    { label: "Content Freshness", hint: "Update frequency, date signals", status: "neutral", score: fc?.content_intelligence?.content_depth ? 15 : 12, max: 20 },
+    { label: "Multimedia Optimization", hint: "Image alt, video transcript, infographic", status: "bad", score: data.apify_data ? 10 : 6, max: 20 },
+  ];
+
+  const total = rows.reduce((s, r) => s + r.score, 0);
+  const maxTotal = rows.reduce((s, r) => s + r.max, 0);
+
+  const iconMap = {
+    good: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" width="13" height="13"><path d="M20 6 9 17l-5-5"/></svg>,
+    warn: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" width="13" height="13"><path d="M12 9v4"/><path d="M12 17h.01"/></svg>,
+    bad:  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" width="13" height="13"><path d="M18 6 6 18M6 6l12 12"/></svg>,
+    neutral: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="13" height="13"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>,
+  };
+  const bgMap = { good: "var(--gv-color-success-50)", warn: "var(--gv-color-warning-50)", bad: "var(--gv-color-danger-50)", neutral: "var(--gv-color-neutral-100)" };
+  const cMap  = { good: "var(--gv-color-success-700)", warn: "var(--gv-color-warning-700)", bad: "var(--gv-color-danger-700)", neutral: "var(--gv-color-neutral-500)" };
+  const barMap = { good: "var(--gv-color-success-500)", warn: "var(--gv-color-warning-500)", bad: "var(--gv-color-danger-500)", neutral: "var(--gv-color-primary-400)" };
+
+  return (
+    <Card>
+      <CardLabel label="A14 · Content Score" title="Content Optimization Breakdown" />
+      <div style={{ display: "flex", flexDirection: "column" }}>
+        {rows.map((row) => (
+          <div key={row.label} style={{
+            display: "flex", alignItems: "center", gap: 10,
+            padding: "10px 8px", borderBottom: "1px solid var(--gv-color-neutral-100)",
+            cursor: "pointer", borderRadius: "var(--gv-radius-xs)",
+          }}>
+            <div style={{ width: 28, height: 28, borderRadius: "var(--gv-radius-xs)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, background: bgMap[row.status], color: cMap[row.status] }}>
+              {iconMap[row.status]}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: "var(--gv-color-neutral-900)" }}>{row.label}</div>
+              <div style={{ fontSize: 11, color: "var(--gv-color-neutral-400)", marginTop: 1 }}>{row.hint}</div>
+            </div>
+            <div style={{ width: 42, height: 5, background: "var(--gv-color-neutral-100)", borderRadius: "var(--gv-radius-full)", overflow: "hidden", flexShrink: 0 }}>
+              <div style={{ height: "100%", width: `${pct(row.score, row.max)}%`, background: barMap[row.status], borderRadius: "var(--gv-radius-full)" }} />
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", flexShrink: 0, minWidth: 32 }}>
+              <span style={{ fontFamily: "var(--gv-font-mono)", fontSize: 14, fontWeight: 800, color: "var(--gv-color-neutral-900)" }}>{row.score}</span>
+              <span style={{ fontFamily: "var(--gv-font-mono)", fontSize: 10, color: "var(--gv-color-neutral-400)" }}>/{row.max}</span>
+            </div>
+          </div>
+        ))}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 8px 4px", borderTop: "2px solid var(--gv-color-neutral-200)", marginTop: 4 }}>
+          <span style={{ fontFamily: "var(--gv-font-heading)", fontSize: 14, fontWeight: 700, color: "var(--gv-color-neutral-700)" }}>Total Content Score</span>
+          <span style={{ fontFamily: "var(--gv-font-heading)", fontSize: 20, fontWeight: 900, color: "var(--gv-color-primary-600)", letterSpacing: "-.02em" }}>{total} / {maxTotal}</span>
+        </div>
+      </div>
+    </Card>
+  );
 }
 
-// ── GEO Factor type ───────────────────────────────────────────────
-interface PlatformScore {
-  engine: "ChatGPT" | "Perplexity" | "Gemini" | "Claude" | "Grok";
-  icon: string;
-  score: number;
-  analysis: string;
-  suggestion: string;
-}
-
-interface GeoFactor {
-  rank: number;
-  label: string;
-  score: number;
-  status: "good" | "warn" | "low";
-  icon: string;
-  tip: string;
-  detail: string;
-  actions: string[];
-  platforms: PlatformScore[];
-}
-
-const geoFactors: GeoFactor[] = [
-  {
-    rank: 1, label: "E-E-A-T (Kredibilitas Brand)", score: 62, status: "warn", icon: "🏛️",
-    tip: "Brand mentions tumbuh 34% · Belum ada Wikipedia page",
-    detail: "AI engines memprioritaskan brand yang menunjukkan Experience, Expertise, Authoritativeness, dan Trustworthiness nyata — diukur dari brand mentions di media terpercaya, profil founder terverifikasi, dan konsistensi klaim di seluruh web.",
-    actions: ["Buat halaman Wikipedia atau Wikidata entry untuk GeoVera", "Dapatkan wawancara di media DA > 70", "Pastikan profil LinkedIn CEO/Founder lengkap & aktif", "Publish case study dengan data nyata"],
-    platforms: [
-      { engine: "ChatGPT", icon: "🤖", score: 68, analysis: "GeoVera dikenali sebagai platform AI marketing, namun kredibilitas masih lemah karena tidak ada Wikipedia entry dan media coverage terbatas.", suggestion: "Dapatkan coverage di TechCrunch atau Entrepreneur untuk meningkatkan sinyal E-E-A-T di ChatGPT." },
-      { engine: "Perplexity", icon: "🔍", score: 74, analysis: "Perplexity mendeteksi ProductHunt listing dan beberapa review G2. Brand authority masih di bawah kompetitor seperti HubSpot atau Sprout Social.", suggestion: "Tingkatkan review di G2 dan Capterra — Perplexity sering mensitasi platform review ini." },
-      { engine: "Gemini", icon: "✨", score: 58, analysis: "Gemini kesulitan memverifikasi klaim expertise GeoVera karena kurangnya referensi dari sumber Google-trusted seperti Wikipedia dan media nasional.", suggestion: "Buat Google Business Profile yang lengkap dan dapatkan feature di media yang terindeks Google News." },
-      { engine: "Claude", icon: "🧠", score: 61, analysis: "Claude mengenali GeoVera dari konteks konten blog, namun tidak menemukan cukup sinyal otoritas eksternal untuk mengutipnya sebagai sumber terpercaya.", suggestion: "Publish original research atau whitepaper yang bisa direferensikan oleh situs lain." },
-      { engine: "Grok", icon: "⚡", score: 51, analysis: "Grok (berbasis X/Twitter) mendeteksi aktivitas brand di X namun engagement masih rendah. Follower count dan interaksi tidak cukup untuk sinyal authority.", suggestion: "Bangun kehadiran X yang kuat — retweet dari akun berpengaruh di industri AI marketing sangat membantu." },
-    ],
-  },
-  {
-    rank: 2, label: "Struktur Konten (Answer-Ready)", score: 71, status: "good", icon: "📋",
-    tip: "68% artikel menggunakan format FAQ · H2 deskriptif",
-    detail: "Konten 'answer-ready' menggunakan format pertanyaan-jawaban, heading deskriptif, bullet points ringkas, dan definisi yang jelas — memudahkan AI untuk mengutip dan mensintesis informasi dari brand.",
-    actions: ["Tambah blok FAQ schema di setiap artikel pillar", "Gunakan heading berbentuk pertanyaan", "Tulis definisi singkat untuk setiap konsep kunci", "Gunakan tabel perbandingan dan bullet points terstruktur"],
-    platforms: [
-      { engine: "ChatGPT", icon: "🤖", score: 76, analysis: "ChatGPT berhasil mengekstrak jawaban langsung dari artikel GeoVera di 4 dari 6 query yang diuji. Format FAQ di blog berkontribusi signifikan.", suggestion: "Perluas FAQ section di artikel utama dengan pertanyaan long-tail yang sering dicari user." },
-      { engine: "Perplexity", icon: "🔍", score: 79, analysis: "Perplexity mengutip konten GeoVera 21 kali dalam 25 query. Struktur heading H2 yang deskriptif memudahkan Perplexity mengekstrak jawaban spesifik.", suggestion: "Tambah TL;DR box di awal setiap artikel — Perplexity sangat sering mengutip ringkasan singkat." },
-      { engine: "Gemini", icon: "✨", score: 65, analysis: "Gemini berhasil mensintesis konten GeoVera namun sering memilih sumber lain untuk jawaban definitif. Konten kurang 'opinionated' untuk selera Gemini.", suggestion: "Buat konten dengan stance yang jelas dan berbeda — Gemini lebih suka kutip sumber dengan sudut pandang unik." },
-      { engine: "Claude", icon: "🧠", score: 72, analysis: "Claude mengevaluasi struktur konten GeoVera sebagai baik — definisi konsep jelas dan flow logis. Namun depth analisis di beberapa artikel masih dangkal.", suggestion: "Perkuat section 'Analisis Mendalam' di setiap artikel dengan data dan reasoning yang lebih detail." },
-      { engine: "Grok", icon: "⚡", score: 63, analysis: "Grok menemukan konten GeoVera kurang relevan untuk query real-time. Format konten sudah baik namun kurang membahas tren dan berita terkini.", suggestion: "Tambah 'What's New' atau 'Update Terkini' di artikel evergreen untuk boost freshness signal di Grok." },
-    ],
-  },
-  {
-    rank: 3, label: "Kedalaman Topik & Topical Authority", score: 58, status: "warn", icon: "🎯",
-    tip: "Cluster AI Marketing kuat · GEO & Brand Intelligence perlu diperdalam",
-    detail: "AI engines menilai seberapa dalam brand membahas topik tertentu. Topical authority dibangun ketika satu brand konsisten menjadi sumber terpercaya untuk subtopik tertentu dengan nuansa dan insight unik.",
-    actions: ["Buat 3 pillar artikel 3000+ kata untuk topik utama", "Cover setiap subtopik: GEO, AI Marketing, Brand Automation", "Lakukan original research: survey, data analysis, benchmark", "Bangun internal link cluster yang kuat"],
-    platforms: [
-      { engine: "ChatGPT", icon: "🤖", score: 63, analysis: "ChatGPT mengakui GeoVera sebagai pemain di AI marketing namun belum memposisikannya sebagai authority definitif. Topik GEO dan Brand Intelligence hampir tidak terdeteksi.", suggestion: "Buat seri artikel 'The Definitive Guide to GEO' yang komprehensif — ChatGPT akan mulai mengutipnya sebagai referensi utama." },
-      { engine: "Perplexity", icon: "🔍", score: 67, analysis: "Perplexity mensitasi GeoVera untuk query spesifik tentang AI marketing automation, namun untuk query tentang GEO masih mengutip kompetitor lebih sering.", suggestion: "Publish artikel riset mendalam tentang GEO dengan data original — ini akan menjadi 'go-to source' Perplexity." },
-      { engine: "Gemini", icon: "✨", score: 52, analysis: "Gemini jarang mengutip GeoVera untuk topik mendalam. Konten yang ada terlalu surface-level dibanding sumber seperti HubSpot Academy atau Content Marketing Institute.", suggestion: "Buat konten setara HubSpot Academy dalam niche GEO — panjang, terstruktur, dan data-driven." },
-      { engine: "Claude", icon: "🧠", score: 55, analysis: "Claude menemukan celah topical authority GeoVera: kuatnya di AI marketing surface, lemah di GEO strategy dan brand intelligence mendalam.", suggestion: "Tulis 5 artikel cluster tentang Brand Intelligence dengan subtopik yang sangat spesifik dan teknis." },
-      { engine: "Grok", icon: "⚡", score: 54, analysis: "Grok mengutip GeoVera hanya sekali dari 23 query yang relevan. Konten kurang membahas tren industri terkini yang menjadi fokus Grok.", suggestion: "Buat konten reaktif terhadap tren AI yang viral — Grok sangat menyukai konten yang relevan dengan diskusi terkini." },
-    ],
-  },
-  {
-    rank: 4, label: "Freshness & Relevansi Terkini", score: 54, status: "warn", icon: "🔄",
-    tip: "Avg konten usia 3.2 bulan · Update frequency perlu ditingkatkan",
-    detail: "Brand yang konsisten memproduksi konten segar tentang perkembangan industri lebih sering muncul dalam jawaban AI — terutama untuk query time-sensitive seperti 'best tools 2026'.",
-    actions: ["Update artikel populer dengan data terbaru setiap 60 hari", "Buat weekly digest untuk freshness sinyal", "Publish konten reaktif dalam 24-48 jam setelah tren baru", "Tambah tanggal 'last updated' yang jelas"],
-    platforms: [
-      { engine: "ChatGPT", icon: "🤖", score: 55, analysis: "ChatGPT training data memiliki cutoff tetap, namun Browsing mode mendeteksi artikel GeoVera terakhir dipublish 3 bulan lalu. Skor freshness rendah untuk query 'terbaik 2026'.", suggestion: "Publish minimal 2 artikel per minggu dan update artikel lama dengan tag 'Updated [bulan ini]'." },
-      { engine: "Perplexity", icon: "🔍", score: 61, analysis: "Perplexity (real-time web) mendeteksi GeoVera memiliki gap konten di Januari-Februari 2026. Kompetitor lebih aktif publikasi di periode ini.", suggestion: "Jadwalkan konten secara konsisten — setidaknya 3x per minggu untuk sinyal freshness Perplexity yang kuat." },
-      { engine: "Gemini", icon: "✨", score: 49, analysis: "Gemini lebih memprioritaskan sumber yang konsisten update. GeoVera kalah dari sumber yang publish konten harian atau mingguan tentang AI marketing.", suggestion: "Buat 'AI Marketing Weekly' newsletter yang juga dipublish sebagai halaman web untuk boost freshness." },
-      { engine: "Claude", icon: "🧠", score: 52, analysis: "Claude mengevaluasi relevansi konten berdasarkan kecocokan dengan perkembangan terbaru. Beberapa artikel GeoVera tidak mencerminkan perkembangan AI Q1 2026.", suggestion: "Review dan update 5 artikel terpopuler dengan perkembangan AI terbaru — tambahkan section 'Update 2026'." },
-      { engine: "Grok", icon: "⚡", score: 54, analysis: "Grok sangat memprioritaskan konten real-time. GeoVera hampir tidak muncul di query Grok karena kurangnya aktivitas publikasi di 6 minggu terakhir.", suggestion: "Post thread X harian tentang tren AI marketing dan link ke artikel GeoVera — Grok mengindeks X secara real-time." },
-    ],
-  },
-  {
-    rank: 5, label: "Sinyal Teknis (GEO-Optimized)", score: 66, status: "warn", icon: "⚙️",
-    tip: "Sitemap OK · Structured data 60% coverage · LLM.txt belum ada",
-    detail: "GEO memerlukan optimasi teknis khusus di luar SEO standar: LLM.txt untuk AI crawlers, structured data yang kaya, dan meta descriptions yang ditulis sebagai AI-digestible summary.",
-    actions: ["Buat file LLM.txt dan robots.txt untuk AI crawlers", "Implementasi Article, Organization, FAQPage schema", "Tulis meta descriptions sebagai AI-digestible summary", "Pastikan konten accessible tanpa JavaScript"],
-    platforms: [
-      { engine: "ChatGPT", icon: "🤖", score: 70, analysis: "ChatGPT Browsing dapat mengakses halaman GeoVera dengan baik. Namun tidak ada LLM.txt yang memberi instruksi khusus tentang konten apa yang boleh dikutip.", suggestion: "Buat robots.txt dengan GPTBot directive dan LLM.txt yang mengarahkan ke konten pillar terbaik." },
-      { engine: "Perplexity", icon: "🔍", score: 73, analysis: "Perplexity berhasil mengindeks sebagian besar konten GeoVera. Article schema di 60% halaman membantu, namun 40% sisanya kehilangan konteks penting.", suggestion: "Implementasi Article schema 100% coverage — prioritaskan halaman dengan traffic tertinggi lebih dulu." },
-      { engine: "Gemini", icon: "✨", score: 62, analysis: "Gemini kesulitan mengekstrak informasi terstruktur dari beberapa halaman karena rendering JavaScript yang berat. Structured data tidak konsisten.", suggestion: "Pastikan semua konten ter-render sebagai static HTML — gunakan SSR atau pre-rendering untuk semua halaman." },
-      { engine: "Claude", icon: "🧠", score: 65, analysis: "Claude dapat mengakses dan memahami konten GeoVera, namun Organization schema yang tidak lengkap menyebabkan ambiguitas tentang identitas dan scope bisnis.", suggestion: "Deploy Organization schema lengkap dengan sameAs links ke LinkedIn, Crunchbase, dan ProductHunt." },
-      { engine: "Grok", icon: "⚡", score: 60, analysis: "Grok mengandalkan X/web untuk real-time indexing. Sinyal teknis GeoVera cukup untuk Grok, namun meta descriptions tidak dioptimasi untuk ekstraksi AI.", suggestion: "Tulis meta description sebagai 1 kalimat ringkasan yang langsung menjawab 'Apa itu GeoVera dan untuk siapa?'" },
-    ],
-  },
-  {
-    rank: 6, label: "Schema & Structured Data", score: 49, status: "low", icon: "🗂️",
-    tip: "Article schema 60% · Organization schema belum lengkap · No HowTo schema",
-    detail: "Schema markup memberi konteks eksplisit kepada AI engines. Organization schema dengan sameAs links ke Wikipedia dan LinkedIn membantu AI memverifikasi identitas brand. FAQ dan HowTo schema langsung meningkatkan kemungkinan dikutip.",
-    actions: ["Deploy Organization schema lengkap dengan sameAs", "Tambah FAQPage schema ke 20 artikel tertinggi", "Implementasi HowTo schema untuk semua tutorial", "Gunakan BreadcrumbList schema"],
-    platforms: [
-      { engine: "ChatGPT", icon: "🤖", score: 48, analysis: "ChatGPT tidak menemukan Organization schema lengkap di geovera.xyz. Akibatnya, informasi dasar tentang GeoVera (lokasi, founder, produk) sering tidak akurat dalam jawaban.", suggestion: "Deploy Organization schema dengan name, url, logo, foundingDate, dan sameAs ke semua profil publik — ini paling kritis." },
-      { engine: "Perplexity", icon: "🔍", score: 55, analysis: "Perplexity memanfaatkan Article schema yang ada (60% coverage) dengan baik, namun sering kehilangan konteks di 40% halaman tanpa schema.", suggestion: "Implementasi schema di semua halaman dalam 1 sprint — gunakan JSON-LD di head document untuk kemudahan." },
-      { engine: "Gemini", icon: "✨", score: 44, analysis: "Gemini sangat bergantung pada structured data untuk verifikasi entitas. Tanpa schema lengkap, GeoVera sering dikategorikan sebagai 'unverified entity'.", suggestion: "Prioritas: deploy SoftwareApplication schema dengan applicationCategory, operatingSystem, dan offers — ini format yang disukai Gemini." },
-      { engine: "Claude", icon: "🧠", score: 50, analysis: "Claude mengevaluasi schema GeoVera sebagai 'minimal' — ada tapi tidak komprehensif. HowTo schema untuk tutorial sangat dibutuhkan untuk meningkatkan citability.", suggestion: "Tambah HowTo schema ke 5 artikel tutorial terpopuler — ini akan langsung meningkatkan kutipan Claude untuk query instruksional." },
-      { engine: "Grok", icon: "⚡", score: 47, analysis: "Grok kurang bergantung pada structured data dibanding engine lain, namun FAQPage schema yang hilang menyebabkan Grok sering melewatkan konten FAQ GeoVera.", suggestion: "Implementasi FAQPage schema — meski Grok tidak bergantung penuh, ini meningkatkan visibilitas di semua engine sekaligus." },
-    ],
-  },
-  {
-    rank: 7, label: "Kehadiran di Sumber Training Penting", score: 41, status: "low", icon: "📚",
-    tip: "ProductHunt ✓ · Wikipedia ✗ · Crunchbase ✓ · GitHub ✗",
-    detail: "Data training AI berasal dari sumber berpengaruh: Wikipedia, GitHub, Reddit, Hacker News, Medium, dan direktori bisnis terpercaya. Brand yang hadir di sumber-sumber ini jauh lebih sering dikutip AI.",
-    actions: ["Buat halaman Wikipedia GeoVera dengan referensi terverifikasi", "Publish artikel teknis di Medium dan Dev.to", "Aktif di Hacker News: Show HN dan komentar relevan", "Buat GitHub repo publik dengan tools AI marketing"],
-    platforms: [
-      { engine: "ChatGPT", icon: "🤖", score: 38, analysis: "ChatGPT training data tidak mencakup GeoVera secara signifikan — tidak ada Wikipedia entry, minimal Reddit mention, dan tidak ada GitHub presence. Brand hampir tidak dikenal dalam model base.", suggestion: "Wikipedia adalah prioritas absolut untuk ChatGPT. Buat entry dengan referensi dari minimal 3 media terpercaya sebagai syarat verifikasi." },
-      { engine: "Perplexity", icon: "🔍", score: 52, analysis: "Perplexity (real-time) dapat mengakses ProductHunt dan Crunchbase GeoVera. Namun sumber web authoritative seperti Wikipedia dan media besar masih kosong.", suggestion: "Targetkan 'Show HN' di Hacker News — satu thread yang populer di HN bisa langsung meningkatkan Perplexity visibility 3x." },
-      { engine: "Gemini", icon: "✨", score: 38, analysis: "Gemini sangat bergantung pada Wikipedia dan Google Knowledge Graph. Tanpa Wikipedia entry, GeoVera tidak ada di Knowledge Graph dan hampir tidak visible di Gemini.", suggestion: "Buat Wikipedia draft dan submit ke Wikipedia:Articles for Creation — ini adalah single highest-impact action untuk Gemini." },
-      { engine: "Claude", icon: "🧠", score: 43, analysis: "Claude training mencakup web data luas, namun GeoVera hampir tidak muncul karena kurangnya presence di sumber-sumber yang heavily crawled seperti GitHub dan arXiv.", suggestion: "Publish technical content di GitHub (tools, datasets, atau open-source utilities) — GitHub presence sangat mempengaruhi Claude training data." },
-      { engine: "Grok", icon: "⚡", score: 31, analysis: "Grok berbasis X data. GeoVera memiliki kehadiran X yang minimal — follower rendah, engagement rendah, dan hampir tidak ada mention dari akun berpengaruh di tech/AI.", suggestion: "Invest 3 bulan membangun X presence secara serius: daily post, engage dengan AI influencer, dan dapatkan RT dari akun tech besar." },
-    ],
-  },
-  {
-    rank: 8, label: "Kejelasan Fakta & Data Terverifikasi", score: 55, status: "warn", icon: "✅",
-    tip: "67% klaim didukung data · Sumber eksternal terbatas",
-    detail: "AI engines memprioritaskan konten dengan klaim yang dapat diverifikasi. Original data (survei, studi kasus) adalah aset GEO terkuat karena AI engines sering mensitasi primary sources.",
-    actions: ["Setiap klaim statistik harus link ke sumber primer", "Lakukan survei tahunan 'State of AI Marketing'", "Buat halaman data publik dengan benchmark industri", "Gunakan format yang mudah dikutip AI"],
-    platforms: [
-      { engine: "ChatGPT", icon: "🤖", score: 58, analysis: "ChatGPT menemukan beberapa klaim di artikel GeoVera tidak didukung sumber eksternal. 33% klaim statistik tidak ada referensinya, menurunkan kepercayaan model.", suggestion: "Audit semua artikel dan tambahkan footnote/link untuk setiap statistik — format '[Sumber: nama]' sangat membantu ChatGPT memverifikasi." },
-      { engine: "Perplexity", icon: "🔍", score: 63, analysis: "Perplexity memberikan citation credit ke GeoVera hanya saat konten memiliki data yang jelas dengan sumber. Artikel tanpa data spesifik tidak pernah dikutip.", suggestion: "Buat '2026 AI Marketing Benchmark Report' dengan data survei original — Perplexity akan mengutipnya ratusan kali." },
-      { engine: "Gemini", icon: "✨", score: 51, analysis: "Gemini menganggap banyak klaim GeoVera sebagai 'unverified assertions'. Tanpa backlink dari sumber terpercaya yang mengonfirmasi klaim tersebut, Gemini memilih sumber lain.", suggestion: "Dapatkan endorsement klaim dari sumber seperti Forrester, Gartner, atau laporan McKinsey — Gemini sangat menghormati analyst report citations." },
-      { engine: "Claude", icon: "🧠", score: 57, analysis: "Claude menilai factual accuracy GeoVera sebagai 'good but not great' — fakta utama benar namun kurang presisi dan kurang primary source citations.", suggestion: "Tambah methodology section di setiap artikel yang mengklaim data — jelaskan bagaimana data dikumpulkan dan apa sampelnya." },
-      { engine: "Grok", icon: "⚡", score: 45, analysis: "Grok tidak dapat memverifikasi banyak klaim GeoVera karena tidak ada diskusi tentang data tersebut di X. Klaim yang tidak dibicarakan di media sosial dianggap less credible.", suggestion: "Share data dan statistik GeoVera di X dengan visualisasi menarik — diskusi dan RT dari komunitas akan meningkatkan kredibilitas di Grok." },
-    ],
-  },
+/* ══════════════════════════════════════════════════
+   A15 — Engagement Heatmap
+══════════════════════════════════════════════════ */
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const HOURS = ["06", "09", "12", "15", "18", "21"];
+// Default heatmap intensity grid (rows=hours, cols=days)
+const DEFAULT_GRID = [
+  [1, 1, 2, 1, 2, 0, 0],
+  [4, 5, 5, 4, 6, 2, 1],
+  [6, 7, "peak", 7, "peak", 5, 4],
+  [5, 6, 6, 5, 7, 6, 5],
+  [7, "peak", 7, "peak", "peak", 7, 6],
+  [4, 5, 4, 4, 6, 7, "peak"],
 ];
 
-// ── Right Detail Panel ───────────────────────────────────────────
-type SelectedItem =
-  | { type: "content"; item: ContentItem }
-  | { type: "geo"; item: GeoItem }
-  | { type: "social"; item: SocialItem }
-  | { type: "seo-factor"; item: SeoFactor }
-  | { type: "geo-factor"; item: GeoFactor }
-  | { type: "social-factor"; item: SocialFactor }
-  | { type: "overview-todo"; item: TodoItem }
-  | { type: "overview-content"; item: TopContentItem }
-  | { type: "overview-plan"; item: ContentPlanItem }
-  | null;
+const CELL_BG: Record<string, string> = {
+  "0": "var(--gv-color-neutral-100)",
+  "1": "rgba(95,143,139,.12)",
+  "2": "rgba(95,143,139,.22)",
+  "3": "rgba(95,143,139,.34)",
+  "4": "rgba(95,143,139,.48)",
+  "5": "rgba(95,143,139,.62)",
+  "6": "rgba(95,143,139,.76)",
+  "7": "var(--gv-color-primary-500)",
+  peak: "var(--gv-gradient-primary)",
+};
 
-interface PageSpeedResult {
-  url: string;
-  strategy: "mobile" | "desktop";
-  scores: { performance?: number };
-  metrics: Record<string, { title: string; displayValue: string; score: number | null }>;
-  fetchTime: string | null;
-}
-
-function DetailPanel({ selected, section, analyticsReport }: { selected: SelectedItem; section: AnalyticsSection; analyticsReport: AnalyticsReport | null }) {
-  const [psData, setPsData] = React.useState<{ mobile: PageSpeedResult | null; desktop: PageSpeedResult | null }>({ mobile: null, desktop: null });
-  const [psLoading, setPsLoading] = React.useState(false);
-
-  const isPageSpeedFactor = selected?.type === "seo-factor" && selected.item.rank === 5;
-
-  React.useEffect(() => {
-    if (!isPageSpeedFactor || psData.mobile) return;
-    setPsLoading(true);
-    const base = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/pagespeed-check`;
-    Promise.all([
-      fetch(`${base}?url=https://geovera.xyz&strategy=mobile`).then((r) => r.json()),
-      fetch(`${base}?url=https://geovera.xyz&strategy=desktop`).then((r) => r.json()),
-    ])
-      .then(([mobile, desktop]) => setPsData({ mobile, desktop }))
-      .finally(() => setPsLoading(false));
-  }, [isPageSpeedFactor]);
-  if (!selected) {
-    // Overview empty state — keywords, topics, visibility
-    if (section === "overview") {
-      return (
-        <div className="flex flex-col h-full overflow-y-auto custom-scrollbar px-4 py-4 space-y-5">
-          {/* Keywords Tracking */}
-          {analyticsReport?.keywords_tracking && analyticsReport.keywords_tracking.length > 0 && (
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.1em] mb-2.5" style={{ color: "var(--gv-color-neutral-400)" }}>Keywords Tracking</p>
-              <div className="space-y-1">
-                {analyticsReport.keywords_tracking.map((k, i) => {
-                  const oppColor = k.opportunity === "high" ? "#16A34A" : k.opportunity === "medium" ? "#D97706" : "#9CA3AF";
-                  const typeLabel = k.type === "quick_win" ? "⚡" : k.type === "gap" ? "🎯" : "📊";
-                  return (
-                    <div key={i} className="rounded-[12px] px-3 py-2" style={{ background: "var(--gv-color-neutral-50)", border: "1px solid var(--gv-color-neutral-100)" }}>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[11px]">{typeLabel}</span>
-                        <p className="text-[12px] font-semibold flex-1 min-w-0 truncate" style={{ color: "var(--gv-color-neutral-900)" }}>{k.keyword}</p>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          {k.current_rank ? <span className="text-[11px] font-bold" style={{ color: "var(--gv-color-primary-600)" }}>#{k.current_rank}</span> : <span className="text-[10px]" style={{ color: "var(--gv-color-neutral-400)" }}>—</span>}
-                          <span className="text-[10px] font-bold" style={{ color: oppColor }}>{k.opportunity}</span>
-                        </div>
-                      </div>
-                      <p className="text-[10px] mt-0.5 pl-5" style={{ color: "var(--gv-color-neutral-500)" }}>{k.action}</p>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Topics Tracking */}
-          {analyticsReport?.topics_tracking && analyticsReport.topics_tracking.length > 0 && (
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.1em] mb-2.5" style={{ color: "var(--gv-color-neutral-400)" }}>Topics Tracking</p>
-              <div className="space-y-1.5">
-                {analyticsReport.topics_tracking.map((t, i) => {
-                  const oppColor = t.opportunity === "high" ? "#16A34A" : t.opportunity === "medium" ? "#D97706" : "#9CA3AF";
-                  return (
-                    <div key={i} className="rounded-[12px] px-3 py-2" style={{ background: "var(--gv-color-neutral-50)", border: "1px solid var(--gv-color-neutral-100)" }}>
-                      <div className="flex items-center gap-2 mb-1">
-                        <p className="text-[12px] font-semibold flex-1 min-w-0" style={{ color: "var(--gv-color-neutral-900)" }}>{t.topic}</p>
-                        <span className="text-[10px] font-bold flex-shrink-0" style={{ color: oppColor }}>{t.opportunity}</span>
-                      </div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <div className="flex-1 h-1.5 rounded-full" style={{ background: "var(--gv-color-neutral-200)" }}>
-                          <div className="h-1.5 rounded-full" style={{ background: "var(--gv-color-primary-500)", width: `${t.content_coverage}%` }} />
-                        </div>
-                        <span className="text-[10px]" style={{ color: "var(--gv-color-neutral-500)" }}>{t.content_coverage}%</span>
-                      </div>
-                      <p className="text-[10px]" style={{ color: "var(--gv-color-neutral-500)" }}>{t.action}</p>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Visibility Strategy */}
-          {analyticsReport?.visibility_strategy && (
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.1em] mb-2.5" style={{ color: "var(--gv-color-neutral-400)" }}>Visibility Strategy</p>
-              <div className="space-y-2">
-                {([
-                  { key: "search_visibility" as const, label: "Search Visibility", icon: "🔍" },
-                  { key: "discovery" as const, label: "Discovery", icon: "✨" },
-                  { key: "authority" as const, label: "Authority", icon: "🏛️" },
-                  { key: "timeline_presence" as const, label: "Timeline Presence", icon: "⚡" },
-                ] as const).map(({ key, label, icon }) => {
-                  const pillar = analyticsReport.visibility_strategy?.[key];
-                  if (!pillar) return null;
-                  const scoreColor = pillar.score >= 70 ? "#16A34A" : pillar.score >= 50 ? "#D97706" : "#DC2626";
-                  return (
-                    <div key={key} className="rounded-[12px] p-3" style={{ background: "var(--gv-color-neutral-50)", border: "1px solid var(--gv-color-neutral-100)" }}>
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span className="text-sm">{icon}</span>
-                        <p className="text-[11px] font-semibold flex-1" style={{ color: "var(--gv-color-neutral-900)" }}>{label}</p>
-                        <span className="text-[13px] font-bold" style={{ color: scoreColor }}>{pillar.score}</span>
-                      </div>
-                      <p className="text-[10px] mb-1.5" style={{ color: "var(--gv-color-neutral-500)" }}>{pillar.tactic}</p>
-                      <div className="space-y-0.5">
-                        {pillar.actions?.slice(0, 2).map((a, ai) => (
-                          <p key={ai} className="text-[10px]" style={{ color: "var(--gv-color-neutral-500)" }}>• {a}</p>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {!analyticsReport && (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <p className="text-[13px] font-semibold" style={{ color: "var(--gv-color-neutral-500)" }}>Run an analysis to see insights</p>
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    // GEO empty state — show tracked AI platforms
-    if (section === "geo") {
-      const trackedPlatforms = [
-        { name: "ChatGPT", icon: "🤖", desc: "OpenAI · GPT-4o" },
-        { name: "Perplexity", icon: "🔍", desc: "Real-time web search" },
-        { name: "Gemini", icon: "✨", desc: "Google DeepMind" },
-        { name: "Claude", icon: "🧠", desc: "Anthropic" },
-        { name: "Grok", icon: "⚡", desc: "xAI · X Platform" },
-        { name: "Copilot", icon: "💡", desc: "Microsoft · Bing" },
-      ];
-      return (
-        <div className="flex flex-col h-full p-4">
-          <div className="mb-4">
-            <p className="text-[11px] font-bold uppercase tracking-[0.1em] mb-0.5" style={{ color: "var(--gv-color-neutral-400)" }}>AI Platforms Tracked</p>
-            <p className="text-[11px]" style={{ color: "var(--gv-color-neutral-400)" }}>Pilih faktor GEO untuk melihat detail analisa</p>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            {trackedPlatforms.map((p) => (
-              <div key={p.name} className="rounded-[14px] p-3 flex items-center gap-3" style={{ border: "1px solid var(--gv-color-neutral-100)" }}>
-                <span className="text-2xl flex-shrink-0">{p.icon}</span>
-                <div className="min-w-0">
-                  <p className="text-[13px] font-semibold leading-tight" style={{ color: "var(--gv-color-neutral-900)" }}>{p.name}</p>
-                  <p className="text-[10px] mt-0.5 truncate" style={{ color: "var(--gv-color-neutral-400)" }}>{p.desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      );
-    }
-    const sectionLabel = section === "seo" ? "a factor to see details" : "a post to see score";
-    return (
-      <div className="flex h-full items-center justify-center p-8">
-        <div className="text-center">
-          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full" style={{ background: "var(--gv-color-neutral-100)" }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--gv-color-neutral-400)" strokeWidth="1.5">
-              <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </div>
-          <p className="text-[13px] font-semibold" style={{ color: "var(--gv-color-neutral-500)" }}>Select {sectionLabel}</p>
-          <p className="mt-1 text-[11px]" style={{ color: "var(--gv-color-neutral-400)" }}>Click any item in the center panel</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Overview — todo detail
-  if (selected.type === "overview-todo") {
-    const t = selected.item;
-    const catColor = t.category === "SEO" ? "#1D4ED8" : t.category === "GEO" ? "#7C3AED" : "#DB2777";
-    const catBg   = t.category === "SEO" ? "#EFF6FF"  : t.category === "GEO" ? "#F5F3FF"  : "#FDF2F8";
-    const impactColor = t.impact >= 8 ? "#16A34A" : t.impact >= 5 ? "#D97706" : "#9CA3AF";
-    return (
-      <div className="flex flex-col h-full">
-        <div className="p-4" style={{ borderBottom: "1px solid var(--gv-color-neutral-100)" }}>
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full" style={{ background: catBg, color: catColor }}>{t.category}</span>
-            <span className="text-[10px] font-medium" style={{ color: "var(--gv-color-neutral-400)" }}>Priority #{t.id?.replace("todo_","")}</span>
-          </div>
-          <h3 className="text-[15px] font-bold leading-snug" style={{ color: "var(--gv-color-neutral-900)", fontFamily: "var(--gv-font-heading)" }}>{t.title}</h3>
-          <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--gv-color-neutral-600)" }}>{t.description}</p>
-        </div>
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { label: "Impact", value: `${t.impact}/10`, color: impactColor },
-              { label: "Effort", value: `${t.effort}/10`, color: "var(--gv-color-neutral-700)" },
-              { label: "Score Gain Est.", value: t.score_gain_est, color: "#16A34A" },
-              { label: "Metric", value: t.metric_affected?.replace(/_/g," "), color: "var(--gv-color-neutral-700)" },
-            ].map((m) => (
-              <div key={m.label} className="rounded-[12px] p-3 text-center" style={{ background: "var(--gv-color-neutral-50)", border: "1px solid var(--gv-color-neutral-100)" }}>
-                <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "var(--gv-color-neutral-400)" }}>{m.label}</p>
-                <p className="text-[15px] font-bold capitalize" style={{ color: m.color }}>{m.value}</p>
-              </div>
-            ))}
-          </div>
-          <div style={{ height: 1, background: "var(--gv-color-neutral-100)" }} />
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: "var(--gv-color-neutral-400)" }}>GeoVera Service</p>
-            <span className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium capitalize" style={{ background: "var(--gv-color-primary-50)", color: "var(--gv-color-primary-700)" }}>{t.geovera_service?.replace(/_/g," ")}</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Overview — top content detail
-  if (selected.type === "overview-content") {
-    const c = selected.item;
-    const platformIcons: Record<string, string> = { website:"✍️", instagram:"📸", tiktok:"🎵", linkedin:"💼", youtube:"▶️" };
-    const typeIcons: Record<string, string> = { article:"📄", social_reel:"🎬", social_post:"📱", video:"▶️" };
-    return (
-      <div className="flex flex-col h-full">
-        <div className="p-4" style={{ borderBottom: "1px solid var(--gv-color-neutral-100)" }}>
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-lg">{platformIcons[c.platform] ?? "📄"}</span>
-            <span className="text-xs font-medium capitalize" style={{ color: "var(--gv-color-neutral-500)" }}>{c.platform}</span>
-            <span className="text-[10px]" style={{ color: "var(--gv-color-neutral-400)" }}>·</span>
-            <span className="text-xs" style={{ color: "var(--gv-color-neutral-400)" }}>{typeIcons[c.type] ?? "📄"} {c.type?.replace(/_/g," ")}</span>
-          </div>
-          <h3 className="text-[15px] font-bold leading-snug" style={{ color: "var(--gv-color-neutral-900)", fontFamily: "var(--gv-font-heading)" }}>{c.title}</h3>
-        </div>
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
-          {/* Impact scores */}
-          <div>
-            <h4 className="text-xs font-medium uppercase mb-2.5" style={{ color: "var(--gv-color-neutral-400)" }}>Impact Scores</h4>
-            {[
-              { label: "SEO Impact", score: c.seo_impact, color: "#1D4ED8", bg: "#EFF6FF" },
-              { label: "GEO Impact", score: c.geo_impact, color: "#7C3AED", bg: "#F5F3FF" },
-              { label: "Social Impact", score: c.social_impact, color: "#DB2777", bg: "#FDF2F8" },
-              { label: "Overall Impact", score: c.overall_impact, color: "#16A34A", bg: "#DCFCE7" },
-            ].map((m) => (
-              <div key={m.label} className="mb-2.5">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-medium" style={{ color: "var(--gv-color-neutral-700)" }}>{m.label}</span>
-                  <span className="text-sm font-bold" style={{ color: m.color }}>{m.score}</span>
-                </div>
-                <div style={{ height: 6, borderRadius: 99, background: "var(--gv-color-neutral-100)" }}>
-                  <div style={{ height: 6, borderRadius: 99, background: m.color, width: `${m.score}%`, transition: "width 0.3s", opacity: 0.8 }} />
-                </div>
-              </div>
-            ))}
-          </div>
-          <div style={{ height: 1, background: "var(--gv-color-neutral-100)" }} />
-          <div>
-            <h4 className="text-xs font-medium uppercase mb-1.5" style={{ color: "var(--gv-color-neutral-400)" }}>Why It Works</h4>
-            <p className="text-sm leading-relaxed" style={{ color: "var(--gv-color-neutral-700)" }}>{c.why_it_works}</p>
-          </div>
-          <div className="rounded-[12px] p-3 flex items-start gap-2" style={{ background: "var(--gv-color-primary-50)", border: "1px solid var(--gv-color-primary-100)" }}>
-            <span className="text-sm flex-shrink-0 mt-0.5">💡</span>
-            <p className="text-xs leading-relaxed" style={{ color: "var(--gv-color-primary-700)" }}><strong>Replicate:</strong> {c.replicate_insight}</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Overview — content plan detail
-  if (selected.type === "overview-plan") {
-    const p = selected.item;
-    const catColor = p.category === "SEO" ? "#1D4ED8" : p.category === "GEO" ? "#7C3AED" : "#DB2777";
-    const catBg   = p.category === "SEO" ? "#EFF6FF"  : p.category === "GEO" ? "#F5F3FF"  : "#FDF2F8";
-    const typeLabel = p.type?.replace(/_/g," ") ?? "";
-    return (
-      <div className="flex flex-col h-full">
-        <div className="p-4" style={{ borderBottom: "1px solid var(--gv-color-neutral-100)" }}>
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background: "var(--gv-color-neutral-100)", color: "var(--gv-color-neutral-600)" }}>Day {p.day}</span>
-            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full" style={{ background: catBg, color: catColor }}>{p.category}</span>
-          </div>
-          <h3 className="text-[15px] font-bold leading-snug" style={{ color: "var(--gv-color-neutral-900)", fontFamily: "var(--gv-font-heading)" }}>{p.title}</h3>
-          <p className="mt-1 text-xs capitalize" style={{ color: "var(--gv-color-neutral-500)" }}>{typeLabel} · {p.platform}</p>
-        </div>
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--gv-color-neutral-400)" }}>Target Keyword</p>
-            <p className="text-sm font-medium" style={{ color: "var(--gv-color-primary-700)", background: "var(--gv-color-primary-50)", display: "inline-block", padding: "2px 8px", borderRadius: 999 }}>{p.target_keyword}</p>
-          </div>
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--gv-color-neutral-400)" }}>Goal</p>
-            <p className="text-sm leading-relaxed" style={{ color: "var(--gv-color-neutral-700)" }}>{p.goal}</p>
-          </div>
-          <div style={{ height: 1, background: "var(--gv-color-neutral-100)" }} />
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: "var(--gv-color-neutral-400)" }}>Content Brief</p>
-            <p className="text-sm leading-relaxed" style={{ color: "var(--gv-color-neutral-700)" }}>{p.brief}</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // SEO Factor detail
-  if (selected.type === "seo-factor") {
-    const f = selected.item;
-    const statusFill = f.status === "good" ? "#16A34A" : f.status === "warn" ? "#D97706" : "#DC2626";
-    const scoreStyle = { color: statusFill };
-    const badgeStyle = f.status === "good" ? { background: "#DCFCE7", color: "#16A34A" } : f.status === "warn" ? { background: "#FEF3C7", color: "#D97706" } : { background: "#FEE2E2", color: "#DC2626" };
-    const badgeLabel = f.status === "good" ? "Good" : f.status === "warn" ? "Needs Work" : "Low — Prioritas";
-    return (
-      <div className="flex flex-col h-full">
-        {/* Header */}
-        <div className="p-4" style={{ borderBottom: "1px solid var(--gv-color-neutral-100)" }}>
-          <div className="flex items-center gap-3 mb-3">
-            <span className="text-2xl">{f.icon}</span>
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-wider mb-0.5" style={{ color: "var(--gv-color-neutral-400)" }}>Faktor #{f.rank}</p>
-              <h3 className="text-[15px] font-bold leading-snug" style={{ color: "var(--gv-color-neutral-900)", fontFamily: "var(--gv-font-heading)" }}>{f.label}</h3>
-            </div>
-            <span className="text-2xl font-bold" style={scoreStyle}>{f.score}</span>
-          </div>
-          <div style={{ height: 6, borderRadius: 99, background: "var(--gv-color-neutral-100)" }} className="mb-2">
-            <div style={{ height: 6, borderRadius: 99, background: statusFill, width: `${f.score}%`, transition: "width 0.3s" }} />
-          </div>
-          <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium" style={badgeStyle}>{badgeLabel}</span>
-        </div>
-
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
-          {/* NOW */}
-          <div>
-            <h4 className="text-xs font-medium uppercase mb-1.5" style={{ color: "var(--gv-color-neutral-400)" }}>Kondisi Saat Ini</h4>
-            <p className="text-sm font-medium leading-relaxed mb-1" style={{ color: "var(--gv-color-neutral-900)" }}>{f.tip}</p>
-            <p className="text-sm leading-relaxed" style={{ color: "var(--gv-color-neutral-600)" }}>{f.detail}</p>
-          </div>
-
-          <div style={{ height: 1, background: "var(--gv-color-neutral-100)" }} />
-
-          {/* SUGGESTED */}
-          <div>
-            <h4 className="text-xs font-medium uppercase mb-2" style={{ color: "var(--gv-color-neutral-400)" }}>Suggested Actions</h4>
-            <div className="space-y-2">
-              {f.actions.map((action, i) => (
-                <div key={i} className="flex items-start gap-2.5">
-                  <span className="flex-shrink-0 mt-0.5 h-5 w-5 rounded-full flex items-center justify-center" style={{ background: "var(--gv-color-primary-100)" }}>
-                    <span className="text-[10px] font-bold" style={{ color: "var(--gv-color-primary-600)" }}>{i + 1}</span>
-                  </span>
-                  <p className="text-sm leading-relaxed" style={{ color: "var(--gv-color-neutral-700)" }}>{action}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* KEYWORDS — only for keyword factor */}
-          {f.keywords && f.keywords.length > 0 && (() => {
-            const optimized = f.keywords.filter((k) => k.status === "optimized");
-            const monitored = f.keywords.filter((k) => k.status === "monitored");
-            const suggested = f.keywords.filter((k) => k.status === "suggested");
-            return (
-              <>
-                <div style={{ height: 1, background: "var(--gv-color-neutral-100)" }} />
-                <div className="space-y-3">
-                  {optimized.length > 0 && (
-                    <div>
-                      <h4 className="text-xs font-medium uppercase mb-1.5 flex items-center gap-1.5" style={{ color: "var(--gv-color-neutral-400)" }}>
-                        <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ background: "#16A34A" }} />
-                        Keywords Optimized
-                        <span className="ml-auto normal-case font-normal" style={{ color: "#16A34A" }}>{optimized.length} keywords</span>
-                      </h4>
-                      <div className="divide-y" style={{ borderColor: "var(--gv-color-neutral-100)" }}>
-                        {optimized.map((k, i) => (
-                          <div key={i} className="flex items-center justify-between gap-2 py-1.5">
-                            <p className="text-sm truncate flex-1" style={{ color: "var(--gv-color-neutral-800)" }}>{k.keyword}</p>
-                            <div className="flex items-center gap-3 flex-shrink-0">
-                              <span className="text-sm font-semibold" style={{ color: "#16A34A" }}>#{k.position}</span>
-                              <span className="text-xs" style={{ color: "var(--gv-color-neutral-400)" }}>{k.volume >= 1000 ? `${(k.volume / 1000).toFixed(1)}K` : k.volume}/mo</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {monitored.length > 0 && (
-                    <div>
-                      <h4 className="text-xs font-medium uppercase mb-1.5 flex items-center gap-1.5" style={{ color: "var(--gv-color-neutral-400)" }}>
-                        <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ background: "#D97706" }} />
-                        Keywords Monitored
-                        <span className="ml-auto normal-case font-normal" style={{ color: "#D97706" }}>{monitored.length} keywords</span>
-                      </h4>
-                      <div className="divide-y" style={{ borderColor: "var(--gv-color-neutral-100)" }}>
-                        {monitored.map((k, i) => (
-                          <div key={i} className="flex items-center justify-between gap-2 py-1.5">
-                            <p className="text-sm truncate flex-1" style={{ color: "var(--gv-color-neutral-800)" }}>{k.keyword}</p>
-                            <div className="flex items-center gap-3 flex-shrink-0">
-                              <span className="text-sm font-semibold" style={{ color: "#D97706" }}>#{k.position}</span>
-                              <span className="text-xs" style={{ color: "var(--gv-color-neutral-400)" }}>{k.volume >= 1000 ? `${(k.volume / 1000).toFixed(1)}K` : k.volume}/mo</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {suggested.length > 0 && (
-                    <div>
-                      <h4 className="text-xs font-medium uppercase mb-1.5 flex items-center gap-1.5" style={{ color: "var(--gv-color-neutral-400)" }}>
-                        <span className="h-2 w-2 rounded-full bg-blue-400 flex-shrink-0" />
-                        Suggested Keywords
-                        <span className="ml-auto normal-case font-normal text-blue-500">{suggested.length} keywords</span>
-                      </h4>
-                      <div className="divide-y" style={{ borderColor: "var(--gv-color-neutral-100)" }}>
-                        {suggested.map((k, i) => (
-                          <div key={i} className="flex items-center justify-between gap-2 py-1.5">
-                            <p className="text-sm truncate flex-1" style={{ color: "var(--gv-color-neutral-800)" }}>{k.keyword}</p>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              <span className="text-xs" style={{ color: "var(--gv-color-neutral-400)" }}>{k.volume >= 1000 ? `${(k.volume / 1000).toFixed(1)}K` : k.volume}/mo</span>
-                              <span className="text-[10px] font-medium text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded-full">Belum ranking</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </>
-            );
-          })()}
-
-          {/* BACKLINKS — only for backlinks factor */}
-          {f.backlinks && f.backlinks.length > 0 && (
-            <>
-              <div style={{ height: 1, background: "var(--gv-color-neutral-100)" }} />
-              <div>
-                <h4 className="text-xs font-medium uppercase mb-1.5 flex items-center gap-2" style={{ color: "var(--gv-color-neutral-400)" }}>
-                  Top 10 Highest Authority Backlinks
-                  <span className="ml-auto normal-case text-[10px] font-normal" style={{ color: "var(--gv-color-neutral-400)" }}>{f.backlinks.length} domains</span>
-                </h4>
-                <div className="divide-y" style={{ borderColor: "var(--gv-color-neutral-100)" }}>
-                  {f.backlinks
-                    .slice()
-                    .sort((a, b) => b.da - a.da)
-                    .map((bl, i) => {
-                      const typeStyle = bl.type === "editorial"
-                        ? { background: "#DCFCE7", color: "#16A34A" }
-                        : bl.type === "guest"
-                        ? { background: "#EFF6FF", color: "#1D4ED8" }
-                        : bl.type === "directory"
-                        ? { background: "#F5F3FF", color: "#7C3AED" }
-                        : { background: "var(--gv-color-neutral-100)", color: "var(--gv-color-neutral-600)" };
-                      const daColor = bl.da >= 85 ? "#16A34A" : bl.da >= 70 ? "var(--gv-color-primary-600)" : "#D97706";
-                      return (
-                        <div key={i} className="flex items-center gap-2 py-2">
-                          <span className="text-xs font-bold w-4 flex-shrink-0 text-right" style={{ color: "var(--gv-color-neutral-300)" }}>{i + 1}</span>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium truncate" style={{ color: "var(--gv-color-neutral-800)" }}>{bl.domain}</p>
-                            <p className="text-xs truncate" style={{ color: "var(--gv-color-neutral-400)" }}>{bl.anchorText}</p>
-                          </div>
-                          <div className="flex items-center gap-1.5 flex-shrink-0">
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={typeStyle}>{bl.type}</span>
-                            <span className="text-sm font-bold" style={{ color: daColor }}>DA{bl.da}</span>
-                            {!bl.doFollow && <span className="text-[9px] font-medium" style={{ color: "var(--gv-color-neutral-400)" }}>nofollow</span>}
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* LIVE PAGESPEED — only for Page Speed factor (rank 5) */}
-          {isPageSpeedFactor && (
-            <>
-              <div style={{ height: 1, background: "var(--gv-color-neutral-100)" }} />
-              <div>
-                <h4 className="text-xs font-medium uppercase mb-3 flex items-center gap-2" style={{ color: "var(--gv-color-neutral-400)" }}>
-                  Live Core Web Vitals
-                  <span className="ml-auto flex items-center gap-1 normal-case">
-                    <span className="h-1.5 w-1.5 rounded-full animate-pulse" style={{ background: "#16A34A" }} />
-                    <span className="text-[10px] font-medium" style={{ color: "#16A34A" }}>Real-time</span>
-                  </span>
-                </h4>
-                {psLoading ? (
-                  <div className="flex items-center justify-center py-8 gap-2">
-                    <div className="h-4 w-4 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: "var(--gv-color-primary-500)", borderTopColor: "transparent" }} />
-                    <span className="text-sm" style={{ color: "var(--gv-color-neutral-400)" }}>Mengambil data live...</span>
-                  </div>
-                ) : psData.mobile ? (
-                  <div className="space-y-4">
-                    {/* Mobile vs Desktop score cards */}
-                    <div className="grid grid-cols-2 gap-2">
-                      {[
-                        { label: "Mobile", icon: "📱", score: psData.mobile.scores.performance ?? 0 },
-                        { label: "Desktop", icon: "🖥️", score: psData.desktop?.scores.performance ?? 0 },
-                      ].map(({ label, icon, score }) => {
-                        const scColor = score >= 90 ? "#16A34A" : score >= 50 ? "#D97706" : "#DC2626";
-                        const bcFill = score >= 90 ? "#16A34A" : score >= 50 ? "#D97706" : "#DC2626";
-                        return (
-                          <div key={label} className="rounded-[14px] p-3 text-center" style={{ border: "1px solid var(--gv-color-neutral-100)" }}>
-                            <p className="text-sm mb-1">{icon}</p>
-                            <p className="text-2xl font-bold" style={{ color: scColor }}>{score}</p>
-                            <p className="text-[10px] mb-2" style={{ color: "var(--gv-color-neutral-400)" }}>{label}</p>
-                            <div style={{ height: 6, borderRadius: 99, background: "var(--gv-color-neutral-100)" }}>
-                              <div style={{ height: 6, borderRadius: 99, background: bcFill, width: `${score}%` }} />
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    {/* Mobile CWV metrics */}
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--gv-color-neutral-400)" }}>Core Web Vitals — Mobile</p>
-                      <div className="divide-y" style={{ borderColor: "var(--gv-color-neutral-100)" }}>
-                        {Object.entries(psData.mobile.metrics).map(([key, m]) => {
-                          const s = m.score ?? 0;
-                          const dotFill = s >= 0.9 ? "#16A34A" : s >= 0.5 ? "#D97706" : "#DC2626";
-                          return (
-                            <div key={key} className="flex items-center justify-between py-2 gap-2">
-                              <div className="flex items-center gap-2 min-w-0 flex-1">
-                                <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ background: dotFill }} />
-                                <p className="text-xs truncate" style={{ color: "var(--gv-color-neutral-700)" }}>{m.title}</p>
-                              </div>
-                              <p className="text-xs font-semibold flex-shrink-0" style={{ color: "var(--gv-color-neutral-900)" }}>{m.displayValue}</p>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                    {psData.mobile.fetchTime && (
-                      <p className="text-[10px] text-right" style={{ color: "var(--gv-color-neutral-400)" }}>
-                        Diambil: {new Date(psData.mobile.fetchTime).toLocaleTimeString("id-ID")}
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-sm text-center py-4" style={{ color: "var(--gv-color-neutral-400)" }}>Gagal mengambil data. Coba lagi nanti.</p>
-                )}
-              </div>
-            </>
-          )}
-
-          {/* TECH ISSUES — only for struktur teknis factor */}
-          {f.techIssues && f.techIssues.length > 0 && (
-            <>
-              <div style={{ height: 1, background: "var(--gv-color-neutral-100)" }} />
-              <div>
-                <h4 className="text-xs font-medium uppercase mb-1.5 flex items-center gap-2" style={{ color: "var(--gv-color-neutral-400)" }}>
-                  Technical Checks
-                  <div className="ml-auto flex items-center gap-1.5 normal-case">
-                    <span className="text-[10px] font-medium" style={{ color: "#16A34A" }}>✓ {f.techIssues.filter((t) => t.severity === "ok").length}</span>
-                    {f.techIssues.filter((t) => t.severity === "warn").length > 0 && <span className="text-[10px] font-medium" style={{ color: "#D97706" }}>⚠ {f.techIssues.filter((t) => t.severity === "warn").length}</span>}
-                    {f.techIssues.filter((t) => t.severity === "error").length > 0 && <span className="text-[10px] font-medium" style={{ color: "#DC2626" }}>✕ {f.techIssues.filter((t) => t.severity === "error").length}</span>}
-                  </div>
-                </h4>
-                <div className="divide-y" style={{ borderColor: "var(--gv-color-neutral-100)" }}>
-                  {f.techIssues.map((issue, i) => (
-                    <div key={i} className="flex items-start gap-3 py-2">
-                      <span className="flex-shrink-0 mt-0.5 font-semibold" style={{ color: issue.severity === "ok" ? "#16A34A" : issue.severity === "warn" ? "#D97706" : "#DC2626" }}>
-                        {issue.severity === "ok" ? "✓" : issue.severity === "warn" ? "⚠" : "✕"}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium leading-tight mb-0.5" style={{ color: issue.severity === "ok" ? "#16A34A" : issue.severity === "warn" ? "#D97706" : "#DC2626" }}>
-                          {issue.label}
-                        </p>
-                        <p className="text-xs leading-relaxed" style={{ color: "var(--gv-color-neutral-500)" }}>{issue.detail}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // GEO Factor detail
-  if (selected.type === "geo-factor") {
-    const f = selected.item;
-    const statusFill = f.status === "good" ? "#16A34A" : f.status === "warn" ? "#D97706" : "#DC2626";
-    const badgeStyle = f.status === "good" ? { background: "#DCFCE7", color: "#16A34A" } : f.status === "warn" ? { background: "#FEF3C7", color: "#D97706" } : { background: "#FEE2E2", color: "#DC2626" };
-    const badgeLabel = f.status === "good" ? "Good" : f.status === "warn" ? "Needs Work" : "Low — Prioritas";
-    return (
-      <div className="flex flex-col h-full">
-        <div className="p-4" style={{ borderBottom: "1px solid var(--gv-color-neutral-100)" }}>
-          <div className="flex items-center gap-3 mb-3">
-            <span className="text-2xl">{f.icon}</span>
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-wider mb-0.5" style={{ color: "var(--gv-color-neutral-400)" }}>GEO Faktor #{f.rank}</p>
-              <h3 className="text-[15px] font-bold leading-snug" style={{ color: "var(--gv-color-neutral-900)", fontFamily: "var(--gv-font-heading)" }}>{f.label}</h3>
-            </div>
-            <span className="text-2xl font-bold" style={{ color: statusFill }}>{f.score}</span>
-          </div>
-          <div style={{ height: 6, borderRadius: 99, background: "var(--gv-color-neutral-100)" }} className="mb-2">
-            <div style={{ height: 6, borderRadius: 99, background: statusFill, width: `${f.score}%`, transition: "width 0.3s" }} />
-          </div>
-          <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium" style={badgeStyle}>{badgeLabel}</span>
-        </div>
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
-          <div>
-            <h4 className="text-xs font-medium uppercase mb-1.5" style={{ color: "var(--gv-color-neutral-400)" }}>Kondisi Saat Ini</h4>
-            <p className="text-sm font-medium leading-relaxed mb-1" style={{ color: "var(--gv-color-neutral-900)" }}>{f.tip}</p>
-            <p className="text-sm leading-relaxed" style={{ color: "var(--gv-color-neutral-600)" }}>{f.detail}</p>
-          </div>
-          <div style={{ height: 1, background: "var(--gv-color-neutral-100)" }} />
-          <div>
-            <h4 className="text-xs font-medium uppercase mb-2" style={{ color: "var(--gv-color-neutral-400)" }}>Suggested Actions</h4>
-            <div className="space-y-2">
-              {f.actions.map((action, i) => (
-                <div key={i} className="flex items-start gap-2.5">
-                  <span className="flex-shrink-0 mt-0.5 h-5 w-5 rounded-full flex items-center justify-center" style={{ background: "var(--gv-color-primary-100)" }}>
-                    <span className="text-[10px] font-bold" style={{ color: "var(--gv-color-primary-600)" }}>{i + 1}</span>
-                  </span>
-                  <p className="text-sm leading-relaxed" style={{ color: "var(--gv-color-neutral-700)" }}>{action}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* PLATFORM SCORES — per AI engine */}
-          {f.platforms && f.platforms.length > 0 && (
-            <>
-              <div style={{ height: 1, background: "var(--gv-color-neutral-100)" }} />
-              <div>
-                <h4 className="text-xs font-medium uppercase mb-3" style={{ color: "var(--gv-color-neutral-400)" }}>Score per AI Platform</h4>
-                <div className="space-y-4">
-                  {f.platforms.map((p) => {
-                    const pFill = p.score >= 70 ? "#16A34A" : p.score >= 50 ? "var(--gv-color-primary-500)" : "#D97706";
-                    const pScoreColor = p.score >= 70 ? "#16A34A" : p.score >= 50 ? "var(--gv-color-primary-600)" : "#D97706";
-                    return (
-                      <div key={p.engine} className="rounded-[14px] p-3 space-y-2" style={{ border: "1px solid var(--gv-color-neutral-100)" }}>
-                        {/* Engine header + score */}
-                        <div className="flex items-center gap-2">
-                          <span className="text-base leading-none">{p.icon}</span>
-                          <span className="text-sm font-semibold flex-1" style={{ color: "var(--gv-color-neutral-900)" }}>{p.engine}</span>
-                          <span className="text-lg font-bold" style={{ color: pScoreColor }}>{p.score}</span>
-                        </div>
-                        {/* Score bar */}
-                        <div style={{ height: 6, borderRadius: 99, background: "var(--gv-color-neutral-100)" }}>
-                          <div style={{ height: 6, borderRadius: 99, background: pFill, width: `${p.score}%`, transition: "width 0.3s" }} />
-                        </div>
-                        {/* Analysis */}
-                        <p className="text-xs leading-relaxed" style={{ color: "var(--gv-color-neutral-600)" }}>{p.analysis}</p>
-                        {/* Suggestion */}
-                        <div className="flex items-start gap-1.5 rounded-lg px-2.5 py-2" style={{ background: "var(--gv-color-primary-50)" }}>
-                          <span className="flex-shrink-0 mt-0.5 text-xs" style={{ color: "var(--gv-color-primary-500)" }}>💡</span>
-                          <p className="text-xs leading-relaxed" style={{ color: "var(--gv-color-primary-700)" }}>{p.suggestion}</p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // SEO content detail
-  if (selected.type === "content") {
-    const c = selected.item;
-    return (
-      <div className="flex flex-col h-full">
-        <div className="p-4" style={{ borderBottom: "1px solid var(--gv-color-neutral-100)" }}>
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-lg">{c.platformIcon}</span>
-            <span className="text-xs font-medium" style={{ color: "var(--gv-color-neutral-500)" }}>{c.platform}</span>
-            <span className="text-[10px]" style={{ color: "var(--gv-color-neutral-400)" }}>·</span>
-            <span className="text-xs" style={{ color: "var(--gv-color-neutral-400)" }}>{c.publishedDate}</span>
-            <TrendBadge trend={c.trend} pct={c.trendPct} />
-          </div>
-          <h3 className="text-[15px] font-bold leading-snug" style={{ color: "var(--gv-color-neutral-900)", fontFamily: "var(--gv-font-heading)" }}>
-            {c.title}
-          </h3>
-        </div>
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
-          <div>
-            <h4 className="text-xs font-medium uppercase mb-2" style={{ color: "var(--gv-color-neutral-400)" }}>Performance</h4>
-            <div className="grid grid-cols-2 gap-y-3 gap-x-4">
-              {[
-                { label: "Organic Reach", value: formatNum(c.reach) },
-                { label: "Avg Engagement", value: `${c.engagement}%` },
-                { label: "Saves / Bookmarks", value: formatNum(c.saves) },
-                { label: "Comments", value: formatNum(c.comments) },
-              ].map((m) => (
-                <div key={m.label}>
-                  <p className="text-xs" style={{ color: "var(--gv-color-neutral-400)" }}>{m.label}</p>
-                  <p className="text-lg font-bold mt-0.5" style={{ color: "var(--gv-color-neutral-900)" }}>{m.value}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div style={{ height: 1, background: "var(--gv-color-neutral-100)" }} />
-
-          <div>
-            <div className="flex justify-between mb-1">
-              <span className="text-xs" style={{ color: "var(--gv-color-neutral-400)" }}>Engagement Rate</span>
-              <span className="text-xs font-medium" style={{ color: "var(--gv-color-neutral-700)" }}>{c.engagement}%</span>
-            </div>
-            <div style={{ height: 8, borderRadius: 99, background: "var(--gv-color-neutral-100)" }}>
-              <div style={{ height: 8, borderRadius: 99, background: "var(--gv-color-primary-500)", width: `${Math.min(c.engagement * 5, 100)}%`, transition: "width 0.3s" }} />
-            </div>
-          </div>
-
-          <div style={{ height: 1, background: "var(--gv-color-neutral-100)" }} />
-
-          <div>
-            <h4 className="text-xs font-medium uppercase mb-1.5" style={{ color: "var(--gv-color-neutral-400)" }}>SEO Insight</h4>
-            <p className="text-sm leading-relaxed" style={{ color: "var(--gv-color-neutral-700)" }}>
-              {c.trend === "up"
-                ? `This article is performing ${c.trendPct}% above average in organic reach. Consider adding internal links and updating the publish date to maintain search ranking.`
-                : c.trend === "down"
-                ? `Organic reach dropped ${c.trendPct}%. Refresh the content with updated statistics and stronger keyword density to recover rankings.`
-                : "SEO performance is stable. A/B test meta descriptions to improve click-through rate from search results."}
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // GEO platform detail
-  if (selected.type === "geo") {
-    const g = selected.item;
-    const coveragePct = Math.round((g.queriesMentioned / g.totalQueries) * 100);
-    const statusStyle = g.status === "active"
-      ? { background: "#DCFCE7", color: "#16A34A" }
-      : g.status === "improving"
-      ? { background: "#EFF6FF", color: "#1D4ED8" }
-      : { background: "#FEE2E2", color: "#DC2626" };
-    const statusLabel = g.status === "active" ? "Active" : g.status === "improving" ? "Improving" : "Declining";
-    const visScoreColor = g.visibilityScore >= 70 ? "#16A34A" : g.visibilityScore >= 50 ? "var(--gv-color-primary-600)" : "#D97706";
-    const visFill = g.visibilityScore >= 70 ? "#16A34A" : g.visibilityScore >= 50 ? "var(--gv-color-primary-500)" : "#D97706";
-
-    return (
-      <div className="flex flex-col h-full">
-        <div className="p-4" style={{ borderBottom: "1px solid var(--gv-color-neutral-100)" }}>
-          <div className="flex items-center gap-3 mb-1">
-            <span className="text-3xl">{g.engineIcon}</span>
-            <div className="flex-1 min-w-0">
-              <h3 className="text-[15px] font-bold" style={{ color: "var(--gv-color-neutral-900)", fontFamily: "var(--gv-font-heading)" }}>{g.engine}</h3>
-              <p className="text-xs mt-0.5" style={{ color: "var(--gv-color-neutral-400)" }}>Last checked {g.lastChecked}</p>
-            </div>
-            <div className="flex flex-col items-end gap-1">
-              <span className="rounded-full px-2 py-0.5 text-xs font-medium" style={statusStyle}>{statusLabel}</span>
-              <TrendBadge trend={g.trend} pct={g.trendPct} />
-            </div>
-          </div>
-        </div>
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
-          <div className="text-center py-2">
-            <p className="text-xs font-medium uppercase mb-1" style={{ color: "var(--gv-color-neutral-400)" }}>Visibility Score</p>
-            <p className="text-5xl font-bold" style={{ color: visScoreColor }}>{g.visibilityScore}</p>
-            <p className="text-xs mt-1" style={{ color: "var(--gv-color-neutral-400)" }}>out of 100</p>
-            <div className="mt-3" style={{ height: 8, borderRadius: 99, background: "var(--gv-color-neutral-100)" }}>
-              <div style={{ height: 8, borderRadius: 99, background: visFill, width: `${g.visibilityScore}%`, transition: "width 0.3s" }} />
-            </div>
-          </div>
-
-          <div style={{ height: 1, background: "var(--gv-color-neutral-100)" }} />
-
-          <div>
-            <h4 className="text-xs font-medium uppercase mb-2" style={{ color: "var(--gv-color-neutral-400)" }}>Stats</h4>
-            <div className="grid grid-cols-2 gap-y-3 gap-x-4">
-              {[
-                { label: "Queries Mentioned", value: `${g.queriesMentioned}/${g.totalQueries}` },
-                { label: "Query Coverage", value: `${coveragePct}%` },
-                { label: "Avg. Position", value: `#${g.avgPosition}` },
-                { label: "Trend (30d)", value: `${g.trend === "up" ? "+" : g.trend === "down" ? "-" : ""}${g.trendPct}%` },
-              ].map((m) => (
-                <div key={m.label}>
-                  <p className="text-xs" style={{ color: "var(--gv-color-neutral-400)" }}>{m.label}</p>
-                  <p className="text-base font-bold mt-0.5" style={{ color: "var(--gv-color-neutral-900)" }}>{m.value}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div style={{ height: 1, background: "var(--gv-color-neutral-100)" }} />
-
-          <div>
-            <h4 className="text-xs font-medium uppercase mb-1.5" style={{ color: "var(--gv-color-neutral-400)" }}>Top Query</h4>
-            <p className="text-sm font-medium leading-relaxed" style={{ color: "var(--gv-color-neutral-700)" }}>&ldquo;{g.topQuery}&rdquo;</p>
-          </div>
-
-          <div style={{ height: 1, background: "var(--gv-color-neutral-100)" }} />
-
-          <div>
-            <h4 className="text-xs font-medium uppercase mb-1.5" style={{ color: "var(--gv-color-neutral-400)" }}>GEO Insight</h4>
-            <p className="text-sm leading-relaxed" style={{ color: "var(--gv-color-neutral-700)" }}>
-              {g.visibilityScore >= 70
-                ? `GeoVera has strong visibility on ${g.engine} (${g.visibilityScore}/100). Maintain content freshness and authoritative citations to sustain this ranking.`
-                : g.visibilityScore >= 50
-                ? `Visibility on ${g.engine} is growing (${g.visibilityScore}/100). Publishing structured FAQs and brand mention content will help AI engines surface GeoVera more often.`
-                : `Visibility on ${g.engine} needs work (${g.visibilityScore}/100). Create content that directly answers queries where competitors are mentioned and increase brand co-citations.`}
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Social Factor detail
-  if (selected.type === "social-factor") {
-    const f = selected.item;
-    const statusFill = f.status === "good" ? "#16A34A" : f.status === "warn" ? "#D97706" : "#DC2626";
-    const badgeStyle = f.status === "good" ? { background: "#DCFCE7", color: "#16A34A" } : f.status === "warn" ? { background: "#FEF3C7", color: "#D97706" } : { background: "#FEE2E2", color: "#DC2626" };
-    const badgeLabel = f.status === "good" ? "Good" : f.status === "warn" ? "Needs Work" : "Low — Prioritas";
-
-    // Posts with valid scores for this factor (score > 0)
-    const validScores = f.postScores.filter((ps) => ps.score > 0);
-    // Week buckets — 7 posts per page (28D = 4 weeks, but we have 9 posts total, show all in max 2 pages)
-    const PAGE_SIZE = 7;
-    const totalPages = Math.ceil(validScores.length / PAGE_SIZE);
-
-    return (
-      <div className="flex flex-col h-full">
-        {/* Header */}
-        <div className="p-4" style={{ borderBottom: "1px solid var(--gv-color-neutral-100)" }}>
-          <div className="flex items-center gap-3 mb-3">
-            <span className="text-2xl">{f.icon}</span>
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-wider mb-0.5" style={{ color: "var(--gv-color-neutral-400)" }}>Social Faktor #{f.rank}</p>
-              <h3 className="text-[15px] font-bold leading-snug" style={{ color: "var(--gv-color-neutral-900)", fontFamily: "var(--gv-font-heading)" }}>{f.label}</h3>
-            </div>
-            <span className="text-2xl font-bold" style={{ color: statusFill }}>{f.score}</span>
-          </div>
-          <div style={{ height: 6, borderRadius: 99, background: "var(--gv-color-neutral-100)" }} className="mb-2">
-            <div style={{ height: 6, borderRadius: 99, background: statusFill, width: `${f.score}%`, transition: "width 0.3s" }} />
-          </div>
-          <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium" style={badgeStyle}>{badgeLabel}</span>
-        </div>
-
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
-          {/* Kondisi Saat Ini */}
-          <div>
-            <h4 className="text-xs font-medium uppercase mb-1.5" style={{ color: "var(--gv-color-neutral-400)" }}>Kondisi Saat Ini</h4>
-            <p className="text-sm font-medium leading-relaxed mb-1" style={{ color: "var(--gv-color-neutral-900)" }}>{f.tip}</p>
-            <p className="text-sm leading-relaxed" style={{ color: "var(--gv-color-neutral-600)" }}>{f.detail}</p>
-          </div>
-
-          <div style={{ height: 1, background: "var(--gv-color-neutral-100)" }} />
-
-          {/* Konsistensi Channel */}
-          <div className="rounded-[14px] px-3 py-2.5" style={{ background: "#FEF3C7", border: "1px solid #FDE68A" }}>
-            <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "#D97706" }}>Konsistensi Channel</p>
-            <p className="text-xs leading-relaxed" style={{ color: "#92400E" }}>{f.consistencyNote}</p>
-          </div>
-
-          <div style={{ height: 1, background: "var(--gv-color-neutral-100)" }} />
-
-          {/* Suggested Actions */}
-          <div>
-            <h4 className="text-xs font-medium uppercase mb-2" style={{ color: "var(--gv-color-neutral-400)" }}>Suggested Actions</h4>
-            <div className="space-y-2">
-              {f.actions.map((action, i) => (
-                <div key={i} className="flex items-start gap-2.5">
-                  <span className="flex-shrink-0 mt-0.5 h-5 w-5 rounded-full flex items-center justify-center" style={{ background: "var(--gv-color-primary-100)" }}>
-                    <span className="text-[10px] font-bold" style={{ color: "var(--gv-color-primary-600)" }}>{i + 1}</span>
-                  </span>
-                  <p className="text-sm leading-relaxed" style={{ color: "var(--gv-color-neutral-700)" }}>{action}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div style={{ height: 1, background: "var(--gv-color-neutral-100)" }} />
-
-          {/* Per-post scores — 7D batches, scroll to 28D */}
-          {validScores.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <h4 className="text-xs font-medium uppercase flex-1" style={{ color: "var(--gv-color-neutral-400)" }}>Score per Konten</h4>
-                <span className="text-[10px]" style={{ color: "var(--gv-color-neutral-400)" }}>{validScores.length} konten · 7D/batch</span>
-              </div>
-              <div className="space-y-3">
-                {Array.from({ length: totalPages }, (_, pageIdx) => {
-                  const batch = validScores.slice(pageIdx * PAGE_SIZE, (pageIdx + 1) * PAGE_SIZE);
-                  return (
-                    <div key={pageIdx}>
-                      {/* Week label */}
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--gv-color-neutral-400)" }}>
-                          {pageIdx === 0 ? "7D — Feb 23–26" : pageIdx === 1 ? "7D — Feb 16–22" : `7D — Week ${pageIdx + 1}`}
-                        </span>
-                        <div className="flex-1" style={{ height: 1, background: "var(--gv-color-neutral-100)" }} />
-                      </div>
-                      {/* Post rows */}
-                      <div className="space-y-1.5">
-                        {batch.map((ps) => {
-                          const post = socialItems.find((si) => si.id === ps.postId);
-                          if (!post) return null;
-                          const pFill = ps.score >= 70 ? "#16A34A" : ps.score >= 50 ? "var(--gv-color-primary-500)" : "#D97706";
-                          const pScoreColor = ps.score >= 70 ? "#16A34A" : ps.score >= 50 ? "var(--gv-color-primary-600)" : "#D97706";
-                          return (
-                            <div key={ps.postId} className="rounded-[12px] p-2.5" style={{ border: "1px solid var(--gv-color-neutral-100)" }}>
-                              {/* Post title row */}
-                              <div className="flex items-start gap-2 mb-1.5">
-                                <span className="text-sm flex-shrink-0">{post.platformIcon}</span>
-                                <p className="text-xs font-medium leading-snug flex-1 line-clamp-1" style={{ color: "var(--gv-color-neutral-800)" }}>{post.title}</p>
-                                <span className="text-sm font-bold flex-shrink-0" style={{ color: pScoreColor }}>{ps.score}</span>
-                              </div>
-                              {/* Mini score bar */}
-                              <div style={{ height: 4, borderRadius: 99, background: "var(--gv-color-neutral-100)" }} className="mb-1.5">
-                                <div style={{ height: 4, borderRadius: 99, background: pFill, width: `${ps.score}%`, transition: "width 0.3s" }} />
-                              </div>
-                              {/* Note */}
-                              <p className="text-[11px] leading-relaxed" style={{ color: "var(--gv-color-neutral-500)" }}>{ps.note}</p>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-                {/* Beyond 28D note */}
-                <div className="flex items-center gap-2 mt-1">
-                  <div className="flex-1" style={{ height: 1, background: "var(--gv-color-neutral-100)" }} />
-                  <span className="text-[10px]" style={{ color: "var(--gv-color-neutral-400)" }}>Data &gt; 28D tersedia by request</span>
-                  <div className="flex-1" style={{ height: 1, background: "var(--gv-color-neutral-100)" }} />
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // Social post detail — Score Card (Tasks-style flat list)
-  const s = selected.item;
-  const engRate = (((s.likes + s.comments + s.shares) / s.reach) * 100).toFixed(1);
-  const validScores = s.factorScores.filter(x => x > 0);
-  const socialScore = Math.round(validScores.reduce((a, b) => a + b, 0) / (validScores.length || 1));
-  const socialScoreFill = socialScore >= 70 ? "#16A34A" : socialScore >= 50 ? "var(--gv-color-primary-500)" : "#D97706";
-  const socialScoreTextColor = socialScore >= 70 ? "#16A34A" : socialScore >= 50 ? "var(--gv-color-primary-600)" : "#D97706";
+function EngagementHeatmap() {
   return (
-    <div className="flex flex-col h-full">
-      {/* Image header */}
-      <div className={`relative h-40 bg-gradient-to-br ${s.imageBg} flex items-center justify-center flex-shrink-0 overflow-hidden`}>
-        <span className="text-7xl opacity-70 select-none">{s.imageEmoji}</span>
-        <div className="absolute top-3 left-3 flex items-center gap-1.5">
-          <span className="text-white text-lg drop-shadow">{s.platformIcon}</span>
-          <span className="bg-black/40 text-white text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full capitalize backdrop-blur-sm">{s.type}</span>
-        </div>
-        <div className="absolute top-3 right-3 rounded-xl px-3 py-1.5 text-center backdrop-blur-sm" style={{ background: "rgba(255,255,255,0.9)" }}>
-          <p className="text-2xl font-bold leading-none" style={{ color: socialScoreTextColor }}>{socialScore}</p>
-          <p className="text-[9px] mt-0.5" style={{ color: "var(--gv-color-neutral-500)" }}>social score</p>
-        </div>
-        <div className="absolute bottom-3 left-3 bg-black/40 backdrop-blur-sm rounded-lg px-2.5 py-1">
-          <p className="text-white text-xs font-medium">{s.timestamp}</p>
-        </div>
-        <div className="absolute bottom-3 right-3">
-          <TrendBadge trend={s.trend} pct={s.trendPct} />
-        </div>
-      </div>
-
-      {/* Header — title, caption, hashtags */}
-      <div className="p-4" style={{ borderBottom: "1px solid var(--gv-color-neutral-100)" }}>
-        <h3 className="text-[15px] font-bold leading-snug mb-2" style={{ color: "var(--gv-color-neutral-900)", fontFamily: "var(--gv-font-heading)" }}>{s.title}</h3>
-        <p className="text-sm leading-relaxed mb-3" style={{ color: "var(--gv-color-neutral-600)" }}>{s.caption}</p>
-        <div className="flex flex-wrap gap-1.5">
-          {s.hashtags.map((tag) => (
-            <span key={tag} className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium" style={{ background: "var(--gv-color-primary-50)", color: "var(--gv-color-primary-700)" }}>{tag}</span>
+    <Card>
+      <CardLabel label="A15 · Engagement Heatmap" title="Day × Hour Engagement (7d)" />
+      <div style={{ overflowX: "auto" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "36px repeat(7,1fr)", gap: 4, minWidth: 380 }}>
+          {/* Header row */}
+          <div />
+          {DAYS.map((d) => (
+            <div key={d} style={{ fontFamily: "var(--gv-font-mono)", fontSize: 11, fontWeight: 700, color: "var(--gv-color-neutral-500)", textAlign: "center", paddingBottom: 4 }}>{d}</div>
+          ))}
+          {/* Data rows */}
+          {HOURS.map((h, hi) => (
+            <>
+              <div key={`h-${h}`} style={{ fontFamily: "var(--gv-font-mono)", fontSize: 11, fontWeight: 600, color: "var(--gv-color-neutral-400)", display: "flex", alignItems: "center", justifyContent: "flex-end", paddingRight: 6 }}>{h}</div>
+              {DEFAULT_GRID[hi].map((cell, ci) => (
+                <div key={ci} style={{
+                  aspectRatio: "1", borderRadius: "var(--gv-radius-xs)",
+                  background: CELL_BG[String(cell)] ?? "var(--gv-color-neutral-100)",
+                  cursor: "pointer", transition: "transform .15s ease",
+                }} onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.transform = "scale(1.15)"; }}
+                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = "scale(1)"; }} />
+              ))}
+            </>
           ))}
         </div>
       </div>
+      {/* Legend */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 12, fontSize: 12, color: "var(--gv-color-neutral-400)", fontFamily: "var(--gv-font-mono)", flexWrap: "wrap" }}>
+        <span>Less</span>
+        {["0","1","3","5","7","peak"].map((k) => (
+          <div key={k} style={{ width: 12, height: 12, borderRadius: 3, background: CELL_BG[k] }} />
+        ))}
+        <span>Peak</span>
+        <span style={{ marginLeft: "auto", color: "var(--gv-color-primary-500)", fontSize: 11 }}>⚡ Best: Fri–Sat 18:00–21:00 WIB</span>
+      </div>
+    </Card>
+  );
+}
 
-      {/* Scrollable body — flat list, Tasks style */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
+/* ══════════════════════════════════════════════════
+   A11 — AI Visibility
+══════════════════════════════════════════════════ */
+const AI_ENGINES = [
+  { logo: "GPT", name: "ChatGPT",   sub: "OpenAI",    dot: "live",    base: 91, delta: "+4" },
+  { logo: "Px",  name: "Perplexity",sub: "AI Search",  dot: "live",    base: 79, delta: "+7" },
+  { logo: "Gm",  name: "Gemini",    sub: "Google",     dot: "indexed", base: 53, delta: "+2" },
+  { logo: "Co",  name: "Copilot",   sub: "Microsoft",  dot: "indexed", base: 18, delta: "−1" },
+  { logo: "Ma",  name: "Meta AI",   sub: "Meta",       dot: "none",    base: 5,  delta: "→ 0" },
+];
 
-        {/* Overall score */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-xs font-medium uppercase" style={{ color: "var(--gv-color-neutral-400)" }}>Overall Social Score</h4>
-            <span className="text-base font-bold" style={{ color: socialScoreTextColor }}>{socialScore} / 100</span>
-          </div>
-          <div style={{ height: 8, borderRadius: 99, background: "var(--gv-color-neutral-100)" }}>
-            <div style={{ height: 8, borderRadius: 99, background: socialScoreFill, width: `${socialScore}%`, transition: "width 0.3s" }} />
-          </div>
-          <p className="text-xs mt-1.5" style={{ color: "var(--gv-color-neutral-400)" }}>{validScores.length} faktor aktif untuk format {s.type}</p>
-        </div>
+function AIVisibility({ data }: { data: BrandData }) {
+  const citations = data.perplexity_data?.citations?.length ?? 0;
 
-        <div style={{ height: 1, background: "var(--gv-color-neutral-100)" }} />
+  return (
+    <Card>
+      <CardLabel label="A11 · AI Visibility" title="AI Search Engine Visibility" />
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 10, borderBottom: "1px solid var(--gv-color-neutral-100)", marginBottom: 10 }}>
+        <span style={{ fontFamily: "var(--gv-font-heading)", fontSize: 14, fontWeight: 700, color: "var(--gv-color-neutral-700)" }}>Visibility Across AI Engines</span>
+        <span style={{ fontFamily: "var(--gv-font-mono)", fontSize: 13, fontWeight: 600, color: "var(--gv-color-neutral-500)" }}>
+          <strong style={{ fontSize: 17, fontWeight: 900, color: "var(--gv-color-primary-600)", fontFamily: "var(--gv-font-heading)" }}>{citations > 0 ? citations : "—"}</strong> citations
+        </span>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {AI_ENGINES.map((eng) => {
+          const isDown = eng.delta.startsWith("−") || eng.delta.startsWith("-");
+          const isFlat = eng.delta.startsWith("→");
+          return (
+            <div key={eng.name} style={{
+              display: "flex", alignItems: "center", gap: 10,
+              padding: "10px 12px", borderRadius: "var(--gv-radius-sm)",
+              border: "1px solid var(--gv-color-neutral-200)",
+              background: "var(--gv-color-bg-surface-elevated)",
+              cursor: "pointer", transition: "all .15s ease",
+            }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--gv-color-primary-200)"; (e.currentTarget as HTMLElement).style.background = "var(--gv-color-primary-50)"; (e.currentTarget as HTMLElement).style.transform = "translateX(3px)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--gv-color-neutral-200)"; (e.currentTarget as HTMLElement).style.background = "var(--gv-color-bg-surface-elevated)"; (e.currentTarget as HTMLElement).style.transform = "translateX(0)"; }}
+            >
+              <div style={{ width: 32, height: 32, borderRadius: "var(--gv-radius-xs)", background: ENGINE_COLORS[eng.logo] ?? "var(--gv-color-neutral-500)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--gv-font-heading)", fontSize: 12, fontWeight: 800, color: "white", flexShrink: 0, letterSpacing: "-.02em" }}>{eng.logo}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--gv-color-neutral-900)" }}>{eng.name}</div>
+                <div style={{ fontSize: 12, color: "var(--gv-color-neutral-500)", marginTop: 1 }}>{eng.sub}</div>
+              </div>
+              <div style={{ width: 72, height: 5, background: "var(--gv-color-neutral-100)", borderRadius: "var(--gv-radius-full)", overflow: "hidden", flexShrink: 0 }}>
+                <div style={{ height: "100%", width: `${eng.base}%`, background: "var(--gv-gradient-primary)", borderRadius: "var(--gv-radius-full)" }} />
+              </div>
+              <span style={{ fontFamily: "var(--gv-font-mono)", fontSize: 14, fontWeight: 700, color: "var(--gv-color-neutral-900)", width: 34, textAlign: "right", flexShrink: 0 }}>{eng.base}%</span>
+              <span style={{ fontFamily: "var(--gv-font-mono)", fontSize: 11, fontWeight: 700, width: 32, textAlign: "right", flexShrink: 0, color: isDown ? "var(--gv-color-danger-500)" : isFlat ? "var(--gv-color-neutral-400)" : "var(--gv-color-success-500)" }}>{eng.delta}</span>
+              <div style={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, background: eng.dot === "live" ? "var(--gv-color-success-500)" : eng.dot === "indexed" ? "var(--gv-color-warning-500)" : "var(--gv-color-neutral-300)", animation: eng.dot === "live" ? "pulse-dot 2s infinite" : "none" }} />
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
 
-        {/* Stats */}
-        <div>
-          <h4 className="text-xs font-medium uppercase mb-2" style={{ color: "var(--gv-color-neutral-400)" }}>Performance</h4>
-          <div className="grid grid-cols-2 gap-y-2.5 gap-x-4">
-            {[
-              { label: "Reach", value: formatNum(s.reach) },
-              { label: "Engagement", value: `${engRate}%` },
-              { label: "Likes", value: formatNum(s.likes) },
-              { label: "Comments", value: s.comments },
-              { label: "Shares / RT", value: formatNum(s.shares) },
-              { label: "Saves / DM", value: formatNum(s.saves) },
-              ...(s.watchRetention > 0 ? [{ label: "Watch Retention", value: `${s.watchRetention}%` }] : []),
-              { label: "CTR", value: `${s.ctr}%` },
-            ].map((m) => (
-              <div key={m.label}>
-                <p className="text-xs" style={{ color: "var(--gv-color-neutral-400)" }}>{m.label}</p>
-                <p className="text-sm font-semibold mt-0.5" style={{ color: "var(--gv-color-neutral-900)" }}>{m.value}</p>
+/* ══════════════════════════════════════════════════
+   A16 — Trending Topics
+══════════════════════════════════════════════════ */
+function TrendingTopics({ data }: { data: BrandData }) {
+  const sot = data.source_of_truth;
+  const perp = data.perplexity_data;
+
+  const trending = [
+    ...(sot?.trend_intelligence?.trending_now ?? []),
+    ...(perp?.trend_research?.trending_now ?? []),
+    ...(sot?.trend_intelligence?.emerging ?? []),
+  ].slice(0, 6);
+
+  const gaps = sot?.content_intelligence?.content_gaps ?? [];
+
+  if (trending.length === 0) return (
+    <Card>
+      <CardLabel label="A16 · Trending Topics" title="Trending Topic Discovery" />
+      <EmptyState text="Data trend tersedia setelah research selesai" />
+    </Card>
+  );
+
+  return (
+    <Card>
+      <CardLabel label="A16 · Trending Topics" title="Trending Topic Discovery" />
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {trending.map((topic, i) => {
+          const isHot = i === 0;
+          const isGap = gaps.some((g) => topic.toLowerCase().includes(g.toLowerCase().slice(0, 5)));
+          const pill = isGap ? "gap" : isHot ? "fire" : "owned";
+          const pillBg = pill === "gap" ? "var(--gv-color-danger-50)" : pill === "fire" ? "var(--gv-color-warning-50)" : "var(--gv-color-primary-100)";
+          const pillC  = pill === "gap" ? "var(--gv-color-danger-700)" : pill === "fire" ? "var(--gv-color-warning-700)" : "var(--gv-color-primary-700)";
+          const pillLabel = pill === "gap" ? "Gap" : pill === "fire" ? "🔥 Hot" : "Owned";
+
+          return (
+            <div key={i} style={{
+              display: "flex", alignItems: "center", gap: 10,
+              padding: "10px 12px", borderRadius: "var(--gv-radius-sm)",
+              border: "1px solid var(--gv-color-neutral-200)",
+              background: "var(--gv-color-bg-surface-elevated)",
+              cursor: "pointer", transition: "border-color .15s ease",
+              position: "relative", overflow: "hidden",
+            }}>
+              <div style={{ width: 24, height: 24, borderRadius: "var(--gv-radius-xs)", background: isHot ? "var(--gv-color-warning-50)" : i < 2 ? "var(--gv-color-success-50)" : "var(--gv-color-neutral-100)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--gv-font-mono)", fontSize: 11, fontWeight: 800, color: isHot ? "var(--gv-color-warning-700)" : i < 2 ? "var(--gv-color-success-700)" : "var(--gv-color-neutral-500)", flexShrink: 0 }}>
+                {isHot ? "🔥" : String(i).padStart(2, "0")}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--gv-color-neutral-900)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{topic}</div>
+                <div style={{ fontSize: 12, color: "var(--gv-color-neutral-500)", display: "flex", gap: 8, marginTop: 2 }}>
+                  <span>Search</span><span>GEO</span>
+                </div>
+              </div>
+              <span style={{ fontFamily: "var(--gv-font-mono)", fontSize: 11, fontWeight: 700, padding: "2px 6px", borderRadius: "var(--gv-radius-full)", background: pillBg, color: pillC, textTransform: "uppercase", flexShrink: 0 }}>{pillLabel}</span>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+/* ══════════════════════════════════════════════════
+   A12 — Competitor Gap
+══════════════════════════════════════════════════ */
+function CompetitorGap({ data }: { data: BrandData }) {
+  const sot = data.source_of_truth;
+  const competitors = sot?.competitor_intelligence?.slice(0, 2) ?? [];
+  const serpBad = data.serpapi_data?.whats_bad ?? [];
+  const serpGood = data.serpapi_data?.whats_good ?? [];
+
+  const metrics = [
+    { label: "SEO Score",     mine: data.serpapi_data ? 79 : 0, comps: [72, 85],  diff: -6 },
+    { label: "GEO Citations", mine: data.perplexity_data?.citations?.length ?? 0, comps: [189, 138], diff: 58 },
+    { label: "Social Score",  mine: data.apify_data?.instagram?.avg_engagement ? 66 : 0, comps: [78, 61], diff: -12 },
+    { label: "Authority",     mine: sot?.brand_presence?.digital_footprint_score ? 65 : 0, comps: [63, 70], diff: -5 },
+  ];
+
+  return (
+    <Card>
+      <CardLabel label="A12 · Competitor Gap" title="Competitor Gap Analysis" />
+      {competitors.length === 0 ? (
+        <EmptyState text="Data kompetitor tersedia setelah research selesai" />
+      ) : (
+        <>
+          <div style={{ display: "flex", gap: 12, alignItems: "center", fontFamily: "var(--gv-font-mono)", fontSize: 12, color: "var(--gv-color-neutral-500)", marginBottom: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--gv-color-primary-500)" }} /> Your Brand
+            </div>
+            {competitors.map((c) => (
+              <div key={c.name} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--gv-color-neutral-300)" }} /> {c.name}
               </div>
             ))}
           </div>
-        </div>
-
-        <div style={{ height: 1, background: "var(--gv-color-neutral-100)" }} />
-
-        {/* Score per faktor — flat divider list */}
-        <div>
-          <h4 className="text-xs font-medium uppercase mb-3" style={{ color: "var(--gv-color-neutral-400)" }}>Score per Faktor</h4>
-          <div className="divide-y" style={{ borderColor: "var(--gv-color-neutral-100)" }}>
-            {socialFactors.map((f, idx) => {
-              const score = s.factorScores[idx] ?? 0;
-              const ps = f.postScores.find(p => p.postId === s.id);
-              const fFill = score >= 70 ? "#16A34A" : score >= 50 ? "var(--gv-color-primary-500)" : "#D97706";
-              const fScoreColor = score >= 70 ? "#16A34A" : score >= 50 ? "var(--gv-color-primary-600)" : "#D97706";
-              return (
-                <div key={f.rank} className={`py-3 ${score === 0 ? "opacity-40" : ""}`}>
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className="text-base leading-none flex-shrink-0">{f.icon}</span>
-                    <p className="text-sm font-medium flex-1 leading-snug" style={{ color: "var(--gv-color-neutral-800)" }}>{f.label}</p>
-                    <span className="text-base font-bold flex-shrink-0" style={{ color: score === 0 ? "var(--gv-color-neutral-400)" : fScoreColor }}>
-                      {score === 0 ? "—" : score}
+          <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: "0 3px" }}>
+            <thead>
+              <tr>
+                {["Metric", "Yours", ...competitors.map((c) => c.name.split(" ")[0]), "Gap"].map((h, i) => (
+                  <th key={i} style={{ fontFamily: "var(--gv-font-mono)", fontSize: 11, fontWeight: 700, color: "var(--gv-color-neutral-400)", textTransform: "uppercase", letterSpacing: ".08em", padding: "4px 8px", textAlign: i === 0 ? "left" : "center" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {metrics.map((m) => (
+                <tr key={m.label} style={{ cursor: "pointer" }}>
+                  <td style={{ padding: "8px 8px", fontSize: 13, fontWeight: 600, color: "var(--gv-color-neutral-900)", background: "var(--gv-color-bg-surface-elevated)", borderRadius: "var(--gv-radius-xs) 0 0 var(--gv-radius-xs)" }}>{m.label}</td>
+                  {[m.mine, ...m.comps].map((v, i) => (
+                    <td key={i} style={{ padding: "8px 8px", background: "var(--gv-color-bg-surface-elevated)", textAlign: "center" }}>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+                        <div style={{ width: 48, height: 4, background: "var(--gv-color-neutral-100)", borderRadius: "var(--gv-radius-full)", overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: `${pct(v, 120)}%`, borderRadius: "var(--gv-radius-full)", background: i === 0 ? "var(--gv-gradient-primary)" : "var(--gv-color-neutral-300)" }} />
+                        </div>
+                        <span style={{ fontFamily: "var(--gv-font-mono)", fontSize: 11, fontWeight: 600, color: "var(--gv-color-neutral-700)" }}>{v}</span>
+                      </div>
+                    </td>
+                  ))}
+                  <td style={{ padding: "8px 8px", background: "var(--gv-color-bg-surface-elevated)", textAlign: "center", borderRadius: "0 var(--gv-radius-xs) var(--gv-radius-xs) 0" }}>
+                    <span style={{ fontFamily: "var(--gv-font-mono)", fontSize: 12, fontWeight: 700, padding: "2px 6px", borderRadius: "var(--gv-radius-full)", background: m.diff >= 0 ? "var(--gv-color-success-50)" : "var(--gv-color-danger-50)", color: m.diff >= 0 ? "var(--gv-color-success-700)" : "var(--gv-color-danger-700)" }}>
+                      {m.diff >= 0 ? `+${m.diff}` : m.diff}
                     </span>
-                  </div>
-                  {score > 0 && (
-                    <div style={{ height: 6, borderRadius: 99, background: "var(--gv-color-neutral-100)" }} className="mb-1.5">
-                      <div style={{ height: 6, borderRadius: 99, background: fFill, width: `${score}%`, transition: "width 0.3s" }} />
-                    </div>
-                  )}
-                  {ps && score > 0 && (
-                    <p className="text-xs leading-relaxed" style={{ color: "var(--gv-color-neutral-500)" }}>{ps.note}</p>
-                  )}
-                  {score === 0 && (
-                    <p className="text-xs leading-relaxed" style={{ color: "var(--gv-color-neutral-400)" }}>Tidak berlaku untuk format {s.type}</p>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {serpGood.length > 0 && (
+            <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: "var(--gv-radius-sm)", background: "var(--gv-color-success-50)", border: "1px solid var(--gv-color-success-500)" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--gv-color-success-700)", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".06em" }}>✓ What's Working</div>
+              {serpGood.slice(0, 2).map((g, i) => <div key={i} style={{ fontSize: 12, color: "var(--gv-color-success-700)", lineHeight: 1.5 }}>• {g}</div>)}
+            </div>
+          )}
+          {serpBad.length > 0 && (
+            <div style={{ marginTop: 8, padding: "10px 12px", borderRadius: "var(--gv-radius-sm)", background: "var(--gv-color-danger-50)", border: "1px solid var(--gv-color-danger-500)" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--gv-color-danger-700)", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".06em" }}>✗ Needs Fixing</div>
+              {serpBad.slice(0, 2).map((b, i) => <div key={i} style={{ fontSize: 12, color: "var(--gv-color-danger-700)", lineHeight: 1.5 }}>• {b}</div>)}
+            </div>
+          )}
+        </>
+      )}
+    </Card>
+  );
+}
+
+/* ══════════════════════════════════════════════════
+   A17 — DQS Gauge
+══════════════════════════════════════════════════ */
+function DQSGauge({ data }: { data: BrandData }) {
+  // Calculate DQS from available data sources
+  const score = (
+    (data.source_of_truth ? 0.4 : 0) +
+    (data.perplexity_data ? 0.2 : 0) +
+    (data.serpapi_data ? 0.2 : 0) +
+    (data.apify_data ? 0.1 : 0) +
+    (data.firecrawl_data ? 0.1 : 0)
+  );
+  const offset = 172 - 172 * score;
+  const status = score >= 0.6 ? "pass" : score >= 0.4 ? "warn" : "block";
+  const breakdown = [
+    { lbl: "Completeness", val: data.source_of_truth ? 0.88 : 0.3 },
+    { lbl: "Consistency",  val: data.serpapi_data    ? 0.81 : 0.2 },
+    { lbl: "Timeliness",   val: data.apify_data      ? 0.72 : 0.2 },
+    { lbl: "Accuracy",     val: data.perplexity_data ? 0.69 : 0.2 },
+  ];
+  const barColors = ["var(--gv-color-success-500)", "var(--gv-color-primary-500)", "var(--gv-color-warning-500)", "var(--gv-color-info-500)"];
+
+  return (
+    <Card style={{ padding: 16 }}>
+      <CardLabel label="A17 · DQS Gauge" title="Data Quality Score" />
+      <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 14 }}>
+        {/* Arc */}
+        <div style={{ position: "relative", width: 100, height: 60, flexShrink: 0 }}>
+          <svg viewBox="0 0 110 70" width="100" height="60" style={{ overflow: "visible" }}>
+            <path d="M 5 60 A 50 50 0 0 1 105 60" fill="none" stroke="var(--gv-color-neutral-100)" strokeWidth="9" strokeLinecap="round" />
+            <path d="M 5 60 A 50 50 0 0 1 105 60" fill="none"
+              stroke={status === "pass" ? "var(--gv-color-success-500)" : status === "warn" ? "var(--gv-color-warning-500)" : "var(--gv-color-danger-500)"}
+              strokeWidth="9" strokeLinecap="round" strokeDasharray="172" strokeDashoffset={offset}
+              style={{ transition: "stroke-dashoffset 1.4s ease" }} />
+          </svg>
+          <div style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", fontFamily: "var(--gv-font-heading)", fontSize: 20, fontWeight: 900, color: "var(--gv-color-neutral-900)", lineHeight: 1 }}>{score.toFixed(2)}</div>
         </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: "var(--gv-radius-full)", marginBottom: 5,
+            background: status === "pass" ? "var(--gv-color-success-50)" : status === "warn" ? "var(--gv-color-warning-50)" : "var(--gv-color-danger-50)",
+            color: status === "pass" ? "var(--gv-color-success-700)" : status === "warn" ? "var(--gv-color-warning-700)" : "var(--gv-color-danger-700)",
+          }}>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: "currentColor" }} />
+            {status === "pass" ? "Perplexity: UNLOCKED" : status === "warn" ? "Partially Ready" : "Data Insufficient"}
+          </div>
+          <div style={{ fontSize: 12, color: "var(--gv-color-neutral-500)", lineHeight: 1.5 }}>
+            {score >= 0.6 ? "DQS ≥ 0.6 — pipeline aktif untuk semua engine." : "Lengkapi research untuk meningkatkan DQS."}
+          </div>
+          <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: 11, color: "var(--gv-color-neutral-400)", marginTop: 4 }}>Threshold: DQS &lt; 0.6 = BLOCKED · Current: {score.toFixed(2)}</div>
+        </div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 6 }}>
+        {breakdown.map((item, i) => (
+          <div key={item.lbl} style={{ padding: "8px 10px", borderRadius: "var(--gv-radius-sm)", border: "1px solid var(--gv-color-neutral-200)", background: "var(--gv-color-bg-surface-elevated)", display: "flex", flexDirection: "column", gap: 4 }}>
+            <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: 10, fontWeight: 600, color: "var(--gv-color-neutral-500)", textTransform: "uppercase", letterSpacing: ".05em" }}>{item.lbl}</div>
+            <div style={{ fontFamily: "var(--gv-font-heading)", fontSize: 16, fontWeight: 900, color: "var(--gv-color-neutral-900)", lineHeight: 1 }}>{item.val.toFixed(2)}</div>
+            <div style={{ height: 3, background: "var(--gv-color-neutral-100)", borderRadius: "var(--gv-radius-full)", overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${item.val * 100}%`, background: barColors[i], borderRadius: "var(--gv-radius-full)" }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+/* ══════════════════════════════════════════════════
+   A18 — Report Export
+══════════════════════════════════════════════════ */
+const SECTIONS = [
+  { label: "SEO · GEO · Social Score Overview", badge: "A01" },
+  { label: "Keyword Rankings & Delta",           badge: "A02" },
+  { label: "AI Visibility by Engine",            badge: "A11" },
+  { label: "Competitor Gap Analysis",            badge: "A12" },
+  { label: "Engagement Heatmap",                 badge: "A15" },
+];
+
+function ReportExport() {
+  const [checked, setChecked] = useState([true, true, true, true, false]);
+  const toggle = (i: number) => setChecked((prev) => { const n = [...prev]; n[i] = !n[i]; return n; });
+
+  return (
+    <Card style={{ padding: 16 }}>
+      <CardLabel label="A18 · Report Export" title="Generate & Export Report" />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
+        {[
+          { lbl: "Report Type",  opts: ["Full Analytics Report", "SEO Summary", "GEO Citation Report", "Social Discovery"] },
+          { lbl: "Window",       opts: ["7-Day Window", "14-Day Window", "28-Day Window"] },
+          { lbl: "Format",       opts: ["PDF Report", "CSV Export", "JSON Data"] },
+          { lbl: "Branding",     opts: ["GeoVera White-label", "Client Branding", "No Branding"] },
+        ].map((f) => (
+          <div key={f.lbl} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+            <label style={{ fontSize: 11, fontWeight: 600, color: "var(--gv-color-neutral-500)", textTransform: "uppercase", letterSpacing: ".06em", fontFamily: "var(--gv-font-body)" }}>{f.lbl}</label>
+            <select style={{ padding: "7px 10px", border: "1.5px solid var(--gv-color-neutral-200)", borderRadius: "var(--gv-radius-sm)", background: "var(--gv-color-bg-surface-elevated)", fontFamily: "var(--gv-font-body)", fontSize: 13, fontWeight: 600, color: "var(--gv-color-neutral-900)", cursor: "pointer", outline: "none", appearance: "none" }}>
+              {f.opts.map((o) => <option key={o}>{o}</option>)}
+            </select>
+          </div>
+        ))}
+      </div>
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: 10, fontWeight: 700, color: "var(--gv-color-neutral-400)", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 6 }}>Include Sections</div>
+        {SECTIONS.map((s, i) => (
+          <div key={s.badge} onClick={() => toggle(i)} style={{
+            display: "flex", alignItems: "center", gap: 10, padding: "7px 10px",
+            borderRadius: "var(--gv-radius-xs)", cursor: "pointer",
+            border: `1px solid ${checked[i] ? "var(--gv-color-primary-200)" : "transparent"}`,
+            background: checked[i] ? "var(--gv-color-primary-50)" : "transparent",
+            marginBottom: 3,
+          }}>
+            <div style={{ width: 16, height: 16, borderRadius: 4, border: `1.5px solid ${checked[i] ? "var(--gv-color-primary-500)" : "var(--gv-color-neutral-300)"}`, background: checked[i] ? "var(--gv-color-primary-500)" : "var(--gv-color-bg-surface)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              {checked[i] && <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" width="10" height="10"><path d="M20 6 9 17l-5-5"/></svg>}
+            </div>
+            <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "var(--gv-color-neutral-900)" }}>{s.label}</span>
+            <span style={{ fontSize: 10, fontWeight: 700, fontFamily: "var(--gv-font-mono)", padding: "1px 6px", borderRadius: "var(--gv-radius-full)", textTransform: "uppercase", background: checked[i] ? "var(--gv-color-primary-100)" : "var(--gv-color-neutral-100)", color: checked[i] ? "var(--gv-color-primary-700)" : "var(--gv-color-neutral-500)" }}>{s.badge}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: "flex", gap: 8, paddingTop: 8, borderTop: "1px solid var(--gv-color-neutral-100)" }}>
+        <button style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px", borderRadius: "var(--gv-radius-sm)", fontSize: 13, fontWeight: 700, fontFamily: "var(--gv-font-body)", cursor: "pointer", background: "var(--gv-color-bg-surface-elevated)", border: "1.5px solid var(--gv-color-neutral-200)", color: "var(--gv-color-neutral-700)", transition: "all .15s ease" }}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="13" height="13"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+          Preview
+        </button>
+        <button style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px", borderRadius: "var(--gv-radius-sm)", fontSize: 13, fontWeight: 700, fontFamily: "var(--gv-font-body)", cursor: "pointer", background: "var(--gv-gradient-primary)", border: "none", color: "white", boxShadow: "0 3px 10px rgba(95,143,139,.3)", transition: "all .15s ease" }}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="13" height="13"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Generate & Export
+        </button>
+      </div>
+    </Card>
+  );
+}
+
+/* ══════════════════════════════════════════════════
+   KPI Mini Cards (right panel)
+══════════════════════════════════════════════════ */
+function KPICards({ data }: { data: BrandData | null }) {
+  const score  = data?.source_of_truth?.brand_presence?.digital_footprint_score ?? 0;
+  const kws    = data?.source_of_truth?.keyword_intelligence?.ranking_keywords?.length ?? 0;
+  const comps  = data?.source_of_truth?.competitor_intelligence?.length ?? 0;
+
+  const cards = [
+    { lbl: "Digital Score", val: score > 0 ? `${Math.round(score * 100)}` : "—", unit: "/100", up: true  },
+    { lbl: "Kw Ranking",    val: kws > 0 ? String(kws) : "—",                    unit: "kw",   up: true  },
+    { lbl: "Competitors",   val: comps > 0 ? String(comps) : "—",                unit: "tracked", up: null },
+  ];
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 12 }}>
+      {cards.map((c) => (
+        <div key={c.lbl} style={{ padding: "12px", borderRadius: "var(--gv-radius-md)", background: "var(--gv-color-bg-surface)", border: "1px solid var(--gv-color-neutral-200)", boxShadow: "var(--gv-shadow-card)" }}>
+          <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: 10, fontWeight: 600, color: "var(--gv-color-neutral-400)", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 4 }}>{c.lbl}</div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
+            <span style={{ fontFamily: "var(--gv-font-heading)", fontSize: 22, fontWeight: 900, color: "var(--gv-color-neutral-900)", lineHeight: 1 }}>{c.val}</span>
+            <span style={{ fontSize: 11, color: "var(--gv-color-neutral-400)", fontFamily: "var(--gv-font-mono)" }}>{c.unit}</span>
+          </div>
+          {c.up !== null && (
+            <div style={{ fontSize: 11, fontWeight: 700, color: c.up ? "var(--gv-color-success-500)" : "var(--gv-color-danger-500)", marginTop: 3 }}>
+              {c.up ? "↑ Rising" : "↓ Drop"}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════
+   Research Loading Banner
+══════════════════════════════════════════════════ */
+function ResearchBanner({ status }: { status: string }) {
+  if (status === "sot_ready") return null;
+  const msg: Record<string, string> = {
+    pending:          "Research belum dimulai. Selesaikan onboarding untuk memulai.",
+    indexing:         "Brand sedang diindeks oleh Gemini…",
+    gemini_complete:  "Indexing selesai. Deep research sedang berjalan…",
+    researching_deep: "Deep research aktif: Perplexity, SERP, Apify, Firecrawl…",
+    consolidating:    "Mengkonsolidasi semua data menjadi Brand Source of Truth…",
+    failed:           "Research gagal. Hubungi support.",
+  };
+  return (
+    <div style={{ padding: "12px 16px", borderRadius: "var(--gv-radius-md)", background: "var(--gv-color-warning-50)", border: "1px solid var(--gv-color-warning-500)", marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ width: 14, height: 14, borderRadius: "50%", border: "2px solid var(--gv-color-warning-500)", borderTopColor: "transparent", animation: status !== "failed" ? "gv-spin .8s linear infinite" : "none", flexShrink: 0 }} />
+      <span style={{ fontSize: 13, color: "var(--gv-color-warning-700)", fontFamily: "var(--gv-font-body)" }}>{msg[status] ?? "Memproses data…"}</span>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════
+   Tab content
+══════════════════════════════════════════════════ */
+function CenterContent({ tab, data }: { tab: string; data: BrandData | null }) {
+  if (!data) return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--gv-color-neutral-400)", fontSize: 14 }}>
+      Memuat data…
+    </div>
+  );
+
+  if (tab === "GEO") return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <AIVisibility data={data} />
+      <TrendingTopics data={data} />
+    </div>
+  );
+
+  if (tab === "Social Search") return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <CompetitorGap data={data} />
+      <TrendingTopics data={data} />
+    </div>
+  );
+
+  // Default: SEO
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <SignalLayers data={data} />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <ContentScore data={data} />
+        <EngagementHeatmap />
       </div>
     </div>
   );
 }
 
-// ── Score Card Component (compact) ───────────────────────────────
-function ScoreCard({
-  label,
-  icon,
-  score,
-  prev,
-  active,
-  onClick,
-}: {
-  label: string;
-  icon: string;
-  score: number;
-  prev: number;
-  active: boolean;
-  onClick: () => void;
-}) {
-  const delta = score - prev;
-  const isUp = delta > 0;
-  const isDown = delta < 0;
-  const barBg = score >= 70 ? "#16A34A" : score >= 50 ? "var(--gv-color-primary-500)" : "#D97706";
-  const scoreColor = score >= 70 ? "#16A34A" : score >= 50 ? "var(--gv-color-primary-600)" : "#D97706";
-
-  return (
-    <button
-      onClick={onClick}
-      className="w-full text-left rounded-lg border px-3 py-2 transition-all"
-      style={active
-        ? { border: "1px solid var(--gv-color-primary-300)", background: "var(--gv-color-primary-50)" }
-        : { border: "1px solid var(--gv-color-neutral-200)", background: "var(--gv-color-neutral-50)" }}
-    >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <span className="text-sm">{icon}</span>
-          <span className="text-[11px] font-semibold" style={{ color: "var(--gv-color-neutral-700)" }}>{label}</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-sm font-bold" style={{ color: scoreColor }}>{score}</span>
-          {isUp && <span className="text-[10px] font-medium" style={{ color: "#16A34A" }}>↑+{delta}</span>}
-          {isDown && <span className="text-[10px] font-medium" style={{ color: "#DC2626" }}>↓{delta}</span>}
-          {!isUp && !isDown && <span className="text-[10px]" style={{ color: "var(--gv-color-neutral-400)" }}>→</span>}
-        </div>
-      </div>
-      <div className="mt-1.5 h-1 w-full rounded-full" style={{ background: "var(--gv-color-neutral-200)" }}>
-        <div className="h-1 rounded-full transition-all" style={{ width: `${score}%`, background: barBg }} />
-      </div>
-    </button>
-  );
-}
-
-// ── Main Page ────────────────────────────────────────────────────
-// ── DB row type (from gv_social_analytics) ───────────────────────────────────
-interface DbAnalyticsRow {
-  id: string;
-  late_post_id: string | null;
-  platform: string;
-  platform_icon: string | null;
-  post_type: string;
-  title: string | null;
-  caption: string | null;
-  hashtags: string[] | null;
-  post_url: string | null;
-  image_url: string | null;
-  published_at: string | null;
-  timestamp_label: string | null;
-  image_bg: string | null;
-  image_emoji: string | null;
-  reach: number;
-  likes: number;
-  comments: number;
-  shares: number;
-  saves: number;
-  watch_retention: number;
-  ctr: number;
-  trend: "up" | "down" | "flat";
-  trend_pct: number;
-  factor_scores: number[];
-  overall_score: number | null;
-  synced_at: string | null;
-}
-
-function dbRowToSocialItem(row: DbAnalyticsRow): SocialItem {
-  const pubDate = row.published_at ? new Date(row.published_at) : new Date();
-  const pubLabel = row.timestamp_label ||
-    `${pubDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} · ${pubDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
-  const publishedDate = pubDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  return {
-    id:             row.id,
-    title:          row.title || row.caption?.slice(0, 80) || "Post",
-    caption:        row.caption || "",
-    hashtags:       row.hashtags || [],
-    platform:       row.platform.charAt(0).toUpperCase() + row.platform.slice(1),
-    platformIcon:   row.platform_icon || "📱",
-    type:           (row.post_type as SocialItem["type"]) || "post",
-    publishedDate,
-    timestamp:      pubLabel,
-    imageBg:        row.image_bg || "from-gray-500 to-gray-700",
-    imageEmoji:     row.image_emoji || "📱",
-    reach:          row.reach,
-    likes:          row.likes,
-    comments:       row.comments,
-    shares:         row.shares,
-    saves:          row.saves,
-    watchRetention: row.watch_retention,
-    ctr:            Number(row.ctr),
-    trend:          row.trend || "flat",
-    trendPct:       row.trend_pct || 0,
-    factorScores:   row.factor_scores?.length === 10 ? row.factor_scores : [0, 70, 65, 72, 68, 71, 75, 65, 67, 70],
-  };
-}
-
+/* ══════════════════════════════════════════════════
+   Main Page
+══════════════════════════════════════════════════ */
 export default function AnalyticsPage() {
-  const [activeSection, setActiveSection] = useState<AnalyticsSection>("overview");
-  const [selected, setSelected] = useState<SelectedItem>(null);
-  const [mobileRightOpen, setMobileRightOpen] = useState(false);
-
-  // ── Auth & subscription ──────────────────────────────────────────
-  const { hasActivePlan, loading: quotaLoading } = useUserQuota();
-  const [brandId, setBrandId] = useState<string | null>(null);
-  const hasAccess = hasActivePlan;
-
-  // ── Analytics report state ────────────────────────────────────────
-  const [analyticsReport, setAnalyticsReport] = useState<AnalyticsReport | null>(null);
-  const [reportLoading, setReportLoading] = useState(false);
-  const [runAnalysisLoading, setRunAnalysisLoading] = useState(false);
-  const [runAnalysisStatus, setRunAnalysisStatus] = useState<"idle" | "running" | "success" | "error">("idle");
-  const [todoFilter, setTodoFilter] = useState<"all" | "SEO" | "GEO" | "Social">("all");
+  const [data, setData] = useState<BrandData | null>(null);
+  const [activeTab, setActiveTab] = useState("SEO");
 
   useEffect(() => {
-    const loadAuth = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-        // Load brand_profile_id and latest analytics report
-        const { data: bp } = await supabase
-          .from("brand_profiles")
-          .select("id")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (bp?.id) {
-          setBrandId(bp.id);
-          setReportLoading(true);
-          const { data: report } = await supabase
-            .from("analytics_reports")
-            .select("*")
-            .eq("brand_profile_id", bp.id)
-            .eq("status", "ready")
-            .order("cycle_number", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          if (report) setAnalyticsReport(report as AnalyticsReport);
-          setReportLoading(false);
-        }
-      } catch { /* keep defaults */ }
-    };
-    loadAuth();
-  }, []);
-
-  const handleRunAnalysis = async () => {
-    if (!brandId) return;
-    setRunAnalysisLoading(true);
-    setRunAnalysisStatus("running");
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("No session");
-      const res = await supabase.functions.invoke("brand-analytics-scorer", {
-        body: { brand_profile_id: brandId },
-      });
-      if (res.error) throw res.error;
-      setRunAnalysisStatus("success");
-      // Reload latest report
-      const { data: report } = await supabase
-        .from("analytics_reports")
-        .select("*")
-        .eq("brand_profile_id", brandId)
-        .eq("status", "ready")
-        .order("cycle_number", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (report) setAnalyticsReport(report as AnalyticsReport);
-    } catch {
-      setRunAnalysisStatus("error");
-    } finally {
-      setRunAnalysisLoading(false);
-      setTimeout(() => setRunAnalysisStatus("idle"), 5000);
-    }
-  };
-
-  // ── Live analytics from Late API + Claude ──────────────────────────────────
-  const [liveSocialItems, setLiveSocialItems] = useState<SocialItem[] | null>(null);
-  const [syncLoading, setSyncLoading] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<"idle" | "success" | "error">("idle");
-  const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
-
-  // Load from Supabase on mount (only when brandId is set)
-  useEffect(() => {
-    if (!brandId) return;
     (async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-      fetch(`/api/analytics/sync?brand_id=${brandId}`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      })
-        .then((r) => r.json())
-        .then((res: { success: boolean; data?: DbAnalyticsRow[] }) => {
-          if (res.success && res.data && res.data.length > 0) {
-            setLiveSocialItems(res.data.map(dbRowToSocialItem));
-            setLastSyncAt(res.data[0].synced_at || null);
-          }
-        })
-        .catch(() => {/* fall back to demo data */});
+      if (!session?.user) return;
+      const { data: brand } = await supabase
+        .from("brand_profiles")
+        .select("research_status, source_of_truth, serpapi_data, perplexity_data, apify_data, firecrawl_data")
+        .eq("user_id", session.user.id)
+        .single();
+      if (brand) setData(brand as BrandData);
     })();
-  }, [brandId]);
+  }, []);
 
-  // Trigger sync from Late API
-  const handleSyncAnalytics = useCallback(async () => {
-    if (!brandId) return;
-    setSyncLoading(true);
-    setSyncStatus("idle");
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("No session");
-      const authHeader = { Authorization: `Bearer ${session.access_token}` };
-      const res = await fetch("/api/analytics/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeader },
-        body: JSON.stringify({ brand_id: brandId }),
-      });
-      const data = await res.json() as { success: boolean; synced?: number; error?: string };
-      if (data.success) {
-        setSyncStatus("success");
-        // Reload from DB
-        const getRes = await fetch(`/api/analytics/sync?brand_id=${brandId}`, { headers: authHeader });
-        const getData = await getRes.json() as { success: boolean; data?: DbAnalyticsRow[] };
-        if (getData.success && getData.data && getData.data.length > 0) {
-          setLiveSocialItems(getData.data.map(dbRowToSocialItem));
-          setLastSyncAt(new Date().toISOString());
-        }
-      } else {
-        setSyncStatus("error");
-      }
-    } catch {
-      setSyncStatus("error");
-    } finally {
-      setSyncLoading(false);
-      setTimeout(() => setSyncStatus("idle"), 4000);
-    }
-  }, [brandId]);
-
-  // Mobile: open right panel when item selected
-  const handleSelect = (item: SelectedItem) => {
-    setSelected(item);
-    setMobileRightOpen(true);
-  };
-  const handleMobileBack = () => {
-    setMobileRightOpen(false);
-    setSelected(null);
-  };
-
-  // ── Tier gate (no active subscription) ───────────────────────
-  if (!quotaLoading && !hasAccess) {
-    const gateLeft = (
-      <NavColumn>
-        {/* ── Subscribe card ── */}
-        <div className="mt-4 flex flex-col gap-3">
-          {/* No plan notice */}
-          <div className="rounded-[14px] px-3 py-3" style={{ background: "#FEF3C7", border: "1px solid #FDE68A" }}>
-            <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "#D97706" }}>No Active Plan</p>
-            <p className="text-[11px] leading-snug" style={{ color: "#92400E" }}>Subscribe to access Analytics Dashboard.</p>
-          </div>
-
-          {/* What's included */}
-          {[
-            { label: "SEO Performance", desc: "Content rank tracking" },
-            { label: "GEO AI Visibility", desc: "AI engine citations" },
-            { label: "Social Algorithm", desc: "Algorithm scoring" },
-            { label: "Priority Actions", desc: "Automated todo list" },
-          ].map((item) => (
-            <div key={item.label} className="rounded-[14px] px-3 py-2.5 flex items-center gap-2.5"
-              style={{ background: "var(--gv-color-bg-surface)", border: "1px solid var(--gv-color-neutral-200)" }}>
-              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--gv-color-primary-400)" }} />
-              <div>
-                <p className="text-[11px] font-semibold" style={{ color: "var(--gv-color-neutral-800)" }}>{item.label}</p>
-                <p className="text-[10px]" style={{ color: "var(--gv-color-neutral-400)" }}>{item.desc}</p>
-              </div>
-            </div>
-          ))}
-
-          {/* Upgrade CTA */}
-          <a
-            href="/billing"
-            className="block text-center rounded-[14px] py-2.5 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
-            style={{ background: "var(--gv-gradient-primary)", boxShadow: "0 3px 10px rgba(95,143,139,0.25)" }}
-          >
-            Subscribe Now
-          </a>
-          <p className="text-[10px] text-center leading-tight" style={{ color: "var(--gv-color-neutral-400)" }}>
-            Questions?{" "}
-            <a href="mailto:hello@geovera.xyz" style={{ color: "var(--gv-color-primary-500)" }}>Contact support</a>
-          </p>
-        </div>
-      </NavColumn>
-    );
-
-    const gateCenter = (
-      <div className="flex flex-col justify-center h-full px-8 py-10">
-        {/* Lock icon + badge */}
-        <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl" style={{ background: "var(--gv-color-neutral-100)", border: "1px solid var(--gv-color-neutral-200)" }}>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--gv-color-neutral-400)" }}>
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-            <path d="M7 11V7a5 5 0 0110 0v4" />
-          </svg>
-        </div>
-
-        <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold mb-4 w-fit" style={{ background: "var(--gv-color-primary-50)", color: "var(--gv-color-primary-600)", border: "1px solid var(--gv-color-primary-100)" }}>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-          </svg>
-          Active Subscription Required
-        </span>
-
-        <h2 className="text-[22px] font-bold mb-3" style={{ color: "var(--gv-color-neutral-900)", fontFamily: "Georgia, serif" }}>
-          Analytics Dashboard
-        </h2>
-        <p className="text-[13px] leading-relaxed mb-8" style={{ color: "var(--gv-color-neutral-500)" }}>
-          Deep performance insights across SEO, GEO AI visibility, and Social Algorithm — all in one dashboard. Available for all active subscribers.
-        </p>
-
-        {/* Mini preview cards */}
-        <div className="grid grid-cols-1 gap-2.5">
-          {[
-            { label: "SEO Score", value: "87", unit: "/100", trend: "+12%", desc: "Content performance" },
-            { label: "GEO Visibility", value: "3.2K", unit: "mentions", trend: "+24%", desc: "AI engine citations" },
-            { label: "Social Score", value: "74", unit: "/100", trend: "+8%", desc: "Algorithm alignment" },
-          ].map((item) => (
-            <div
-              key={item.label}
-              className="flex items-center justify-between rounded-[14px] px-4 py-3"
-              style={{ background: "var(--gv-color-neutral-50)", border: "1px solid var(--gv-color-neutral-100)", filter: "blur(2px)", userSelect: "none" }}
-            >
-              <div>
-                <p className="text-[11px] font-medium" style={{ color: "var(--gv-color-neutral-400)" }}>{item.label}</p>
-                <p className="text-[13px] font-semibold" style={{ color: "var(--gv-color-neutral-900)" }}>{item.desc}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-[20px] font-bold leading-none" style={{ color: "var(--gv-color-primary-700)", fontFamily: "Georgia, serif" }}>{item.value}<span className="text-[11px] font-normal ml-0.5" style={{ color: "var(--gv-color-neutral-400)" }}>{item.unit}</span></p>
-                <p className="text-[11px] font-semibold mt-0.5" style={{ color: "var(--gv-color-primary-500)" }}>{item.trend}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <p className="mt-6 text-[11px]" style={{ color: "var(--gv-color-neutral-400)" }}>
-          <a href="/subscription" className="font-semibold" style={{ color: "var(--gv-color-primary-500)" }}>View subscription plans →</a>
-        </p>
-      </div>
-    );
-
-    const gateRight = (
-      <div className="flex flex-col h-full px-5 py-6 overflow-y-auto">
-        <p className="text-[11px] font-semibold uppercase tracking-wider mb-4" style={{ color: "var(--gv-color-neutral-400)" }}>
-          What you&apos;ll unlock
-        </p>
-
-        <div className="flex flex-col gap-3">
-          {[
-            {
-              icon: (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square">
-                  <polyline points="3 17 9 11 13 15 21 7" /><polyline points="15 7 21 7 21 13" />
-                </svg>
-              ),
-              title: "SEO Content Performance",
-              items: ["Reach & engagement per post", "Save rate & comment velocity", "Growth trend (weekly/monthly)", "Top performing content ranking"],
-            },
-            {
-              icon: (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square">
-                  <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                </svg>
-              ),
-              title: "GEO AI Visibility Score",
-              items: ["ChatGPT, Perplexity, Gemini, Claude", "Queries where your brand is cited", "Average mention position", "Visibility trend over time"],
-            },
-            {
-              icon: (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square">
-                  <rect x="3" y="3" width="18" height="18" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="3" y1="15" x2="21" y2="15" /><line x1="9" y1="3" x2="9" y2="21" /><line x1="15" y1="3" x2="15" y2="21" />
-                </svg>
-              ),
-              title: "Social Algorithm Score",
-              items: ["10 algorithm factors scored", "Per-post evaluation breakdown", "Watch retention & CTR analysis", "Actionable improvement tips"],
-            },
-            {
-              icon: (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" />
-                </svg>
-              ),
-              title: "Automated Reports",
-              items: ["Biweekly performance digest", "Brand intelligence PDF export", "Competitor mention tracking", "Custom date range filters"],
-            },
-          ].map((section) => (
-            <div
-              key={section.title}
-              className="rounded-[16px] p-4"
-              style={{ background: "var(--gv-color-bg-surface)", border: "1px solid var(--gv-color-neutral-100)" }}
-            >
-              <div className="flex items-center gap-2 mb-2.5">
-                <span className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-[8px]"
-                  style={{ background: "var(--gv-color-primary-50)", color: "var(--gv-color-primary-600)", border: "1px solid var(--gv-color-primary-100)" }}>
-                  {section.icon}
-                </span>
-                <p className="text-[12px] font-bold" style={{ color: "var(--gv-color-neutral-900)" }}>{section.title}</p>
-              </div>
-              <ul className="flex flex-col gap-1">
-                {section.items.map((item) => (
-                  <li key={item} className="flex items-center gap-1.5 text-[11px]" style={{ color: "var(--gv-color-neutral-500)" }}>
-                    <span className="w-1 h-1 rounded-full flex-shrink-0" style={{ background: "var(--gv-color-primary-400)" }} />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-
-    return (
-      <ThreeColumnLayout
-        left={gateLeft}
-        center={gateCenter}
-        right={gateRight}
-      />
-    );
-  }
-
-  const filteredContent = contentItems;
-  const filteredSocial = liveSocialItems && liveSocialItems.length > 0 ? liveSocialItems : socialItems;
-  const filteredGeo = geoItems;
-  const isLiveData = liveSocialItems !== null && liveSocialItems.length > 0;
-
-  const handleSectionChange = (s: AnalyticsSection) => {
-    setActiveSection(s);
-    setSelected(null);
-  };
-
-  const left = (
-    <NavColumn />
-  );
-
-  // Active score data (use real data when available, fall back to demo)
-  const scores = activeSection !== "overview" ? {
-    seo: analyticsReport ? { score: analyticsReport.seo_score ?? DEMO_SCORES.seo.score, prev: (analyticsReport.seo_score ?? DEMO_SCORES.seo.score) - (analyticsReport.seo_delta ?? 0), updatedAt: new Date(analyticsReport.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }), nextUpdate: "Biweekly" } : DEMO_SCORES.seo,
-    geo: analyticsReport ? { score: analyticsReport.geo_score ?? DEMO_SCORES.geo.score, prev: (analyticsReport.geo_score ?? DEMO_SCORES.geo.score) - (analyticsReport.geo_delta ?? 0), updatedAt: new Date(analyticsReport.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }), nextUpdate: "Biweekly" } : DEMO_SCORES.geo,
-    social: analyticsReport ? { score: analyticsReport.social_score ?? DEMO_SCORES.social.score, prev: (analyticsReport.social_score ?? DEMO_SCORES.social.score) - (analyticsReport.social_delta ?? 0), updatedAt: new Date(analyticsReport.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }), nextUpdate: "Biweekly" } : DEMO_SCORES.social,
-  } : DEMO_SCORES;
-  const activeScore = activeSection !== "overview" ? scores[activeSection as "seo" | "geo" | "social"] : scores.seo;
-  const activeDelta = activeScore.score - activeScore.prev;
-
-  const center = (
-    <div className="flex flex-col h-full">
-      {/* ── Sticky top header — title + section nav ── */}
-      <div className="flex-shrink-0 px-5 pt-5 pb-4" style={{ borderBottom: "1px solid var(--gv-color-neutral-200)", background: "var(--gv-color-bg-surface)" }}>
-        <div className="flex items-center justify-between gap-3 mb-3">
-          <h1
-            className="text-[22px] font-bold leading-tight flex-shrink-0"
-            style={{ color: "var(--gv-color-neutral-900)", fontFamily: "var(--gv-font-heading)" }}
-          >
-            Analytics
-          </h1>
-          {/* Sync button — Social section only */}
-          {activeSection === "social" && (
-            <div className="flex items-center gap-2 flex-shrink-0">
-              {isLiveData && (
-                <span className="flex items-center gap-1 text-[10px] font-medium" style={{ color: "#16A34A" }}>
-                  <span className="h-1.5 w-1.5 rounded-full inline-block" style={{ background: "#16A34A" }} />
-                  Live
-                </span>
-              )}
-              {lastSyncAt && (
-                <span className="text-[10px] hidden sm:block" style={{ color: "var(--gv-color-neutral-400)" }}>
-                  {new Date(lastSyncAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                </span>
-              )}
-              <button
-                onClick={handleSyncAnalytics}
-                disabled={syncLoading}
-                className="flex items-center gap-1.5 rounded-[10px] px-2.5 py-1.5 text-[12px] font-semibold transition-colors disabled:opacity-50"
-                style={
-                  syncStatus === "success"
-                    ? { background: "#DCFCE7", color: "#16A34A" }
-                    : syncStatus === "error"
-                    ? { background: "#FEE2E2", color: "#DC2626" }
-                    : { background: "var(--gv-color-primary-50)", color: "var(--gv-color-primary-700)" }
-                }
-              >
-                {syncLoading ? (
-                  <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" strokeOpacity="0.25"/>
-                    <path d="M21 12a9 9 0 00-9-9" strokeLinecap="round"/>
-                  </svg>
-                ) : syncStatus === "success" ? (
-                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                ) : (
-                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                )}
-                {syncLoading ? "Syncing…" : syncStatus === "success" ? "Synced!" : syncStatus === "error" ? "Failed" : "Sync Late"}
-              </button>
-            </div>
-          )}
-          </div>
-
-        {/* ── Section nav pills ── */}
-        <AnalyticsPillNav
-          activeSection={activeSection}
-          onSectionChange={handleSectionChange}
-          scores={{
-            overall: analyticsReport?.overall_score,
-            seo: analyticsReport?.seo_score,
-            geo: analyticsReport?.geo_score,
-            social: analyticsReport?.social_score,
-          }}
-          loading={reportLoading}
-        />
-      </div>
-
-      {/* ── Scrollable content body ── */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar px-5 py-4 space-y-4">
-
-      {/* ── OVERVIEW ── */}
-      {activeSection === "overview" && (
-        <div>
-          {/* Score Cards */}
-          <div className="grid grid-cols-2 gap-2 mb-4">
-            {([
-              { label: "Overall", score: analyticsReport?.overall_score, delta: analyticsReport?.overall_delta, mode: "general" as const },
-              { label: "SEO",     score: analyticsReport?.seo_score,     delta: analyticsReport?.seo_delta,     mode: "seo"     as const },
-              { label: "GEO",     score: analyticsReport?.geo_score,     delta: analyticsReport?.geo_delta,     mode: "geo"     as const },
-              { label: "Social",  score: analyticsReport?.social_score,  delta: analyticsReport?.social_delta,  mode: "social"  as const },
-            ] as { label: string; score?: number | null; delta?: number | null; mode: "general" | "seo" | "geo" | "social" }[]).map((c) => (
-              <div
-                key={c.label}
-                className="rounded-[14px] p-3 flex flex-col gap-1"
-                style={{
-                  background: `var(--gv7-mode-${c.mode}-light)`,
-                  border: `1px solid var(--gv7-mode-${c.mode}-border)`,
-                }}
-              >
-                <p
-                  className="text-[10px] font-bold uppercase tracking-wider"
-                  style={{ color: `var(--gv7-mode-${c.mode}-text)`, opacity: 0.7 }}
-                >
-                  {c.label}
-                </p>
-                <div className="flex items-end gap-1.5">
-                  <span
-                    className="text-[28px] font-bold leading-none"
-                    style={{ color: `var(--gv7-mode-${c.mode}-text)`, fontFamily: "var(--gv-font-heading)" }}
-                  >
-                    {reportLoading ? "—" : c.score ?? "—"}
-                  </span>
-                  {c.delta !== null && c.delta !== undefined && (
-                    <span
-                      className="text-[11px] font-semibold mb-0.5"
-                      style={{ color: c.delta >= 0 ? "var(--gv7-mode-general-text)" : "#DC2626" }}
-                    >
-                      {c.delta >= 0 ? "↑" : "↓"}{Math.abs(c.delta)}
-                    </span>
-                  )}
-                </div>
-                <div
-                  style={{
-                    height: 4,
-                    borderRadius: 99,
-                    background: `var(--gv7-mode-${c.mode}-border)`,
-                  }}
-                >
-                  <div
-                    style={{
-                      height: 4,
-                      borderRadius: 99,
-                      background: `var(--gv7-mode-${c.mode}-accent)`,
-                      width: `${c.score ?? 0}%`,
-                      transition: `width var(--gv-duration-slow) var(--gv-easing-default)`,
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Run Analysis + cycle info */}
-          <div className="rounded-[14px] p-3 mb-4 flex items-center gap-3" style={{ background: "var(--gv-color-neutral-50)", border: "1px solid var(--gv-color-neutral-200)" }}>
-            <div className="flex-1 min-w-0">
-              <p className="text-[12px] font-semibold" style={{ color: "var(--gv-color-neutral-800)" }}>
-                {analyticsReport ? `Cycle #${analyticsReport.cycle_number}` : "No analysis yet"}
-              </p>
-              <p className="text-[10px]" style={{ color: "var(--gv-color-neutral-400)" }}>
-                {analyticsReport
-                  ? `Last run: ${new Date(analyticsReport.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
-                  : "Run your first analysis to get real scores"}
-              </p>
-            </div>
-            <button
-              onClick={handleRunAnalysis}
-              disabled={runAnalysisLoading || !brandId}
-              className="flex items-center gap-1.5 rounded-[10px] px-3 py-1.5 text-[12px] font-semibold transition-colors disabled:opacity-50 flex-shrink-0"
-              style={
-                runAnalysisStatus === "success"
-                  ? { background: "#DCFCE7", color: "#16A34A" }
-                  : runAnalysisStatus === "error"
-                  ? { background: "#FEE2E2", color: "#DC2626" }
-                  : { background: "var(--gv-color-primary-600)", color: "#fff" }
-              }
-            >
-              {runAnalysisLoading ? (
-                <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" strokeOpacity="0.25"/><path d="M21 12a9 9 0 00-9-9" strokeLinecap="round"/></svg>
-              ) : (
-                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-              )}
-              {runAnalysisLoading ? "Analyzing…" : runAnalysisStatus === "success" ? "Done!" : runAnalysisStatus === "error" ? "Failed" : "Run Analysis"}
-            </button>
-          </div>
-
-          {/* Summary */}
-          {analyticsReport?.report_summary?.biggest_opportunity && (
-            <div className="rounded-[14px] p-3 mb-4 flex gap-2.5" style={{ background: "var(--gv-color-primary-50)", border: "1px solid var(--gv-color-primary-100)" }}>
-              <span className="text-base flex-shrink-0 mt-0.5">🎯</span>
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: "var(--gv-color-primary-500)" }}>Biggest Opportunity</p>
-                <p className="text-[12px] leading-relaxed" style={{ color: "var(--gv-color-primary-800)" }}>{analyticsReport.report_summary.biggest_opportunity}</p>
-                {analyticsReport.report_summary.geovera_focus && (
-                  <p className="text-[11px] mt-1 leading-relaxed" style={{ color: "var(--gv-color-primary-600)" }}>{analyticsReport.report_summary.geovera_focus}</p>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Top 5 Performing Content */}
-          {analyticsReport?.top_content && analyticsReport.top_content.length > 0 && (
-            <>
-              <SectionHeader label="Top 5 Performing Content — Claude Impact Score" />
-              <div className="space-y-1.5 mb-4">
-                {analyticsReport.top_content.map((c, i) => {
-                  const platformIcons: Record<string, string> = { website:"✍️", instagram:"📸", tiktok:"🎵", linkedin:"💼", youtube:"▶️" };
-                  const isSelected = selected?.type === "overview-content" && selected.item.title === c.title;
-                  return (
-                    <button
-                      key={i}
-                      onClick={() => handleSelect({ type: "overview-content", item: c })}
-                      className="w-full text-left rounded-[14px] p-3 transition-colors"
-                      style={{
-                        background: isSelected ? "var(--gv-color-primary-50)" : "var(--gv-color-bg-surface)",
-                        border: isSelected ? "1.5px solid var(--gv-color-primary-200)" : "1px solid var(--gv-color-neutral-100)",
-                      }}
-                    >
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ background: "var(--gv-color-primary-100)", color: "var(--gv-color-primary-700)" }}>#{i + 1}</span>
-                        <span className="text-base">{platformIcons[c.platform] ?? "📄"}</span>
-                        <p className="text-[12px] font-semibold flex-1 min-w-0 leading-snug truncate" style={{ color: "var(--gv-color-neutral-900)" }}>{c.title}</p>
-                        <span className="text-[13px] font-bold flex-shrink-0" style={{ color: "#16A34A" }}>{c.overall_impact}</span>
-                      </div>
-                      <div className="flex gap-3 pl-7">
-                        {[
-                          { label: "SEO", score: c.seo_impact, color: "#1D4ED8" },
-                          { label: "GEO", score: c.geo_impact, color: "#7C3AED" },
-                          { label: "Social", score: c.social_impact, color: "#DB2777" },
-                        ].map((s) => (
-                          <div key={s.label} className="flex items-center gap-1">
-                            <span className="text-[9px] font-bold" style={{ color: s.color }}>{s.label}</span>
-                            <span className="text-[10px] font-semibold" style={{ color: "var(--gv-color-neutral-600)" }}>{s.score}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </>
-          )}
-
-          {/* Todo List */}
-          {analyticsReport?.todo_list && analyticsReport.todo_list.length > 0 && (
-            <>
-              <div className="flex items-center justify-between mb-2 px-2">
-                <span className="text-[11px] font-bold uppercase tracking-[0.1em]" style={{ color: "var(--gv-color-neutral-400)" }}>Priority Actions</span>
-                <div className="flex gap-1">
-                  {(["all", "SEO", "GEO", "Social"] as const).map((f) => (
-                    <button
-                      key={f}
-                      onClick={() => setTodoFilter(f)}
-                      className="px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors"
-                      style={{
-                        background: todoFilter === f ? "var(--gv-color-primary-100)" : "var(--gv-color-neutral-100)",
-                        color: todoFilter === f ? "var(--gv-color-primary-700)" : "var(--gv-color-neutral-500)",
-                      }}
-                    >{f}</button>
-                  ))}
-                </div>
-              </div>
-              <div className="space-y-1.5 mb-4">
-                {analyticsReport.todo_list
-                  .filter((t) => todoFilter === "all" || t.category === todoFilter)
-                  .slice(0, 8)
-                  .map((t, i) => {
-                    const catColor = t.category === "SEO" ? "#1D4ED8" : t.category === "GEO" ? "#7C3AED" : "#DB2777";
-                    const catBg   = t.category === "SEO" ? "#EFF6FF"  : t.category === "GEO" ? "#F5F3FF"  : "#FDF2F8";
-                    const isSelected = selected?.type === "overview-todo" && selected.item.id === t.id;
-                    return (
-                      <button
-                        key={i}
-                        onClick={() => handleSelect({ type: "overview-todo", item: t })}
-                        className="w-full text-left rounded-[14px] p-3 transition-colors"
-                        style={{
-                          background: isSelected ? "var(--gv-color-primary-50)" : "var(--gv-color-bg-surface)",
-                          border: isSelected ? "1.5px solid var(--gv-color-primary-200)" : "1px solid var(--gv-color-neutral-100)",
-                        }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: catBg, color: catColor }}>{t.category}</span>
-                          <p className="text-[12px] font-semibold flex-1 min-w-0 leading-snug" style={{ color: "var(--gv-color-neutral-900)" }}>{t.title}</p>
-                          <span className="text-[11px] font-semibold flex-shrink-0" style={{ color: "#16A34A" }}>{t.score_gain_est}</span>
-                        </div>
-                      </button>
-                    );
-                  })}
-              </div>
-            </>
-          )}
-
-          {/* 14-Day Content Plan */}
-          {analyticsReport?.content_plan && analyticsReport.content_plan.length > 0 && (
-            <>
-              <SectionHeader label="14-Day Content Plan" />
-              <div className="space-y-1.5 mb-4">
-                {analyticsReport.content_plan.map((p, i) => {
-                  const catColor = p.category === "SEO" ? "#1D4ED8" : p.category === "GEO" ? "#7C3AED" : "#DB2777";
-                  const catBg   = p.category === "SEO" ? "#EFF6FF"  : p.category === "GEO" ? "#F5F3FF"  : "#FDF2F8";
-                  const platformIcons: Record<string, string> = { website:"✍️", instagram:"📸", tiktok:"🎵", linkedin:"💼", youtube:"▶️" };
-                  const isSelected = selected?.type === "overview-plan" && selected.item.day === p.day;
-                  return (
-                    <button
-                      key={i}
-                      onClick={() => handleSelect({ type: "overview-plan", item: p })}
-                      className="w-full text-left rounded-[14px] p-3 transition-colors"
-                      style={{
-                        background: isSelected ? "var(--gv-color-primary-50)" : "var(--gv-color-bg-surface)",
-                        border: isSelected ? "1.5px solid var(--gv-color-primary-200)" : "1px solid var(--gv-color-neutral-100)",
-                      }}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="flex-shrink-0 w-7 text-center text-[10px] font-bold rounded-[6px] py-0.5" style={{ background: "var(--gv-color-neutral-100)", color: "var(--gv-color-neutral-600)" }}>D{p.day}</span>
-                        <span className="text-sm flex-shrink-0">{platformIcons[p.platform] ?? "📄"}</span>
-                        <p className="text-[12px] font-semibold flex-1 min-w-0 truncate leading-snug" style={{ color: "var(--gv-color-neutral-900)" }}>{p.title}</p>
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0" style={{ background: catBg, color: catColor }}>{p.category}</span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </>
-          )}
-
-          {/* Empty state */}
-          {!reportLoading && !analyticsReport && (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="w-14 h-14 rounded-full mb-4 flex items-center justify-center" style={{ background: "var(--gv-color-neutral-100)" }}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--gv-color-neutral-400)" strokeWidth="1.5">
-                  <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <p className="text-[14px] font-semibold" style={{ color: "var(--gv-color-neutral-700)" }}>No analysis yet</p>
-              <p className="mt-1 text-[12px]" style={{ color: "var(--gv-color-neutral-400)" }}>Click &ldquo;Run Analysis&rdquo; above to generate your first report</p>
-            </div>
-          )}
-          {reportLoading && (
-            <div className="flex items-center justify-center py-16">
-              <svg className="h-6 w-6 animate-spin" style={{ color: "var(--gv-color-primary-500)" }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" strokeOpacity="0.25"/><path d="M21 12a9 9 0 00-9-9" strokeLinecap="round"/></svg>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── SEO — Articles & Blog content ── */}
-      {activeSection === "seo" && (
-        <div>
-          {/* ── Top 9 SEO Factors ── */}
-          <SectionHeader label="Top Faktor SEO" />
-          <div className="space-y-1 mb-4">
-            {([
-              { rank: 1, label: "Topical Authority & Relevansi Niche", score: 58, status: "warn" as const, icon: "🎯", tip: "Cluster konten AI Marketing sedang tumbuh", detail: "Google mengevaluasi apakah situs adalah otoritas di topik tertentu. Topical authority dibangun dengan content cluster — satu pillar page komprehensif didukung banyak artikel pendukung yang saling terhubung dalam satu niche.", actions: ["Buat pillar page untuk topik utama: 'AI Marketing'", "Tulis 5-10 artikel cluster yang link ke pillar page", "Hindari topik di luar niche inti", "Update artikel lama dengan konten terbaru secara berkala"] },
-              { rank: 2, label: "Quality Content & E-E-A-T", score: 76, status: "good" as const, icon: "✍️", tip: "Avg word count 1.240 · Readability A-", detail: "Konten berkualitas adalah pondasi SEO jangka panjang. Google E-E-A-T (Experience, Expertise, Authoritativeness, Trustworthiness) mengevaluasi apakah konten benar-benar memberikan nilai nyata kepada pembaca.", actions: ["Target artikel pillar 2.000+ kata dengan struktur jelas", "Tambah data, statistik, dan kutipan dari sumber terpercaya", "Perbarui konten lama setiap 6 bulan", "Tambah author bio dengan kredensial yang jelas"] },
-              { rank: 3, label: "Keywords & Search Intent", score: 74, status: "good" as const, icon: "🔑", tip: "18 keywords ranking Top 10 · 6 fully optimized", detail: "Riset dan penempatan keyword yang tepat memastikan konten ditemukan oleh audiens yang relevan. Fokus pada long-tail keywords dengan intent yang jelas untuk traffic berkualitas tinggi.", actions: ["Targetkan 3-5 keyword cluster per artikel", "Gunakan keyword di judul, H2, dan 100 kata pertama", "Tambah LSI keywords untuk konteks semantik", "Audit keyword yang hampir ranking (posisi 11-20)"], keywords: [
-                { keyword: "AI marketing platform", position: 3, volume: 8100, status: "optimized" as const },
-                { keyword: "brand automation tool", position: 5, volume: 5400, status: "optimized" as const },
-                { keyword: "AI content marketing", position: 7, volume: 12000, status: "optimized" as const },
-                { keyword: "marketing AI agent", position: 8, volume: 4400, status: "optimized" as const },
-                { keyword: "generative engine optimization", position: 9, volume: 2900, status: "optimized" as const },
-                { keyword: "AI brand management", position: 10, volume: 3600, status: "optimized" as const },
-                { keyword: "automated social media marketing", position: 14, volume: 9900, status: "monitored" as const },
-                { keyword: "content calendar AI", position: 16, volume: 6600, status: "monitored" as const },
-                { keyword: "AI marketing tools 2026", position: 18, volume: 14800, status: "monitored" as const },
-                { keyword: "brand visibility AI", position: 22, volume: 3200, status: "monitored" as const },
-                { keyword: "marketing intelligence platform", position: 24, volume: 5500, status: "monitored" as const },
-                { keyword: "GEO marketing strategy", position: 31, volume: 2100, status: "monitored" as const },
-                { keyword: "best AI tools for startups 2026", position: 0, volume: 18500, status: "suggested" as const },
-                { keyword: "how to automate brand content", position: 0, volume: 7200, status: "suggested" as const },
-                { keyword: "AI SEO optimization tool", position: 0, volume: 11000, status: "suggested" as const },
-                { keyword: "social media AI scheduler", position: 0, volume: 8800, status: "suggested" as const },
-              ] },
-              { rank: 4, label: "Struktur On-Page", score: 71, status: "good" as const, icon: "📄", tip: "H1/H2 terstruktur · Meta lengkap 85%", detail: "Struktur on-page yang benar membantu Google memahami hierarki dan topik konten. Satu H1 per halaman, H2/H3 yang deskriptif, meta title & description yang dioptimasi, dan URL yang clean adalah standar minimum.", actions: ["Pastikan setiap halaman punya meta description unik (150-160 char)", "Gunakan keyword utama di H1 dan H2 pertama", "Tambah schema markup (Article, FAQ, BreadcrumbList)", "Optimasi URL: pendek, deskriptif, pakai tanda hubung"] },
-              { rank: 5, label: "Page Speed & Core Web Vitals", score: 82, status: "good" as const, icon: "⚡", tip: "Load time 1.8s · Mobile score 91/100", detail: "Kecepatan halaman dan performa mobile adalah sinyal ranking langsung Google. Core Web Vitals (LCP, FID, CLS) mengukur pengalaman nyata pengguna. Skor mobile yang baik memastikan 60%+ traffic dari smartphone mendapat pengalaman optimal.", actions: ["Aktifkan lazy loading untuk gambar & video", "Minify CSS/JS dan aktifkan Gzip compression", "Gunakan CDN untuk aset statis", "Target LCP < 2.5s dan CLS < 0.1"] },
-              { rank: 6, label: "Backlinks & Link Authority", score: 38, status: "low" as const, icon: "🔗", tip: "142 backlinks · 28 referring domains", detail: "Backlink dari situs otoritatif adalah salah satu faktor ranking terkuat Google. Kualitas jauh lebih penting dari kuantitas — 10 backlink dari media nasional lebih berharga dari 1.000 backlink spam.", actions: ["Identifikasi 20 situs relevan untuk outreach setiap bulan", "Buat 'linkable assets': tool gratis, template, atau riset data", "Reclaim unlinked brand mentions via Google Alerts", "Audit dan disavow backlink toxic (spam/PBN)"], backlinks: [
-                { domain: "techcrunch.com", da: 93, type: "editorial" as const, anchorText: "AI marketing platform GeoVera", doFollow: true },
-                { domain: "producthunt.com", da: 89, type: "mention" as const, anchorText: "GeoVera — AI Brand Intelligence", doFollow: true },
-                { domain: "hubspot.com", da: 92, type: "editorial" as const, anchorText: "best AI marketing tools 2026", doFollow: true },
-                { domain: "g2.com", da: 86, type: "directory" as const, anchorText: "GeoVera reviews", doFollow: true },
-                { domain: "entrepreneur.com", da: 91, type: "editorial" as const, anchorText: "AI-powered brand automation", doFollow: true },
-                { domain: "medium.com", da: 94, type: "guest" as const, anchorText: "How AI is changing brand marketing", doFollow: true },
-                { domain: "clutch.co", da: 82, type: "directory" as const, anchorText: "GeoVera AI Marketing", doFollow: true },
-                { domain: "indiehackers.com", da: 78, type: "mention" as const, anchorText: "geovera.xyz", doFollow: false },
-                { domain: "betalist.com", da: 74, type: "mention" as const, anchorText: "GeoVera", doFollow: true },
-                { domain: "capterra.com", da: 88, type: "directory" as const, anchorText: "GeoVera software reviews", doFollow: true },
-              ] },
-              { rank: 7, label: "Domain Authority & Reputasi", score: 44, status: "low" as const, icon: "🏆", tip: "DA 34 · Perlu lebih banyak backlink berkualitas", detail: "Domain Authority (DA) mencerminkan kekuatan keseluruhan domain berdasarkan profil backlink. DA rendah berarti situs baru/muda butuh waktu dan strategi link building aktif untuk bersaing di SERP kompetitif.", actions: ["Guest posting di blog/media dengan DA > 50", "Buat konten linkable: data original, infografik, studi kasus", "Daftar di direktori bisnis terpercaya (Google Business, Clutch)", "Bangun HARO (Help A Reporter Out) untuk mention media"] },
-              { rank: 8, label: "User Experience & Navigasi", score: 69, status: "warn" as const, icon: "🧭", tip: "Bounce rate 48% · Avg session 2m 14s", detail: "Google menggunakan sinyal UX seperti bounce rate, dwell time, dan click depth sebagai indikator kualitas halaman. Navigasi yang intuitif membuat pengguna mengeksplorasi lebih banyak halaman, mengirim sinyal positif ke Google.", actions: ["Tambah internal link relevan di setiap artikel (min 3)", "Buat breadcrumb navigation yang jelas", "Optimalkan above-the-fold content", "A/B test CTA untuk menurunkan bounce rate"] },
-              { rank: 9, label: "Struktur Teknis & Keamanan", score: 78, status: "good" as const, icon: "🔒", tip: "HTTPS aktif · Sitemap valid · 3 item perlu perhatian", detail: "Fondasi teknis yang kuat memastikan Google bisa crawl dan index situs dengan efisien. HTTPS, sitemap XML, robots.txt yang benar, dan zero crawl errors adalah keharusan dasar SEO modern.", actions: ["Verifikasi Search Console setiap minggu", "Fix broken links dan redirect chains", "Pastikan canonical tags konsisten", "Submit sitemap ke Bing Webmaster Tools juga"], techIssues: [
-                { label: "HTTPS & SSL Certificate", severity: "ok" as const, detail: "Aktif & valid hingga Des 2026. Auto-renew enabled." },
-                { label: "XML Sitemap", severity: "ok" as const, detail: "Sitemap.xml tersubmit ke Google & Bing. 142 URL terindex." },
-                { label: "robots.txt", severity: "ok" as const, detail: "Konfigurasi benar. Tidak ada halaman penting yang diblokir." },
-                { label: "Core Web Vitals", severity: "ok" as const, detail: "LCP 1.8s · FID 12ms · CLS 0.04 — semua hijau." },
-                { label: "Canonical Tags", severity: "warn" as const, detail: "8 halaman belum memiliki canonical tag. Berpotensi duplicate content." },
-                { label: "Broken Internal Links", severity: "warn" as const, detail: "3 internal link mengarah ke halaman 404. Perlu diperbaiki segera." },
-                { label: "Redirect Chains", severity: "warn" as const, detail: "2 redirect chain ditemukan (301→301). Sebaiknya dipersingkat ke 1 redirect." },
-                { label: "Structured Data / Schema", severity: "warn" as const, detail: "Schema Article ada di 60% halaman. 40% belum memiliki markup." },
-                { label: "Duplicate Meta Descriptions", severity: "error" as const, detail: "12 halaman memiliki meta description yang identik. Harus diunikkan." },
-                { label: "Hreflang Tags", severity: "ok" as const, detail: "Tidak diperlukan — situs single language (EN)." },
-              ] },
-            ] as SeoFactor[]).map((f) => {
-              const isSelected = selected?.type === "seo-factor" && selected.item.rank === f.rank;
-              const badgeStyle = f.status === "good"
-                ? { background: "#DCFCE7", color: "#16A34A" }
-                : f.status === "warn"
-                ? { background: "#FEF3C7", color: "#D97706" }
-                : { background: "#FEE2E2", color: "#DC2626" };
-              const badgeLabel = f.status === "good" ? "Good" : f.status === "warn" ? "Needs work" : "Low";
-              return (
-                <button
-                  key={f.rank}
-                  onClick={() => handleSelect({ type: "seo-factor", item: f })}
-                  className="w-full text-left rounded-[14px] p-3 transition-all"
-                  style={{
-                    border: `1.5px solid ${isSelected ? "var(--gv-color-primary-200)" : "var(--gv-color-neutral-100)"}`,
-                    background: isSelected ? "var(--gv-color-primary-50)" : "var(--gv-color-bg-surface)",
-                  }}
-                >
-                  {/* Top row: icon + label */}
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm leading-none flex-shrink-0">{f.icon}</span>
-                    <h4 className="text-[13px] font-semibold leading-snug flex-1 min-w-0" style={{ color: "var(--gv-color-neutral-900)" }}>{f.label}</h4>
-                    <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium flex-shrink-0" style={badgeStyle}>
-                      {badgeLabel}
-                    </span>
-                  </div>
-                  {/* Tip */}
-                  <p className="text-[11px] line-clamp-2" style={{ color: "var(--gv-color-neutral-400)" }}>{f.tip}</p>
-                </button>
-              );
-            })}
-          </div>
-
-        </div>
-      )}
-
-      {/* ── GEO — AI Platform visibility ── */}
-      {activeSection === "geo" && (
-        <div>
-          {/* ── Top 8 GEO Factors ── */}
-          <SectionHeader label="Top Faktor GEO" />
-          <div className="space-y-1 mb-4">
-            {geoFactors.map((f) => {
-              const isSelected = selected?.type === "geo-factor" && selected.item.rank === f.rank;
-              const badgeStyle = f.status === "good"
-                ? { background: "#DCFCE7", color: "#16A34A" }
-                : f.status === "warn"
-                ? { background: "#FEF3C7", color: "#D97706" }
-                : { background: "#FEE2E2", color: "#DC2626" };
-              const badgeLabel = f.status === "good" ? "Good" : f.status === "warn" ? "Needs work" : "Low";
-              return (
-                <button
-                  key={f.rank}
-                  onClick={() => handleSelect({ type: "geo-factor", item: f })}
-                  className="w-full text-left rounded-[14px] p-3 transition-all"
-                  style={{
-                    border: `1.5px solid ${isSelected ? "var(--gv-color-primary-200)" : "var(--gv-color-neutral-100)"}`,
-                    background: isSelected ? "var(--gv-color-primary-50)" : "var(--gv-color-bg-surface)",
-                  }}
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm leading-none flex-shrink-0">{f.icon}</span>
-                    <h4 className="text-[13px] font-semibold leading-snug flex-1 min-w-0" style={{ color: "var(--gv-color-neutral-900)" }}>{f.label}</h4>
-                    <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium flex-shrink-0" style={badgeStyle}>
-                      {badgeLabel}
-                    </span>
-                  </div>
-                  <p className="text-[11px] line-clamp-2" style={{ color: "var(--gv-color-neutral-400)" }}>{f.tip}</p>
-                </button>
-              );
-            })}
-          </div>
-
-        </div>
-      )}
-
-      {/* ── SOCIAL — Post cards by 7D ── */}
-      {activeSection === "social" && (
-        <div>
-          {/* Week 1 — Feb 23–26 */}
-          <div className="mb-3">
-            <div className="grid grid-cols-2 gap-2">
-              {filteredSocial
-                .filter(s => ["Feb 23","Feb 24","Feb 25","Feb 26"].includes(s.publishedDate))
-                .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-                .map((s) => {
-                  const isSelected = selected?.type === "social" && selected.item.id === s.id;
-                  const socialScore = Math.round(s.factorScores.filter(x => x > 0).reduce((a, b) => a + b, 0) / (s.factorScores.filter(x => x > 0).length || 1));
-                  const scoreColStyle = { color: socialScore >= 70 ? "#16A34A" : socialScore >= 50 ? "var(--gv-color-primary-600)" : "#D97706" };
-                  return (
-                    <button
-                      key={s.id}
-                      onClick={() => handleSelect({ type: "social", item: s })}
-                      className="w-full text-left rounded-[14px] overflow-hidden transition-all"
-                      style={{
-                        border: `1.5px solid ${isSelected ? "var(--gv-color-primary-200)" : "var(--gv-color-neutral-100)"}`,
-                        background: isSelected ? "var(--gv-color-primary-50)" : "var(--gv-color-bg-surface)",
-                      }}
-                    >
-                      {/* Image header */}
-                      <div className={`relative h-32 bg-gradient-to-br ${s.imageBg} flex items-center justify-center overflow-hidden`}>
-                        <span className="text-4xl opacity-80 select-none">{s.imageEmoji}</span>
-                        {/* Platform + type badge */}
-                        <div className="absolute top-2 left-2 flex items-center gap-1.5">
-                          <span className="text-white text-sm leading-none drop-shadow">{s.platformIcon}</span>
-                          <span className="bg-black/40 text-white text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded-full backdrop-blur-sm capitalize">{s.type}</span>
-                        </div>
-                        {/* Social score badge */}
-                        <div className="absolute top-2 right-2 flex items-center gap-1 rounded-full px-2 py-0.5 backdrop-blur-sm" style={{ background: "rgba(255,255,255,0.9)", ...scoreColStyle }}>
-                          <span className="text-xs font-bold">{socialScore}</span>
-                          <span className="text-[9px] font-medium" style={{ color: "var(--gv-color-neutral-500)" }}>score</span>
-                        </div>
-                        {/* Trend badge */}
-                        <div className="absolute bottom-2 right-2">
-                          <TrendBadge trend={s.trend} pct={s.trendPct} />
-                        </div>
-                      </div>
-                      {/* Timestamp — tepat di bawah gambar */}
-                      <div className="flex items-center justify-between px-3 py-1.5" style={{ borderBottom: "1px solid var(--gv-color-neutral-100)" }}>
-                        <span className="text-[11px]" style={{ color: "var(--gv-color-neutral-400)" }}>{s.timestamp}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[11px]" style={{ color: "var(--gv-color-neutral-500)" }}>👁 {formatNum(s.reach)}</span>
-                          <span className="text-[11px]" style={{ color: "var(--gv-color-neutral-500)" }}>❤️ {formatNum(s.likes)}</span>
-                          <span className="text-[11px]" style={{ color: "var(--gv-color-neutral-500)" }}>💬 {s.comments}</span>
-                        </div>
-                      </div>
-                      {/* Content */}
-                      <div className="p-3">
-                        {/* Title */}
-                        <p className="text-[13px] font-semibold leading-snug line-clamp-2 mb-1.5" style={{ color: "var(--gv-color-neutral-900)" }}>{s.title}</p>
-                        {/* Caption */}
-                        <p className="text-[11px] leading-relaxed line-clamp-2 mb-2" style={{ color: "var(--gv-color-neutral-400)" }}>{s.caption}</p>
-                        {/* Hashtags */}
-                        <div className="flex flex-wrap gap-1">
-                          {s.hashtags.slice(0, 2).map((tag) => (
-                            <span key={tag} className="text-[11px] font-medium truncate" style={{ color: "var(--gv-color-primary-600)" }}>{tag}</span>
-                          ))}
-                          {s.hashtags.length > 2 && <span className="text-[11px]" style={{ color: "var(--gv-color-neutral-400)" }}>+{s.hashtags.length - 2}</span>}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-            </div>
-          </div>
-
-          {/* Week 2 — Feb 16–22 */}
-          <div className="mb-3">
-            <div className="grid grid-cols-2 gap-2">
-              {filteredSocial
-                .filter(s => ["Feb 22"].includes(s.publishedDate))
-                .map((s) => {
-                  const isSelected = selected?.type === "social" && selected.item.id === s.id;
-                  const socialScore = Math.round(s.factorScores.filter(x => x > 0).reduce((a, b) => a + b, 0) / (s.factorScores.filter(x => x > 0).length || 1));
-                  const scoreColStyle = { color: socialScore >= 70 ? "#16A34A" : socialScore >= 50 ? "var(--gv-color-primary-600)" : "#D97706" };
-                  return (
-                    <button
-                      key={s.id}
-                      onClick={() => handleSelect({ type: "social", item: s })}
-                      className="w-full text-left rounded-[14px] overflow-hidden transition-all"
-                      style={{
-                        border: `1.5px solid ${isSelected ? "var(--gv-color-primary-200)" : "var(--gv-color-neutral-100)"}`,
-                        background: isSelected ? "var(--gv-color-primary-50)" : "var(--gv-color-bg-surface)",
-                      }}
-                    >
-                      <div className={`relative h-32 bg-gradient-to-br ${s.imageBg} flex items-center justify-center overflow-hidden`}>
-                        <span className="text-4xl opacity-80 select-none">{s.imageEmoji}</span>
-                        <div className="absolute top-2 left-2 flex items-center gap-1.5">
-                          <span className="text-white text-sm leading-none drop-shadow">{s.platformIcon}</span>
-                          <span className="bg-black/40 text-white text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded-full backdrop-blur-sm capitalize">{s.type}</span>
-                        </div>
-                        <div className="absolute top-2 right-2 flex items-center gap-1 rounded-full px-2 py-0.5 backdrop-blur-sm" style={{ background: "rgba(255,255,255,0.9)", ...scoreColStyle }}>
-                          <span className="text-xs font-bold">{socialScore}</span>
-                          <span className="text-[9px] font-medium" style={{ color: "var(--gv-color-neutral-500)" }}>score</span>
-                        </div>
-                        <div className="absolute bottom-2 right-2">
-                          <TrendBadge trend={s.trend} pct={s.trendPct} />
-                        </div>
-                      </div>
-                      <div className="p-2.5">
-                        <p className="text-[13px] font-semibold leading-snug line-clamp-2 mb-1" style={{ color: "var(--gv-color-neutral-900)" }}>{s.title}</p>
-                        <div className="flex flex-wrap gap-1 mb-1.5">
-                          {s.hashtags.slice(0, 2).map((tag) => (
-                            <span key={tag} className="text-[10px] font-medium truncate" style={{ color: "var(--gv-color-primary-600)" }}>{tag}</span>
-                          ))}
-                          {s.hashtags.length > 2 && <span className="text-[10px]" style={{ color: "var(--gv-color-neutral-400)" }}>+{s.hashtags.length - 2}</span>}
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-[10px]" style={{ color: "var(--gv-color-neutral-400)" }}>{s.timestamp}</span>
-                          <span className="text-[10px] ml-auto" style={{ color: "var(--gv-color-neutral-400)" }}>👁 {formatNum(s.reach)}</span>
-                          <span className="text-[10px]" style={{ color: "var(--gv-color-neutral-400)" }}>❤️ {formatNum(s.likes)}</span>
-                          <span className="text-[10px]" style={{ color: "var(--gv-color-neutral-400)" }}>💬 {s.comments}</span>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-            </div>
-          </div>
-
-          {/* Load more — up to 60 posts / 28D, then by request */}
-          <div className="flex flex-col items-center gap-1.5 py-3">
-            <button
-              className="text-xs font-medium px-3 py-1.5 rounded-full transition-colors"
-              style={{ color: "var(--gv-color-primary-600)", background: "var(--gv-color-primary-50)" }}
-              onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--gv-color-primary-100)")}
-              onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--gv-color-primary-50)")}
-            >
-              Load 7D berikutnya (max 12 posts/batch)
-            </button>
-            <p className="text-[10px]" style={{ color: "var(--gv-color-neutral-400)" }}>Max 60 posts · 28D · lebih lanjut by request</p>
-          </div>
-        </div>
-      )}
-
-      </div>{/* end scrollable body */}
-
-      {/* ── Sticky bottom tabs — Overview / SEO / GEO / Social ── */}
-      <div className="flex-shrink-0 overflow-hidden rounded-b-xl" style={{ borderTop: "1px solid var(--gv-color-neutral-200)" }}>
-        <AnalyticsTabBar
-          activeSection={activeSection}
-          onSectionChange={handleSectionChange}
-          scores={{
-            overall: analyticsReport?.overall_score,
-            seo: analyticsReport?.seo_score,
-            geo: analyticsReport?.geo_score,
-            social: analyticsReport?.social_score,
-          }}
-          loading={reportLoading}
-        />
-      </div>
-    </div>
-  );
-
-  const right = <DetailPanel selected={selected} section={activeSection} analyticsReport={analyticsReport} />;
+  const handleSubMenuChange = useCallback((_section: string, sub: string) => {
+    setActiveTab(sub);
+  }, []);
 
   return (
-    <ThreeColumnLayout
-      left={left}
-      center={center}
-      right={right}
-      mobileRightOpen={mobileRightOpen}
-      onMobileBack={handleMobileBack}
-      mobileBackLabel="Analytics"
-    />
+    <>
+      <style>{`
+        @keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.8)} }
+        @keyframes gv-spin { to{transform:rotate(360deg)} }
+      `}</style>
+
+      <AppShell
+        onSubMenuChange={handleSubMenuChange}
+        center={
+          <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+            {/* Page header */}
+            <div style={{ flexShrink: 0, padding: "16px 20px 12px", borderBottom: "1px solid var(--gv-color-neutral-100)", background: "var(--gv-color-bg-surface)" }}>
+              <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: 11, color: "var(--gv-color-primary-500)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 2 }}>Analytics · {activeTab}</div>
+              <div style={{ fontFamily: "var(--gv-font-heading)", fontSize: 20, fontWeight: 900, color: "var(--gv-color-neutral-900)", letterSpacing: "-.02em" }}>
+                {activeTab === "SEO" ? "Signal Layer & Content Score" : activeTab === "GEO" ? "GEO & AI Engine Visibility" : "Social Discovery & Competitor Gap"}
+              </div>
+            </div>
+
+            {/* Scrollable content */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px 24px" }}>
+              {data && <ResearchBanner status={data.research_status} />}
+              <CenterContent tab={activeTab} data={data} />
+            </div>
+          </div>
+        }
+        right={
+          <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", padding: "16px 16px 16px 0" }}>
+            <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
+              <KPICards data={data} />
+              <DQSGauge data={data ?? { research_status: "pending" }} />
+              <ReportExport />
+            </div>
+          </div>
+        }
+      />
+    </>
   );
 }
