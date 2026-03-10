@@ -322,10 +322,10 @@ function TikTokCalendarInner() {
     if (tk === "true") {
       setTiktokConnected(true);
       showToast("success", "TikTok account connected! Ready to publish.");
-      router.replace("/tiktok-calendar");
+      router.replace("/calendar");
     } else if (err) {
       showToast("error", `Connection failed: ${decodeURIComponent(err)}`);
-      router.replace("/tiktok-calendar");
+      router.replace("/calendar");
     }
   }, [searchParams]); // eslint-disable-line
 
@@ -368,7 +368,7 @@ function TikTokCalendarInner() {
       response_type:         "code",
       scope:                 "user.info.basic,video.publish,video.upload",
       redirect_uri:          TIKTOK_REDIRECT_URI,
-      state:                 `${DEMO_BRAND_ID}:tiktok-calendar:${verifier}`,
+      state:                 `${DEMO_BRAND_ID}:calendar:${verifier}`,
       code_challenge:        challenge,
       code_challenge_method: "S256",
     });

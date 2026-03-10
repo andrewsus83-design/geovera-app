@@ -66,11 +66,11 @@ type DetailItem = { type: "image"; data: GeneratedImage } | { type: "video"; dat
 const ARTICLE_OBJECTIVES = [
   { id: "faq",        label: "FAQ",              icon: "❓", desc: "Pertanyaan umum pelanggan" },
   { id: "trend",      label: "Trend",            icon: "📈", desc: "Topik viral & trending" },
-  { id: "review",     label: "Review/Testimoni", icon: "⭐", desc: "Ulasan & testimonial produk" },
-  { id: "education",  label: "Edukasi/Tips",     icon: "📚", desc: "Panduan & tips praktis" },
-  { id: "hot_topic",  label: "Hot Topic",        icon: "🔥", desc: "Berita terkini & hangat" },
+  { id: "tips",       label: "Tips & Tricks",    icon: "💡", desc: "Panduan & tips praktis" },
   { id: "new_product",label: "New Product",      icon: "🆕", desc: "Launch produk baru" },
-  { id: "seasonal",   label: "Seasonal",         icon: "🎉", desc: "Konten hari raya & musiman" },
+  { id: "tutorial",   label: "Tutorial",         icon: "📚", desc: "How-to step-by-step" },
+  { id: "updates",    label: "Updates",          icon: "📢", desc: "Berita & perkembangan terbaru" },
+  { id: "review",     label: "Review/Testimony", icon: "⭐", desc: "Ulasan & testimonial produk" },
   { id: "random",     label: "AI Recommend",     icon: "✨", desc: "Pilihan terbaik dari AI" },
 ];
 const ARTICLE_LENGTHS = [
@@ -82,14 +82,30 @@ const ARTICLE_LENGTHS = [
 const MEDIA_OBJECTIVES = [
   { id: "multi_angles",  label: "Multi Angles",   icon: "🔄", desc: "Dari berbagai sudut" },
   { id: "theme",         label: "Theme/Mood",     icon: "🎨", desc: "Tema & suasana brand" },
-  { id: "education",     label: "Edukasi",        icon: "📚", desc: "Konten informatif" },
-  { id: "new_product",   label: "New Product",    icon: "🆕", desc: "Launch produk baru" },
-  { id: "review",        label: "Review/Testimoni",icon: "⭐", desc: "Ulasan & testimonial" },
-  { id: "ads",           label: "Ads/Iklan",      icon: "📣", desc: "Konten iklan & promosi" },
-  { id: "mini_story",    label: "Mini Story",     icon: "🎬", desc: "Cerita pendek & narrative" },
-  { id: "multi_catalog", label: "Multi Catalog",  icon: "📦", desc: "Katalog multi produk" },
-  { id: "faq",           label: "FAQ",            icon: "❓", desc: "Jawab pertanyaan pelanggan" },
+  { id: "review",        label: "Review",         icon: "⭐", desc: "Ulasan & testimonial" },
+  { id: "life",          label: "Lifestyle",      icon: "🌟", desc: "Gaya hidup & aspirasional" },
+  { id: "tutorial",      label: "Tutorial",       icon: "📚", desc: "How-to & step-by-step" },
+  { id: "catalog",       label: "Catalog",        icon: "📦", desc: "Katalog produk" },
+  { id: "trend",         label: "Trend",          icon: "📈", desc: "Konten viral & trending" },
+  { id: "tips",          label: "Tips & Tricks",  icon: "💡", desc: "Panduan praktis" },
+  { id: "general",       label: "General",        icon: "🖼️", desc: "Konten umum brand" },
+  { id: "multi_scenes",  label: "Multi Scenes",   icon: "🎬", desc: "Berbagai scene & suasana" },
   { id: "random",        label: "AI Recommend",   icon: "✨", desc: "Pilihan terbaik dari AI" },
+];
+const VIDEO_OBJECTIVES = [
+  { id: "multi_angles",  label: "Multi Angles",      icon: "🔄", desc: "Dari berbagai sudut & angle" },
+  { id: "theme",         label: "Themes/Mood",        icon: "🎨", desc: "Tema & suasana brand" },
+  { id: "multi_scenes",  label: "Multi Scenes",       icon: "🎬", desc: "Berbagai scene & suasana" },
+  { id: "tutorial",      label: "Tutorial",           icon: "📚", desc: "How-to & step-by-step" },
+  { id: "review",        label: "Review",             icon: "⭐", desc: "Ulasan & testimonial" },
+  { id: "tips",          label: "Tips & Tricks",      icon: "💡", desc: "Panduan praktis" },
+  { id: "new_product",   label: "New Product",        icon: "🆕", desc: "Peluncuran produk baru" },
+  { id: "educational",   label: "Educational",        icon: "🎓", desc: "Konten edukatif brand" },
+  { id: "trend",         label: "Trend",              icon: "📈", desc: "Konten viral & trending" },
+  { id: "life",          label: "Daily Life",         icon: "🌟", desc: "Keseharian & lifestyle" },
+  { id: "ads",           label: "Ads",                icon: "📢", desc: "Iklan & promosi produk" },
+  { id: "catalog",       label: "Multi Catalog",      icon: "📦", desc: "Katalog multi produk" },
+  { id: "random",        label: "AI Recommend",       icon: "✨", desc: "Pilihan terbaik dari AI" },
 ];
 
 // ── API helpers ───────────────────────────────────────────────────────────────
@@ -678,6 +694,7 @@ function ArticleWizard({
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [generateImage, setGenerateImage] = useState(false);
 
   const handleFileAdd = async (files: FileList | null) => {
     if (!files || refs.length >= 10) return;
@@ -710,8 +727,19 @@ function ArticleWizard({
         ...(imageUrls.length ? { image_urls: imageUrls } : {}),
       });
       if (res.success && res.article) {
+        // Optionally fire image generation alongside the article
+        if (generateImage) {
+          studioFetch({
+            action: "generate_image",
+            brand_id: brandId,
+            prompt: `Illustrative photo for article: ${topic || objective}`,
+            objective: "ads",
+            aspect_ratio: "16:9",
+            ...(imageUrls.length ? { image_urls: imageUrls } : {}),
+          }).catch(() => {});
+        }
         onResult(res.article as GeneratedArticle);
-        setTopic(""); setObjective(null); setLength(null); setRefs([]); setStep(1);
+        setTopic(""); setObjective(null); setLength(null); setRefs([]); setGenerateImage(false); setStep(1);
       } else { setError(res.error ?? "Article generation failed"); }
     } catch { setError("Network error. Try again."); }
     finally { setLoading(false); }
@@ -792,6 +820,21 @@ function ArticleWizard({
               </div>
             </div>
 
+            {/* Image generation toggle */}
+            <div className="flex items-center justify-between p-3" style={{ borderRadius: "var(--gv-radius-sm)", border: "1px solid var(--gv-color-neutral-200)", background: "var(--gv-color-neutral-50)" }}>
+              <div>
+                <p className="text-xs font-semibold" style={{ color: "var(--gv-color-neutral-800)" }}>Generate image juga?</p>
+                <p className="text-[10px]" style={{ color: "var(--gv-color-neutral-400)" }}>Buat gambar ilustrasi sesuai artikel</p>
+              </div>
+              <button
+                onClick={() => setGenerateImage(v => !v)}
+                className="relative w-10 h-5 rounded-full transition-colors flex-shrink-0"
+                style={{ background: generateImage ? "var(--gv-color-primary-500)" : "var(--gv-color-neutral-300)" }}
+              >
+                <span className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform" style={{ transform: generateImage ? "translateX(20px)" : "translateX(0)" }} />
+              </button>
+            </div>
+
             <div className="flex gap-2">
               <button
                 onClick={() => setStep(2)}
@@ -806,7 +849,7 @@ function ArticleWizard({
                 disabled={!canGenerate || loading}
                 className="flex-1 gv-btn-primary py-2 text-xs font-semibold disabled:opacity-40 flex items-center justify-center gap-1.5"
               >
-                {loading ? <><span className="w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" />Generating...</> : "✍️ Generate Artikel"}
+                {loading ? <><span className="w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" />Generating...</> : "✍️ Generate NOW!"}
               </button>
             </div>
             {error && <p className="text-xs" style={{ color: "var(--gv-color-danger-500)" }}>{error}</p>}
@@ -872,6 +915,7 @@ function ImageVideoWizard({
 }) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [topic, setTopic] = useState("");
+  const [description, setDescription] = useState("");
   const [refs, setRefs] = useState<UploadedRef[]>([]);
   const [uploading, setUploading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
@@ -879,6 +923,9 @@ function ImageVideoWizard({
   const [mediaMode, setMediaMode] = useState<"image" | "video">(initialMode);
   const [objective, setObjective] = useState<string | null>(null);
   const [ratio, setRatio] = useState<"1:1" | "9:16" | "16:9">("9:16");
+  const [imageAmount, setImageAmount] = useState(1);
+  const [generateScript, setGenerateScript] = useState(false);
+  const [generateMusic, setGenerateMusic] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [generatingPrompt, setGeneratingPrompt] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -933,6 +980,9 @@ function ImageVideoWizard({
     let negativePrompt = "blurry, low quality, watermark, text overlay";
     let recommendedDuration = 32; // default 32s for video
 
+    // Platform context based on ratio
+    const platform = ratio === "9:16" ? "TikTok/Instagram Reels" : ratio === "16:9" ? "YouTube/LinkedIn" : "Instagram Feed";
+
     try {
       const promptRes = await studioFetch({
         action: "generate_art_directed_prompt",
@@ -942,8 +992,10 @@ function ImageVideoWizard({
         media_type: mediaMode,
         ratio,
         topic,
+        platform,
         image_urls: refs.map(r => r.url).filter(Boolean),
-        notes: analysis?.notes ?? "",
+        notes: [analysis?.notes, description].filter(Boolean).join(". "),
+        generate_music: generateMusic,
       });
       if (promptRes.success && promptRes.prompt) {
         artPrompt = promptRes.prompt;
@@ -958,12 +1010,17 @@ function ImageVideoWizard({
 
     try {
       if (mediaMode === "image") {
-        // Generate batch of images with art-directed prompt via Flux Schnell (Modal/fal.ai)
+        // 1:5 ratio — generate 5× requested, Claude picks top imageAmount
+        const generateCount = imageAmount * 5;
         const res = await studioFetch({
           action: "generate_image", brand_id: brandId,
           prompt: artPrompt, aspect_ratio: ratio,
-          batch_size: batchSize,
+          batch_size: generateCount,
+          target_count: imageAmount,
           score_with_claude: true,
+          generate_script: generateScript,
+          objective,
+          platform,
         });
         if (res.success) {
           const imgs: GeneratedImage[] = Array.isArray(res.images) ? res.images : [{
@@ -977,11 +1034,16 @@ function ImageVideoWizard({
           onUsed();
         } else { setError(res.error ?? "Image generation failed"); }
       } else {
-        // Generate video via Runway Gen 4 Turbo with Claude-determined duration (16-64s)
+        // For video: generate 5 reference images first (1:5 ratio), Claude picks best for video
+        const refUrls = refs.map(r => r.url).filter(Boolean) as string[];
         const res = await studioFetch({
           action: "generate_video", brand_id: brandId,
           prompt: artPrompt, duration: recommendedDuration, aspect_ratio: ratio,
-          ...(refs[0]?.url ? { image_url: refs[0].url } : {}),
+          objective,
+          platform,
+          generate_music: generateMusic,
+          generate_script: generateScript,
+          ...(refUrls.length ? { image_url: refUrls[0] } : {}),
         });
         if (res.success) {
           let finalVideoUrl: string | null = res.video_url;
@@ -990,7 +1052,7 @@ function ImageVideoWizard({
             for (let i = 0; i < 24; i++) {
               await new Promise(r => setTimeout(r, 5000));
               try {
-                const poll = await studioFetch({ action: "check_task", brand_id: brandId, task_id: res.task_id, db_id: res.db_id, task_type: "video", generation_mode: "kie" });
+                const poll = await studioFetch({ action: "check_task", brand_id: brandId, task_id: res.task_id, db_id: res.db_id, task_type: "video", generation_mode: "runway" });
                 finalStatus = poll.status ?? finalStatus;
                 if (poll.video_url) { finalVideoUrl = poll.video_url; break; }
                 if (["failed","error","cancelled"].includes(finalStatus)) break;
@@ -1000,7 +1062,7 @@ function ImageVideoWizard({
           onVideoResult({
             id: res.db_id ?? Date.now().toString(), hook: artPrompt,
             video_url: finalVideoUrl, video_thumbnail_url: null,
-            video_status: finalStatus, ai_model: "kling-v2",
+            video_status: finalStatus, ai_model: res.ai_model ?? "runway-gen4-turbo",
             target_platform: ratio === "9:16" ? "tiktok" : "youtube",
             video_aspect_ratio: ratio, created_at: new Date().toISOString(),
           });
@@ -1011,11 +1073,16 @@ function ImageVideoWizard({
     finally { setGenerating(false); }
   };
 
-  const RATIOS = [
+  const IMAGE_RATIOS = [
     { id: "9:16" as const, label: "9:16", desc: "Portrait · TikTok/Reels" },
     { id: "1:1" as const,  label: "1:1",  desc: "Square · Instagram Feed" },
     { id: "16:9" as const, label: "16:9", desc: "Landscape · YouTube/Blog" },
   ];
+  const VIDEO_RATIOS = [
+    { id: "9:16" as const, label: "9:16", desc: "Portrait · TikTok/Reels" },
+    { id: "16:9" as const, label: "16:9", desc: "Landscape · YouTube" },
+  ];
+  const RATIOS = mediaMode === "video" ? VIDEO_RATIOS : IMAGE_RATIOS;
 
   return (
     <div className="space-y-4">
@@ -1110,14 +1177,14 @@ function ImageVideoWizard({
               </div>
             </div>
 
-            {/* Objectives */}
+            {/* Objectives — video uses VIDEO_OBJECTIVES */}
             <div>
               <p className="text-xs font-semibold mb-2" style={{ color: "var(--gv-color-neutral-700)" }}>
                 Objective <span style={{ color: "var(--gv-color-danger-500)" }}>*</span>
                 {(analysis?.recommended_objectives?.length ?? 0) > 0 && <span className="ml-1 text-[10px] font-normal" style={{ color: "var(--gv-color-info-500)" }}>✨ AI recommended</span>}
               </p>
               <div className="grid grid-cols-2 gap-1.5">
-                {MEDIA_OBJECTIVES.map(obj => {
+                {(mediaMode === "video" ? VIDEO_OBJECTIVES : MEDIA_OBJECTIVES).map(obj => {
                   const sel = objective === obj.id;
                   const recommended = analysis?.recommended_objectives?.includes(obj.id);
                   return (
@@ -1140,9 +1207,24 @@ function ImageVideoWizard({
               </div>
             </div>
 
-            {/* Ratio */}
+            {/* Description */}
             <div>
-              <p className="text-xs font-semibold mb-2" style={{ color: "var(--gv-color-neutral-700)" }}>Aspect Ratio</p>
+              <label className="text-xs font-semibold block mb-1.5" style={{ color: "var(--gv-color-neutral-700)" }}>
+                Deskripsi <span style={{ color: "var(--gv-color-neutral-400)", fontWeight: 400 }}>(opsional)</span>
+              </label>
+              <textarea
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                placeholder="Tambahan detail visual, mood, atau instruksi khusus..."
+                rows={2}
+                className="w-full px-3 py-2 text-xs outline-none resize-none"
+                style={{ borderRadius: "var(--gv-radius-sm)", border: "1px solid var(--gv-color-neutral-200)", background: "var(--gv-color-bg-surface)", color: "var(--gv-color-neutral-900)" }}
+              />
+            </div>
+
+            {/* Ratio — video only shows 9:16 and 16:9 */}
+            <div>
+              <p className="text-xs font-semibold mb-2" style={{ color: "var(--gv-color-neutral-700)" }}>Ukuran / Aspect Ratio</p>
               <div className="flex gap-2">
                 {RATIOS.map(r => {
                   const sel = ratio === r.id;
@@ -1164,13 +1246,57 @@ function ImageVideoWizard({
               </div>
             </div>
 
-            {/* Batch info */}
-            {mediaMode === "image" && batchSize > 1 && (
-              <div className="p-2.5 flex items-center gap-2" style={{ borderRadius: "var(--gv-radius-sm)", background: "var(--gv-color-primary-50)", border: "1px solid var(--gv-color-primary-100)" }}>
-                <span className="text-sm flex-shrink-0">🎯</span>
-                <p className="text-[11px]" style={{ color: "var(--gv-color-primary-700)" }}>
-                  Claude akan generate <strong>{batchSize} kandidat gambar</strong> dengan Flux Schnell, lalu memilih <strong>top {Math.max(1, Math.round(batchSize * 0.15))}</strong> terbaik untuk kamu
-                </p>
+            {/* Amount — image only */}
+            {mediaMode === "image" && (
+              <div>
+                <p className="text-xs font-semibold mb-1" style={{ color: "var(--gv-color-neutral-700)" }}>Jumlah Gambar</p>
+                <p className="text-[10px] mb-2" style={{ color: "var(--gv-color-neutral-400)" }}>AI menghasilkan 5× lalu pilih terbaik</p>
+                <div className="flex gap-2">
+                  {[1, 2, 3, 4].map(n => (
+                    <button key={n} onClick={() => setImageAmount(n)}
+                      className="flex-1 py-2 text-sm font-bold transition-all"
+                      style={{
+                        borderRadius: "var(--gv-radius-sm)",
+                        border: `1.5px solid ${imageAmount === n ? "var(--gv-color-primary-500)" : "var(--gv-color-neutral-200)"}`,
+                        background: imageAmount === n ? "var(--gv-color-primary-50)" : "var(--gv-color-bg-surface)",
+                        color: imageAmount === n ? "var(--gv-color-primary-700)" : "var(--gv-color-neutral-900)",
+                      }}>
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Script + Hashtags toggle — image & video */}
+            <div className="flex items-center justify-between p-3" style={{ borderRadius: "var(--gv-radius-sm)", border: "1px solid var(--gv-color-neutral-200)", background: "var(--gv-color-neutral-50)" }}>
+              <div>
+                <p className="text-xs font-semibold" style={{ color: "var(--gv-color-neutral-800)" }}>Script + Hashtags</p>
+                <p className="text-[10px]" style={{ color: "var(--gv-color-neutral-400)" }}>Buat caption & hashtags untuk posting</p>
+              </div>
+              <button
+                onClick={() => setGenerateScript(v => !v)}
+                className="relative w-10 h-5 rounded-full transition-colors flex-shrink-0"
+                style={{ background: generateScript ? "var(--gv-color-primary-500)" : "var(--gv-color-neutral-300)" }}
+              >
+                <span className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform" style={{ transform: generateScript ? "translateX(20px)" : "translateX(0)" }} />
+              </button>
+            </div>
+
+            {/* Music toggle — video only */}
+            {mediaMode === "video" && (
+              <div className="flex items-center justify-between p-3" style={{ borderRadius: "var(--gv-radius-sm)", border: "1px solid var(--gv-color-neutral-200)", background: "var(--gv-color-neutral-50)" }}>
+                <div>
+                  <p className="text-xs font-semibold" style={{ color: "var(--gv-color-neutral-800)" }}>🎵 Music</p>
+                  <p className="text-[10px]" style={{ color: "var(--gv-color-neutral-400)" }}>AI rekomendasikan musik sesuai mood & platform</p>
+                </div>
+                <button
+                  onClick={() => setGenerateMusic(v => !v)}
+                  className="relative w-10 h-5 rounded-full transition-colors flex-shrink-0"
+                  style={{ background: generateMusic ? "var(--gv-color-primary-500)" : "var(--gv-color-neutral-300)" }}
+                >
+                  <span className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform" style={{ transform: generateMusic ? "translateX(20px)" : "translateX(0)" }} />
+                </button>
               </div>
             )}
 
@@ -1184,11 +1310,11 @@ function ImageVideoWizard({
               {generatingPrompt ? (
                 <><span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />Claude art directing prompt...</>
               ) : generating ? (
-                <><span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />{mediaMode === "image" ? `Generating ${batchSize} candidates...` : "Generating video..."}</>
+                <><span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />{mediaMode === "image" ? "Generating images..." : "Generating video..."}</>
               ) : mediaMode === "image" ? (
-                `🎨 Generate Images (${batchSize} candidates)`
+                `🎨 Generate NOW! (${imageAmount} best of ${imageAmount * 5})`
               ) : (
-                "🎬 Generate Video (Runway Gen 4)"
+                "🎬 Generate NOW!"
               )}
             </button>
           </>
@@ -2463,30 +2589,58 @@ function HistoryRight({ brandId, historyKey, activeSection, onSelect }: {
   activeSection: StudioSection;
   onSelect: (item: DetailItem) => void;
 }) {
-  const defaultTab = activeSection === "video" ? "videos" : "images";
-  const [tab, setTab] = useState<"images" | "videos" | "models">(defaultTab);
+  const defaultTab = activeSection === "article" ? "articles" : activeSection === "video" ? "videos" : "images";
+  const [tab, setTab] = useState<"articles" | "images" | "videos" | "models">(defaultTab);
   useEffect(() => {
-    if (activeSection === "video") setTab("videos");
+    if (activeSection === "article") setTab("articles");
+    else if (activeSection === "video") setTab("videos");
     else if (activeSection === "image") setTab("images");
   }, [activeSection]);
+  const [articles, setArticles] = useState<GeneratedArticle[]>([]);
   const [images, setImages] = useState<GeneratedImage[]>([]);
   const [videos, setVideos] = useState<GeneratedVideo[]>([]);
   const [models, setModels] = useState<TrainedModel[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const reload = () => {
     setLoading(true);
     studioFetch({ action: "get_history", brand_id: brandId, type: "all", limit: 30 })
       .then((r) => {
         if (r.success) {
+          setArticles(r.articles ?? []);
           setImages(r.images ?? []);
           setVideos(r.videos ?? []);
           setModels(r.trainings ?? []);
         }
       })
       .finally(() => setLoading(false));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [brandId, historyKey]);
+  };
+
+  useEffect(() => { reload(); }, [brandId, historyKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const rejectArticle = async (id: string) => {
+    await studioFetch({ action: "update_article", brand_id: brandId, article_id: id, status: "rejected" });
+    reload();
+  };
+
+  const rejectImage = async (id: string) => {
+    await studioFetch({ action: "update_image", brand_id: brandId, image_id: id, status: "rejected" });
+    reload();
+  };
+
+  const rejectVideo = async (id: string) => {
+    await studioFetch({ action: "update_video", brand_id: brandId, video_id: id, status: "rejected" });
+    reload();
+  };
+
+  const downloadFile = (url: string, filename: string) => {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.click();
+  };
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -2495,12 +2649,13 @@ function HistoryRight({ brandId, historyKey, activeSection, onSelect }: {
         <h3 className="text-[16px] font-bold" style={{ fontFamily: "var(--gv-font-heading)", color: "var(--gv-color-neutral-900)" }}>
           History
         </h3>
-        <p className="text-[12px] mt-0.5" style={{ color: "var(--gv-color-neutral-400)" }}>Generated images, videos & models</p>
+        <p className="text-[12px] mt-0.5" style={{ color: "var(--gv-color-neutral-400)" }}>Generated articles, images & videos</p>
       </div>
 
       {/* Tabs */}
       <div className="flex-shrink-0 flex" style={{ borderBottom: "1px solid var(--gv-color-neutral-200)" }}>
         {([
+          { id: "articles" as const, icon: <PencilIcon className="w-3.5 h-3.5" />, label: "Articles", count: articles.length },
           { id: "images" as const, icon: <ImageIcon className="w-3.5 h-3.5" />, label: "Images", count: images.length },
           { id: "videos" as const, icon: <VideoIcon className="w-3.5 h-3.5" />, label: "Videos", count: videos.length },
           { id: "models" as const, icon: <AiIcon className="w-3.5 h-3.5" />, label: "Models", count: models.length },
@@ -2528,51 +2683,115 @@ function HistoryRight({ brandId, historyKey, activeSection, onSelect }: {
           </div>
         )}
 
-        {/* Images grid */}
-        {!loading && tab === "images" && (
-          images.length === 0
-            ? <p className="text-center text-[12px] py-8" style={{ color: "var(--gv-color-neutral-400)" }}>No generated images yet</p>
+        {/* Articles list */}
+        {!loading && tab === "articles" && (
+          articles.length === 0
+            ? <p className="text-center text-[12px] py-8" style={{ color: "var(--gv-color-neutral-400)" }}>No generated articles yet</p>
             : (
-              <div className="grid grid-cols-2 gap-2">
-                {images.map((img) => (
-                  <button
-                    key={img.id}
-                    onClick={() => onSelect({ type: "image", data: img })}
-                    className="aspect-square overflow-hidden transition-all"
-                    style={{ borderRadius: "var(--gv-radius-sm)", background: "var(--gv-color-neutral-100)" }}
-                  >
-                    {img.image_url
-                      ? <img src={img.image_url} alt={img.prompt_text} className="w-full h-full object-cover" />
-                      : <div className="w-full h-full flex items-center justify-center"><span className="text-[10px] font-medium" style={{ color: "var(--gv-color-neutral-400)" }}>{img.status === "processing" ? "..." : "—"}</span></div>}
-                  </button>
+              <div className="space-y-3">
+                {articles.filter(a => (a as GeneratedArticle & { status?: string }).status !== "rejected").map((art) => (
+                  <div key={art.id} className="p-3 space-y-2" style={{ borderRadius: "var(--gv-radius-sm)", border: "1px solid var(--gv-color-neutral-200)", background: "var(--gv-color-bg-surface)" }}>
+                    <div>
+                      <p className="text-[11px] font-bold leading-tight line-clamp-2" style={{ color: "var(--gv-color-neutral-900)" }}>{art.topic || "Article"}</p>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <span className="text-[10px] px-1.5 py-0.5 font-medium" style={{ borderRadius: "var(--gv-radius-xs)", background: "var(--gv-color-primary-50)", color: "var(--gv-color-primary-600)" }}>{art.objective}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 font-medium" style={{ borderRadius: "var(--gv-radius-xs)", background: "var(--gv-color-neutral-100)", color: "var(--gv-color-neutral-600)" }}>{art.length}</span>
+                      </div>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <button
+                        onClick={() => onSelect({ type: "article", data: art })}
+                        className="flex-1 py-1.5 text-[11px] font-semibold"
+                        style={{ borderRadius: "var(--gv-radius-xs)", border: "1px solid var(--gv-color-primary-300)", color: "var(--gv-color-primary-600)", background: "var(--gv-color-primary-50)" }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => rejectArticle(art.id)}
+                        className="flex-1 py-1.5 text-[11px] font-semibold"
+                        style={{ borderRadius: "var(--gv-radius-xs)", border: "1px solid var(--gv-color-danger-200)", color: "var(--gv-color-danger-500)", background: "transparent" }}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
                 ))}
               </div>
             )
         )}
 
-        {/* Videos list */}
-        {!loading && tab === "videos" && (
-          videos.length === 0
-            ? <p className="text-center text-[12px] py-8" style={{ color: "var(--gv-color-neutral-400)" }}>No generated videos yet</p>
+        {/* Images grid with actions */}
+        {!loading && tab === "images" && (
+          images.filter(img => (img as GeneratedImage & { status?: string }).status !== "rejected").length === 0
+            ? <p className="text-center text-[12px] py-8" style={{ color: "var(--gv-color-neutral-400)" }}>No generated images yet</p>
             : (
               <div className="space-y-2">
-                {videos.map((vid) => (
-                  <button
-                    key={vid.id}
-                    onClick={() => onSelect({ type: "video", data: vid })}
-                    className="w-full flex items-center gap-3 p-3 text-left transition-colors"
-                    style={{ borderRadius: "var(--gv-radius-sm)", border: "1px solid var(--gv-color-neutral-200)" }}
-                  >
-                    <div className="w-10 h-10 flex items-center justify-center flex-shrink-0" style={{ borderRadius: "var(--gv-radius-xs)", background: "var(--gv-color-neutral-100)" }}>
-                      {vid.video_thumbnail_url
-                        ? <img src={vid.video_thumbnail_url} alt="" className="w-full h-full object-cover" style={{ borderRadius: "var(--gv-radius-xs)" }} />
-                        : <VideoIcon className="w-4 h-4" style={{ color: "var(--gv-color-neutral-400)" }} />}
+                {images.filter(img => (img as GeneratedImage & { status?: string }).status !== "rejected").map((img) => (
+                  <div key={img.id} style={{ borderRadius: "var(--gv-radius-sm)", border: "1px solid var(--gv-color-neutral-200)", background: "var(--gv-color-bg-surface)", overflow: "hidden" }}>
+                    <button
+                      onClick={() => onSelect({ type: "image", data: img })}
+                      className="w-full block"
+                      style={{ aspectRatio: "16/9", background: "var(--gv-color-neutral-100)", overflow: "hidden" }}
+                    >
+                      {img.image_url
+                        ? <img src={img.image_url} alt={img.prompt_text} className="w-full h-full object-cover" />
+                        : <div className="w-full h-full flex items-center justify-center"><span className="text-2xl">{img.status === "processing" ? "⏳" : "🖼️"}</span></div>}
+                    </button>
+                    <div className="p-2">
+                      <p className="text-[10px] truncate mb-1.5" style={{ color: "var(--gv-color-neutral-500)" }}>{img.prompt_text || "Image"}</p>
+                      <div className="flex gap-1">
+                        <button onClick={() => onSelect({ type: "image", data: img })} className="flex-1 py-1 text-[10px] font-semibold" style={{ borderRadius: "var(--gv-radius-xs)", border: "1px solid var(--gv-color-primary-200)", color: "var(--gv-color-primary-600)", background: "var(--gv-color-primary-50)" }}>
+                          View
+                        </button>
+                        {img.image_url && (
+                          <button onClick={() => downloadFile(img.image_url!, `image-${img.id}.jpg`)} className="flex-1 py-1 text-[10px] font-semibold" style={{ borderRadius: "var(--gv-radius-xs)", border: "1px solid var(--gv-color-info-200)", color: "var(--gv-color-info-600)", background: "var(--gv-color-info-50)" }}>
+                            ↓ Download
+                          </button>
+                        )}
+                        <button onClick={() => rejectImage(img.id)} className="py-1 px-2 text-[10px] font-semibold" style={{ borderRadius: "var(--gv-radius-xs)", border: "1px solid var(--gv-color-danger-200)", color: "var(--gv-color-danger-500)", background: "transparent" }}>
+                          ✕
+                        </button>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-[12px] font-semibold truncate" style={{ color: "var(--gv-color-neutral-900)" }}>{vid.hook}</p>
-                      <p className="text-[10px] mt-0.5" style={{ color: "var(--gv-color-neutral-400)" }}>{vid.ai_model} · {vid.video_aspect_ratio} · {vid.video_status}</p>
+                  </div>
+                ))}
+              </div>
+            )
+        )}
+
+        {/* Videos list with actions */}
+        {!loading && tab === "videos" && (
+          videos.filter(vid => (vid as GeneratedVideo & { status?: string }).video_status !== "rejected").length === 0
+            ? <p className="text-center text-[12px] py-8" style={{ color: "var(--gv-color-neutral-400)" }}>No generated videos yet</p>
+            : (
+              <div className="space-y-3">
+                {videos.filter(vid => (vid as GeneratedVideo & { status?: string }).video_status !== "rejected").map((vid) => (
+                  <div key={vid.id} style={{ borderRadius: "var(--gv-radius-sm)", border: "1px solid var(--gv-color-neutral-200)", background: "var(--gv-color-bg-surface)", overflow: "hidden" }}>
+                    <button onClick={() => onSelect({ type: "video", data: vid })} className="w-full flex items-center gap-3 p-3 text-left">
+                      <div className="w-12 h-12 flex items-center justify-center flex-shrink-0" style={{ borderRadius: "var(--gv-radius-xs)", background: "var(--gv-color-neutral-100)", overflow: "hidden" }}>
+                        {vid.video_thumbnail_url
+                          ? <img src={vid.video_thumbnail_url} alt="" className="w-full h-full object-cover" />
+                          : <VideoIcon className="w-5 h-5" style={{ color: "var(--gv-color-neutral-400)" }} />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[12px] font-semibold truncate" style={{ color: "var(--gv-color-neutral-900)" }}>{vid.hook}</p>
+                        <p className="text-[10px] mt-0.5" style={{ color: "var(--gv-color-neutral-400)" }}>{vid.ai_model} · {vid.video_aspect_ratio} · {vid.video_status}</p>
+                      </div>
+                    </button>
+                    <div className="flex gap-1 px-3 pb-2">
+                      <button onClick={() => onSelect({ type: "video", data: vid })} className="flex-1 py-1 text-[10px] font-semibold" style={{ borderRadius: "var(--gv-radius-xs)", border: "1px solid var(--gv-color-primary-200)", color: "var(--gv-color-primary-600)", background: "var(--gv-color-primary-50)" }}>
+                        View
+                      </button>
+                      {vid.video_url && (
+                        <button onClick={() => downloadFile(vid.video_url!, `video-${vid.id}.mp4`)} className="flex-1 py-1 text-[10px] font-semibold" style={{ borderRadius: "var(--gv-radius-xs)", border: "1px solid var(--gv-color-info-200)", color: "var(--gv-color-info-600)", background: "var(--gv-color-info-50)" }}>
+                          ↓ Download
+                        </button>
+                      )}
+                      <button onClick={() => rejectVideo(vid.id)} className="py-1 px-2 text-[10px] font-semibold" style={{ borderRadius: "var(--gv-radius-xs)", border: "1px solid var(--gv-color-danger-200)", color: "var(--gv-color-danger-500)", background: "transparent" }}>
+                        ✕
+                      </button>
                     </div>
-                  </button>
+                  </div>
                 ))}
               </div>
             )
