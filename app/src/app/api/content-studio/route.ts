@@ -31,6 +31,9 @@ const ALLOWED_ACTIONS = new Set([
   "analyze_images",
   "generate_art_directed_prompt",
   "generate_article",
+  "update_image",
+  "update_video",
+  "update_article",
 ]);
 
 export async function POST(request: NextRequest) {

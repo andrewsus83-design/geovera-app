@@ -118,12 +118,18 @@ async function modalFluxGenerate(prompt: string, aspectRatio: string, numImages:
   return [];
 }
 
-// ── Claude image scoring (returns top 15%) ────────────────────────────────────
+// ── Claude image scoring (returns top N best images — 1:5 ratio) ──────────────
 async function claudeScoreImages(imageUrls: string[], prompt: string, anthropicKey: string): Promise<string[]> {
+  return claudeScoreAndPickN(imageUrls, prompt, Math.max(1, Math.ceil(imageUrls.length * 0.15)), anthropicKey);
+}
+
+async function claudeScoreAndPickN(imageUrls: string[], prompt: string, n: number, anthropicKey: string): Promise<string[]> {
   if (imageUrls.length <= 1) return imageUrls;
-  const threshold = Math.max(1, Math.ceil(imageUrls.length * 0.15));
+  const pickN = Math.min(n, imageUrls.length);
   try {
-    const imageContent = imageUrls.flatMap((url, i) => ([
+    // Score in batches of 10 max (Claude vision limit)
+    const batchUrls = imageUrls.slice(0, 10);
+    const imageContent = batchUrls.flatMap((url, i) => ([
       { type: "text" as const, text: `Image ${i + 1}:` },
       { type: "image" as const, source: { type: "url" as const, url } },
     ]));
@@ -135,22 +141,23 @@ async function claudeScoreImages(imageUrls: string[], prompt: string, anthropicK
         max_tokens: 512,
         messages: [{ role: "user", content: [
           ...imageContent,
-          { type: "text", text: `Score each image 1-10: commercial quality, composition, clarity, relevance to "${prompt}". Return JSON only: {"scores":[n,n,...]}` },
+          { type: "text", text: `You are an expert art director. Score each image 1-10 based on: commercial quality, composition, lighting, clarity, relevance to "${prompt}". Pick the absolute best for professional brand content. Return JSON only: {"scores":[n,n,...]}` },
         ]}],
       }),
     });
-    if (!res.ok) return imageUrls.slice(0, threshold);
+    if (!res.ok) return imageUrls.slice(0, pickN);
     const d = await res.json();
     const raw = d.content?.[0]?.text ?? "{}";
     const match = raw.match(/\{[\s\S]*\}/);
     const scores: number[] = match ? (JSON.parse(match[0]).scores ?? []) : [];
-    return imageUrls
+    const ranked = imageUrls
       .map((url, i) => ({ url, score: scores[i] ?? 5 }))
       .sort((a, b) => b.score - a.score)
-      .slice(0, threshold)
+      .slice(0, pickN)
       .map(x => x.url);
+    return ranked.length > 0 ? ranked : imageUrls.slice(0, pickN);
   } catch {
-    return imageUrls.slice(0, threshold);
+    return imageUrls.slice(0, pickN);
   }
 }
 
@@ -294,7 +301,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const noKieActions = ["check_daily_usage", "generate_smart_prompt", "submit_feedback"];
+    const noKieActions = ["check_daily_usage", "generate_smart_prompt", "submit_feedback", "generate_article", "update_image", "update_video", "update_article"];
     if (!KIE_API_KEY && !noKieActions.includes(action)) {
       return new Response(JSON.stringify({ error: "KIE_API_KEY not configured" }), {
         status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -316,7 +323,7 @@ Deno.serve(async (req) => {
           .select("id", { count: "exact", head: true })
           .eq("brand_id", brand_id)
           .gte("created_at", midnight)
-          .not("status", "in", '("failed","error","cancelled")'),
+          .not("status", "in", '("failed","error","cancelled","video_scene")'),
         supabase.from("gv_video_generations")
           .select("id", { count: "exact", head: true })
           .eq("brand_id", brand_id)
@@ -575,11 +582,14 @@ Return ONLY a valid JSON array of ${count} prompt strings. No explanation, no ma
     if (action === "generate_image") {
       const {
         prompt, aspect_ratio = "1:1", negative_prompt = "",
-        batch_size = 1, score_with_claude = false, lora_model = "",
+        batch_size = 1, target_count, score_with_claude = false, lora_model = "",
+        generate_script = false, objective = "", platform = "",
       } = data;
       if (!prompt) return json({ error: "prompt is required" }, 400);
       const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
+      // 1:5 ratio — generate 5× requested, Claude picks best target_count
       const numImages = Math.min(Number(batch_size) || 1, 30);
+      const wantedCount = target_count ? Math.min(Number(target_count), numImages) : numImages;
 
       let imageUrls: string[] = [];
       let aiProvider = "kie";
@@ -612,22 +622,50 @@ Return ONLY a valid JSON array of ${count} prompt strings. No explanation, no ma
 
       if (imageUrls.length === 0) return json({ error: "Image generation failed — no images returned" }, 500);
 
-      // Claude scoring: top 15% of batch
+      // Claude scoring: pick exactly wantedCount from the batch
       let approvedUrls = imageUrls;
       if (score_with_claude && imageUrls.length > 1 && ANTHROPIC_KEY) {
-        approvedUrls = await claudeScoreImages(imageUrls, String(prompt), ANTHROPIC_KEY);
+        // Modified scoring: sort by score, pick top wantedCount (not just 15%)
+        approvedUrls = await claudeScoreAndPickN(imageUrls, String(prompt), wantedCount, ANTHROPIC_KEY);
+      } else {
+        approvedUrls = imageUrls.slice(0, wantedCount);
       }
 
-      // Save all approved images to DB
-      const platform = data.platform as string ?? (aspect_ratio === "9:16" ? "instagram" : aspect_ratio === "16:9" ? "youtube" : "instagram");
+      // Generate script+hashtags if requested
+      let scriptData: Record<string, string> | null = null;
+      if (generate_script && ANTHROPIC_KEY) {
+        try {
+          const { data: bp } = await supabase.from("brand_profiles").select("brand_name, brand_dna").eq("id", brand_id).maybeSingle();
+          const brandName = (bp?.brand_name as string) ?? "Brand";
+          const scriptResp = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: { "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+            body: JSON.stringify({
+              model: "claude-haiku-4-5-20251001",
+              max_tokens: 512,
+              messages: [{ role: "user", content: `Create an engaging social media posting script for ${brandName} with image: "${prompt}". Objective: ${objective}. Platform: ${platform || "Instagram/TikTok"}.
+Return JSON only: {"caption":"Instagram caption (max 200 chars)","hashtags":"5-10 hashtags","tiktok_hook":"TikTok opening hook (max 80 chars)","cta":"call to action (max 60 chars)"}` }],
+            }),
+          });
+          if (scriptResp.ok) {
+            const sd = await scriptResp.json();
+            const rawScript = sd.content?.[0]?.text ?? "{}";
+            const match = rawScript.match(/\{[\s\S]*\}/);
+            if (match) scriptData = JSON.parse(match[0]);
+          }
+        } catch { /* non-fatal */ }
+      }
+
+      const dbPlatform = String(platform || (aspect_ratio === "9:16" ? "instagram" : aspect_ratio === "16:9" ? "youtube" : "instagram"));
       const savedImages = await Promise.all(approvedUrls.map(async (url) => {
         const { data: ins } = await supabase.from("gv_image_generations").insert({
           brand_id, prompt_text: prompt, negative_prompt, aspect_ratio,
           ai_provider: aiProvider, ai_model: aiModel,
           image_url: url, thumbnail_url: url, status: "completed",
-          target_platform: platform, style_preset: lora_model || null,
+          target_platform: dbPlatform, style_preset: lora_model || null,
+          metadata: scriptData ? { script: scriptData, objective, platform: dbPlatform } : null,
         }).select("id").single();
-        return { id: ins?.id ?? null, prompt_text: prompt, image_url: url, thumbnail_url: url, status: "completed", ai_model: aiModel, target_platform: platform, style_preset: lora_model || null, created_at: new Date().toISOString() };
+        return { id: ins?.id ?? null, prompt_text: prompt, image_url: url, thumbnail_url: url, status: "completed", ai_model: aiModel, target_platform: dbPlatform, style_preset: lora_model || null, script: scriptData, created_at: new Date().toISOString() };
       }));
 
       return json({
@@ -638,52 +676,90 @@ Return ONLY a valid JSON array of ${count} prompt strings. No explanation, no ma
         status: "completed",
         total_generated: imageUrls.length,
         total_approved: approvedUrls.length,
+        script: scriptData,
       });
     }
 
-    // ── GENERATE VIDEO (Runway Gen 4 Turbo, 16–64s total via clips) ──────────
+    // ── GENERATE VIDEO (Full Pipeline: scenes → images × 5 → Claude pick → Runway Gen 4) ──
     if (action === "generate_video") {
-      const { prompt, duration = 32, aspect_ratio = "9:16", image_url = "" } = data;
+      const { prompt, duration = 32, aspect_ratio = "9:16", image_url = "",
+              objective = "", platform = "", generate_script = false,
+              generate_music = false, scene_descriptions = null } = data;
       if (!prompt) return json({ error: "prompt is required" }, 400);
 
       // Duration range: 16–64s as set by Claude's art direction
       const totalDuration = Math.min(64, Math.max(16, Number(duration)));
       const clipDuration = 10 as const; // Runway Gen 4 max per clip
-      const numClips = Math.max(1, Math.min(7, Math.ceil(totalDuration / clipDuration)));
+      // Number of scenes = number of clips needed (each scene produces one clip)
+      const scenes: string[] = Array.isArray(scene_descriptions) && scene_descriptions.length > 0
+        ? (scene_descriptions as string[]).slice(0, 7)
+        : Array.from({ length: Math.max(1, Math.min(7, Math.ceil(totalDuration / clipDuration))) }, (_, i) =>
+            scene_descriptions ? String(prompt) : `${prompt}, scene ${i + 1}, ${objective || "brand"} style, smooth motion`
+          );
+      const numClips = scenes.length;
 
       // Map aspect ratio to Runway format
       const ratioMap: Record<string, string> = { "9:16": "720:1280", "1:1": "1280:1280", "16:9": "1280:720" };
       const runwayRatio = ratioMap[String(aspect_ratio)] ?? "720:1280";
-      const platform = data.platform as string ?? (aspect_ratio === "9:16" ? "tiktok" : "youtube");
+      const dbPlatformV = String(platform || (aspect_ratio === "9:16" ? "tiktok" : "youtube"));
 
+      const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
       let task_id: string | null = null;
       let video_url: string | null = null;
       let status = "processing";
       let ai_model = "runway-gen4-turbo";
       let generation_mode = "runway";
       let extra_task_ids: string[] = [];
+      let scene_image_urls: string[] = [];
 
+      // ── FULL PIPELINE: for each scene, generate 5 images → Claude picks best → image-to-video ──
       if (RUNWAY_API_SECRET) {
         try {
-          // Generate all clips in parallel (each up to 10s)
+          // Step 1: Generate 5 candidate images per scene (in parallel) via Flux Schnell
+          const sceneImageBatches = await Promise.all(
+            scenes.map(async (scenePrompt) => {
+              const scenePromptStr = String(scenePrompt);
+              try {
+                let urls: string[] = [];
+                if (MODAL_FLUX_URL) {
+                  urls = await modalFluxGenerate(scenePromptStr, String(aspect_ratio), 5);
+                } else if (FAL_API_KEY) {
+                  urls = await falFluxSchnell(scenePromptStr, String(aspect_ratio), 5);
+                }
+                return { prompt: scenePromptStr, urls };
+              } catch {
+                return { prompt: scenePromptStr, urls: [] };
+              }
+            })
+          );
+
+          // Step 2: Claude picks best image per scene (1:5 → 1 best)
+          const selectedImages = await Promise.all(
+            sceneImageBatches.map(async ({ prompt: scenePrompt, urls }) => {
+              if (urls.length === 0) return null;
+              if (urls.length === 1 || !ANTHROPIC_KEY) return urls[0];
+              const picked = await claudeScoreAndPickN(urls, scenePrompt, 1, ANTHROPIC_KEY);
+              return picked[0] ?? urls[0];
+            })
+          );
+          scene_image_urls = selectedImages.filter(Boolean) as string[];
+
+          // Step 3: Run Runway Gen 4 image-to-video for each scene's selected image
           const tasks = await Promise.all(
-            Array.from({ length: numClips }, (_, i) => {
-              const clipPrompt = numClips === 1
-                ? String(prompt)
-                : `${prompt}, scene ${i + 1} of ${numClips}, smooth continuation`;
-              return runwayCreateTask({
-                prompt: clipPrompt,
-                imageUrl: i === 0 && image_url ? String(image_url) : null,
+            scenes.map((scenePrompt, i) =>
+              runwayCreateTask({
+                prompt: String(scenePrompt),
+                imageUrl: scene_image_urls[i] ?? (image_url ? String(image_url) : null),
                 duration: clipDuration,
                 ratio: runwayRatio,
-              });
-            })
+              })
+            )
           );
           task_id = tasks[0].id;
           extra_task_ids = tasks.slice(1).map(t => t.id);
           status = "processing";
         } catch (e) {
-          console.error("Runway generation failed, falling back to KIE:", e);
+          console.error("Runway pipeline failed, falling back to KIE:", e);
           generation_mode = "kie"; ai_model = "kling-v2";
           const kiePayload: Record<string, unknown> = { prompt, duration: 8, aspect_ratio, model: "kling-v2", mode: "standard" };
           if (image_url) kiePayload.image_url = image_url;
@@ -705,18 +781,67 @@ Return ONLY a valid JSON array of ${count} prompt strings. No explanation, no ma
         ai_model = kieRes.model ?? "kling-v2";
       }
 
+      // Generate script if requested
+      let videoScript: Record<string, string> | null = null;
+      if (generate_script && ANTHROPIC_KEY) {
+        try {
+          const { data: bp } = await supabase.from("brand_profiles").select("brand_name").eq("id", brand_id).maybeSingle();
+          const brandName = (bp?.brand_name as string) ?? "Brand";
+          const scriptResp = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: { "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+            body: JSON.stringify({
+              model: "claude-haiku-4-5-20251001",
+              max_tokens: 512,
+              messages: [{ role: "user", content: `Create a posting script for ${brandName} video: "${prompt}". Objective: ${objective}. Platform: ${platform || "TikTok"}. Music: ${generate_music ? "yes, suggest mood" : "no"}.
+Return JSON only: {"caption":"posting caption (max 200 chars)","hashtags":"5-10 hashtags","voiceover":"optional voiceover script (max 100 chars per scene)","music_mood":"${generate_music ? "music mood & tempo recommendation" : ""}","cta":"call to action"}` }],
+            }),
+          });
+          if (scriptResp.ok) {
+            const sd = await scriptResp.json();
+            const rawScript = sd.content?.[0]?.text ?? "{}";
+            const match = rawScript.match(/\{[\s\S]*\}/);
+            if (match) videoScript = JSON.parse(match[0]);
+          }
+        } catch { /* non-fatal */ }
+      }
+
+      // Store scene images in gv_image_generations with status "video_scene"
+      // They appear in image history but are EXCLUDED from image quota counts
+      if (scene_image_urls.length > 0) {
+        await Promise.allSettled(scene_image_urls.map((url, i) =>
+          supabase.from("gv_image_generations").insert({
+            brand_id, prompt_text: scenes[i] ?? String(prompt),
+            aspect_ratio, ai_provider: MODAL_FLUX_URL ? "modal" : FAL_API_KEY ? "fal" : "kie",
+            ai_model: "flux-schnell", image_url: url, thumbnail_url: url,
+            status: "video_scene", target_platform: dbPlatformV,
+            metadata: { source: "video_pipeline", scene_index: i, objective, platform: dbPlatformV },
+          })
+        ));
+      }
+
       const { data: inserted, error: insertErr } = await supabase.from("gv_video_generations").insert({
-        brand_id, target_platform: platform, hook: prompt,
+        brand_id, target_platform: dbPlatformV, hook: prompt,
         ai_model, status, generation_mode,
         runway_task_id: task_id, video_url,
         video_thumbnail_url: null, video_aspect_ratio: aspect_ratio, video_status: status,
-        metadata: extra_task_ids.length > 0 ? { extra_task_ids, num_clips: numClips, total_duration: totalDuration } : null,
+        metadata: {
+          ...(extra_task_ids.length > 0 ? { extra_task_ids } : {}),
+          num_clips: numClips, total_duration: totalDuration,
+          num_scenes: scenes.length,
+          scene_image_urls,
+          ...(videoScript ? { script: videoScript } : {}),
+          ...(generate_music ? { music_requested: true } : {}),
+          objective, platform: dbPlatformV,
+        },
       }).select("id").single();
       if (insertErr) console.error("generate_video DB insert failed:", insertErr.message);
 
       return json({
-        success: true, task_id, extra_task_ids, num_clips: numClips, total_duration: totalDuration,
+        success: true, task_id, extra_task_ids, num_clips: numClips,
+        num_scenes: scenes.length, total_duration: totalDuration,
         video_url, status, db_id: inserted?.id ?? null, ai_model,
+        scene_image_urls, script: videoScript,
       });
     }
 
@@ -928,6 +1053,16 @@ Return ONLY a valid JSON array of ${count} prompt strings. No explanation, no ma
       const type = data.type ?? "all";
       const results: Record<string, unknown> = {};
 
+      if (type === "all" || type === "article") {
+        const { data: articles } = await supabase
+          .from("gv_article_generations")
+          .select("id, topic, objective, length, content, meta_title, meta_description, focus_keywords, social, geo, status, image_url, created_at")
+          .eq("brand_id", brand_id)
+          .order("created_at", { ascending: false })
+          .limit(limit);
+        results.articles = articles ?? [];
+      }
+
       if (type === "all" || type === "image") {
         const { data: imgs } = await supabase
           .from("gv_image_generations")
@@ -1128,75 +1263,196 @@ Return ONLY valid JSON:
       return json({ success: true, ...promptResult });
     }
 
-    // ── GENERATE ARTICLE (proxies to generate-article edge function) ──────────
+    // ── GENERATE ARTICLE (Claude Sonnet 4.6 direct) ───────────────────────────
     if (action === "generate_article") {
-      const { topic, objective, length, image_urls } = data;
-      const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
-      const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+      const { topic, objective, length, image_urls, brand_context } = data;
+      const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
+      if (!ANTHROPIC_API_KEY) return json({ error: "ANTHROPIC_API_KEY not configured" }, 500);
 
-      // Build enriched topic with objective context
+      // Fetch brand profile for context
+      const { data: bp } = await supabase
+        .from("brand_profiles")
+        .select("brand_name, country, brand_dna, source_of_truth")
+        .eq("id", brand_id)
+        .maybeSingle();
+
+      const brandName = bp?.brand_name ?? (brand_context as Record<string, string> | null)?.brand_name ?? "Brand";
+      const country = bp?.brand_country ?? (brand_context as Record<string, string> | null)?.country ?? "Indonesia";
+      const dna = (bp?.brand_dna ?? {}) as Record<string, unknown>;
+      const sot = (bp?.source_of_truth ?? {}) as Record<string, unknown>;
+      const kwi = sot.keyword_intelligence as Record<string, unknown> | null;
+      const rankingKws = (kwi?.ranking_keywords as string[] ?? []).slice(0, 5).join(", ");
+
       const objectiveLabels: Record<string, string> = {
-        faq: "FAQ artikel dengan pertanyaan dan jawaban yang umum",
-        trend: "artikel trend terkini dan viral",
-        review: "artikel review dan testimonial produk",
-        education: "artikel edukasi, tips dan trik praktis",
-        hot_topic: "artikel hot topic dan berita terkini",
-        new_product: "artikel peluncuran produk baru yang menarik",
-        seasonal: "konten seasonal dan hari spesial yang relevan",
-        random: "konten terbaik berdasarkan rekomendasi AI",
+        faq: "FAQ format — pertanyaan umum pelanggan dengan jawaban detail",
+        trend: "Trend article — topik viral & trending terkini",
+        tips: "Tips & Tricks — panduan praktis langkah demi langkah",
+        new_product: "Product launch — peluncuran produk baru yang menarik",
+        tutorial: "Tutorial — panduan how-to yang mudah diikuti",
+        updates: "Brand updates — berita & perkembangan terbaru brand",
+        review: "Review & Testimonial — ulasan dan testimoni pelanggan",
+        random: "AI-recommended — konten terbaik berdasarkan rekomendasi AI",
       };
-      const enrichedTopic = [topic, objectiveLabels[objective as string] ?? ""].filter(Boolean).join(" — ") || "konten brand yang menarik dan relevan";
+      const objLabel = objectiveLabels[objective as string] ?? "konten brand relevan";
 
-      const articleResp = await fetch(`${SUPABASE_URL}/functions/v1/generate-article`, {
+      const wordCounts: Record<string, number> = { short: 300, medium: 800, long: 1500, very_long: 3000 };
+      const targetWords = wordCounts[length as string] ?? 800;
+
+      const enrichedTopic = topic
+        ? `${topic} (${objLabel})`
+        : `${objLabel} untuk ${brandName}`;
+
+      const systemMsg = `You are an expert content writer and SEO specialist. Write high-quality, engaging content in Indonesian language (Bahasa Indonesia) for digital brands. You always write in proper JSON format.`;
+
+      const userMsg = `Write a complete ${targetWords}-word article for this brand:
+
+Brand: ${brandName}
+Country/Market: ${country}
+Positioning: ${String(dna.positioning ?? "premium brand")}
+USP: ${String(dna.usp ?? "")}
+Target keywords: ${rankingKws || "brand-related keywords"}
+
+Topic: ${enrichedTopic}
+Format: ${objLabel}
+Target length: ~${targetWords} words
+${image_urls?.length ? `Reference images provided: ${(image_urls as string[]).length} image(s) — reference their content/context` : ""}
+
+Return ONLY valid JSON (no markdown, no code blocks):
+{
+  "article": "full article HTML content (~${targetWords} words, use <h2><h3><p><ul><li> tags)",
+  "meta_title": "SEO title (50-60 chars)",
+  "meta_description": "SEO description (150-160 chars)",
+  "focus_keywords": ["keyword1", "keyword2", "keyword3"],
+  "social": {
+    "instagram": "Instagram caption (max 150 chars + 5 hashtags)",
+    "linkedin": "LinkedIn post (professional, max 200 chars)",
+    "tiktok": "TikTok hook (punchy, max 100 chars)"
+  },
+  "geo": {
+    "faq": [
+      {"question": "Q1?", "answer": "A1."},
+      {"question": "Q2?", "answer": "A2."},
+      {"question": "Q3?", "answer": "A3."}
+    ]
+  }
+}`;
+
+      const claudeResp = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${SUPABASE_SERVICE_KEY}`,
+          "x-api-key": ANTHROPIC_API_KEY,
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json",
         },
         body: JSON.stringify({
-          brand_id,
-          topic: enrichedTopic,
-          target_platforms: ["instagram", "linkedin", "tiktok"],
-          mode: "manual",
-          ...(image_urls?.length ? { image_urls } : {}),
+          model: "claude-sonnet-4-6",
+          max_tokens: 8192,
+          system: systemMsg,
+          messages: [{ role: "user", content: userMsg }],
         }),
       });
 
-      if (!articleResp.ok) {
-        const errText = await articleResp.text();
-        return json({ success: false, error: `Article generation failed: ${errText}` }, 502);
+      if (!claudeResp.ok) {
+        return json({ success: false, error: `Article generation failed (${claudeResp.status})` }, 502);
       }
 
-      const articleData = await articleResp.json();
+      const claudeData = await claudeResp.json();
+      const rawText = (claudeData.content?.[0]?.text ?? "").trim();
+      let articleData: Record<string, unknown> = {};
+      try {
+        const match = rawText.match(/\{[\s\S]*\}/);
+        if (match) articleData = JSON.parse(match[0]);
+      } catch {
+        articleData = { article: rawText };
+      }
 
-      // Map length selection to the right article variant
-      const lengthMap: Record<string, string> = {
-        short: "article_short",
-        medium: "article_medium",
-        long: "article_long",
-        very_long: "article_long", // use long as max available
-      };
-      const selectedField = lengthMap[length as string] ?? "article_medium";
+      const articleContent = String(articleData.article ?? "");
+
+      // Store in gv_article_generations
+      const { data: stored } = await supabase.from("gv_article_generations").insert({
+        brand_id,
+        topic: enrichedTopic,
+        objective,
+        length,
+        content: articleContent,
+        meta_title: String(articleData.meta_title ?? ""),
+        meta_description: String(articleData.meta_description ?? ""),
+        focus_keywords: articleData.focus_keywords ?? [],
+        social: articleData.social ?? {},
+        geo: articleData.geo ?? {},
+        status: "done",
+      }).select("id").single();
 
       return json({
         success: true,
         article: {
-          id: `article-${Date.now()}`,
+          id: stored?.id ?? `article-${Date.now()}`,
           topic: enrichedTopic,
           objective,
           length,
-          content: articleData[selectedField] ?? articleData.article_medium ?? "",
-          content_short: articleData.article_short ?? "",
-          content_medium: articleData.article_medium ?? "",
-          content_long: articleData.article_long ?? "",
-          meta_title: articleData.meta_title ?? "",
-          meta_description: articleData.meta_description ?? "",
-          focus_keywords: articleData.focus_keywords ?? [],
-          social: articleData.social ?? {},
-          geo: articleData.geo ?? {},
+          content: articleContent,
+          content_short: articleContent,
+          content_medium: articleContent,
+          content_long: articleContent,
+          meta_title: String(articleData.meta_title ?? ""),
+          meta_description: String(articleData.meta_description ?? ""),
+          focus_keywords: (articleData.focus_keywords as string[]) ?? [],
+          social: (articleData.social as Record<string, string>) ?? {},
+          geo: (articleData.geo as Record<string, unknown>) ?? {},
           created_at: new Date().toISOString(),
         },
       });
+    }
+
+    // ── UPDATE IMAGE STATUS (reject / schedule) ───────────────────────────────
+    if (action === "update_image") {
+      const { image_id, status: newStatus, scheduled_at } = data;
+      if (!image_id) return json({ error: "image_id required" }, 400);
+      const updates: Record<string, unknown> = {};
+      if (newStatus) updates.status = newStatus;
+      if (scheduled_at) updates.scheduled_at = scheduled_at;
+      if (!Object.keys(updates).length) return json({ error: "No fields to update" }, 400);
+      const { error: upErr } = await supabase
+        .from("gv_image_generations")
+        .update(updates)
+        .eq("id", image_id)
+        .eq("brand_id", brand_id);
+      if (upErr) return json({ error: "Update failed" }, 500);
+      return json({ success: true });
+    }
+
+    // ── UPDATE VIDEO STATUS (reject / schedule) ───────────────────────────────
+    if (action === "update_video") {
+      const { video_id, status: newStatus, scheduled_at } = data;
+      if (!video_id) return json({ error: "video_id required" }, 400);
+      const updates: Record<string, unknown> = {};
+      if (newStatus) updates.video_status = newStatus;
+      if (scheduled_at) updates.scheduled_at = scheduled_at;
+      if (!Object.keys(updates).length) return json({ error: "No fields to update" }, 400);
+      const { error: upErr } = await supabase
+        .from("gv_video_generations")
+        .update(updates)
+        .eq("id", video_id)
+        .eq("brand_id", brand_id);
+      if (upErr) return json({ error: "Update failed" }, 500);
+      return json({ success: true });
+    }
+
+    // ── UPDATE ARTICLE STATUS (reject / schedule) ─────────────────────────────
+    if (action === "update_article") {
+      const { article_id, status: newStatus, content: newContent, scheduled_at } = data;
+      if (!article_id) return json({ error: "article_id required" }, 400);
+      const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (newStatus) updates.status = newStatus;
+      if (newContent) updates.content = newContent;
+      if (scheduled_at) updates.scheduled_at = scheduled_at;
+      const { error: upErr } = await supabase
+        .from("gv_article_generations")
+        .update(updates)
+        .eq("id", article_id)
+        .eq("brand_id", brand_id);
+      if (upErr) return json({ error: "Update failed" }, 500);
+      return json({ success: true });
     }
 
     return json({ error: "Invalid action" }, 400);
