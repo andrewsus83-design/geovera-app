@@ -88,32 +88,30 @@ export default function PricingPage() {
     setSelectedPlan(plan);
     setSubmitting(true);
     try {
-      // Create subscription record
-      const { data: sub, error } = await supabase
-        .from("subscriptions")
-        .insert({ user_id: user.id, plan_id: plan.id, status: "pending_payment" })
-        .select("invoice_number")
-        .single();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sesi berakhir, silakan login ulang.");
 
-      if (error) throw error;
-
-      // Trigger invoice email via edge function
-      await supabase.functions.invoke("send-invoice", {
-        body: {
-          user_id: user.id,
-          email: user.email,
-          full_name: user.full_name || user.email,
-          plan_name: plan.name,
-          plan_price: plan.price_idr,
-          invoice_number: sub.invoice_number,
-          bank_settings: bankSettings,
+      const res = await fetch("/api/payment", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`,
         },
-      }).catch(() => null); // Non-blocking — email best effort
+        body: JSON.stringify({
+          action: "request_subscription",
+          user_id: session.user.id,
+          plan_id: plan.id,
+          email: session.user.email,
+          full_name: user.full_name || session.user.email?.split("@")[0] || "User",
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || "Gagal membuat invoice.");
 
-      setInvoiceCreated({ invoice_number: sub.invoice_number, plan });
+      setInvoiceCreated({ invoice_number: data.invoice_number, plan });
     } catch (err) {
       console.error("Error creating subscription:", err);
-      alert("Gagal membuat invoice. Coba lagi.");
+      alert(err instanceof Error ? err.message : "Gagal membuat invoice. Coba lagi.");
     } finally {
       setSubmitting(false);
     }

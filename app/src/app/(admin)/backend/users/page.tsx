@@ -68,11 +68,11 @@ export default function BackendUsersPage() {
     setActionId(userId);
     await supabase.from("user_profiles").update({ status }).eq("id", userId);
     if (status === "active") {
-      // Also activate latest subscription
+      // Activate latest subscription (covers both pending_payment and proof_uploaded)
       await supabase.from("subscriptions")
-        .update({ status: "active", activated_at: new Date().toISOString() })
+        .update({ status: "active" })
         .eq("user_id", userId)
-        .eq("status", "proof_uploaded");
+        .in("status", ["proof_uploaded", "pending_payment"]);
     }
     showToast(status === "active" ? "Pengguna diaktifkan!" : status === "suspended" ? "Pengguna disuspend." : "Status direset.");
     setActionId(null);

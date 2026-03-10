@@ -351,7 +351,7 @@ export default function SubscriptionPage() {
             </p>
 
             <button
-              onClick={() => router.push("/dashboard")}
+              onClick={() => router.push("/analytics")}
               className="mt-6 px-6 py-3 rounded-[12px] text-[14px] font-semibold"
               style={{ background: "var(--gv-color-primary-600)", color: "white" }}
             >
