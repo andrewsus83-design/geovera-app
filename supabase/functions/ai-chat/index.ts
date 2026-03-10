@@ -462,7 +462,7 @@ ${JSON.stringify(sot, null, 2).slice(0, 12000)}
     if (!openaiResponse.ok) {
       const errorData = await openaiResponse.json();
       console.error("OpenAI API error:", errorData);
-      return new Response(JSON.stringify({ error: "OpenAI API error", details: errorData }), {
+      return new Response(JSON.stringify({ error: "Internal server error" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
