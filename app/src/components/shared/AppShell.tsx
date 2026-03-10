@@ -74,27 +74,27 @@ const ChevronUpIcon = () => (
 
 /* ── Nav definitions ── */
 const NAV_ITEMS = [
-  { icon: <HubIcon />,        name: "Start",       path: "/getting-started" },
-  { icon: <AIChatIcon />,     name: "AI Chat",     path: "/ai-chat"         },
-  { icon: <ContentIcon />,    name: "Content",     path: "/content"         },
-  { icon: <SmartReplyIcon />, name: "Smart Reply", path: "/auto-reply"      },
-  { icon: <AnalyticIcon />,   name: "Analytic",    path: "/analytics"       },
+  { icon: <HubIcon />,        name: "Start",   path: "/start"          },
+  { icon: <AIChatIcon />,     name: "AI Chat", path: "/ai-chat"        },
+  { icon: <ContentIcon />,    name: "Content", path: "/content-studio" },
+  { icon: <SmartReplyIcon />, name: "Reply",   path: "/auto-reply"     },
+  { icon: <AnalyticIcon />,   name: "Report",  path: "/analytics"      },
 ];
 
 /* Submenu items per section */
 const SUBMENUS: Record<string, string[]> = {
-  "/getting-started": ["101 Brand", "Chronicle", "Connect", "Subscription"],
+  "/start":           [],
   "/ai-chat":         ["Chat", "Documents", "History"],
-  "/content":         ["Article", "Image", "Video"],
+  "/content-studio":  ["Article", "Image", "Video"],
   "/auto-reply":      ["Manual Reply", "Auto Reply", "Setting"],
   "/analytics":       ["SEO", "GEO", "Social Search"],
 };
 
 /* ── Mode accent colors per section (DS tokens) ── */
 const MODE_ACCENTS: Record<string, string> = {
-  "/getting-started": "var(--gv7-mode-general-accent)",
+  "/start":           "var(--gv7-mode-general-accent)",
   "/ai-chat":         "var(--gv7-mode-general-accent)",
-  "/content":         "var(--gv7-mode-seo-accent)",
+  "/content-studio":  "var(--gv7-mode-seo-accent)",
   "/auto-reply":      "var(--gv7-mode-social-accent)",
   "/analytics":       "var(--gv7-mode-geo-accent)",
 };
@@ -111,7 +111,7 @@ export interface AppShellProps {
 
 /* ══════════════════════════════════════════════════════════════════
    AppShell — GeoVera Design System
-   Layout: [sidebar 17%] [center ~47%] [right ~36%]
+   Layout: [sidebar 16%] [center ~48%] [right 36%]
    Floating sticky submenu bar at bottom (changes per section)
 ══════════════════════════════════════════════════════════════════ */
 export default function AppShell({
@@ -191,12 +191,12 @@ export default function AppShell({
         position: "relative",
       }}
     >
-      {/* ═══════════════════ LEFT SIDEBAR (17%) ═══════════════════ */}
+      {/* ═══════════════════ LEFT SIDEBAR (16%) ═══════════════════ */}
       <div
         style={{
-          width: "17%",
-          minWidth: 180,
-          maxWidth: 260,
+          width: "16%",
+          minWidth: 172,
+          maxWidth: 240,
           flexShrink: 0,
           display: "flex",
           flexDirection: "column",
@@ -454,7 +454,7 @@ export default function AppShell({
           position: "relative",
         }}
       >
-        {/* CENTER (~47% of viewport, flex-1) */}
+        {/* CENTER (~48% of viewport, flex-1) */}
         <div
           style={{
             flex: 1,
@@ -473,10 +473,10 @@ export default function AppShell({
           </div>
         </div>
 
-        {/* RIGHT (~36% of viewport) */}
+        {/* RIGHT (36% of viewport) */}
         <div
           style={{
-            flex: "0 0 36%",
+            flex: "0 0 calc(36% - 12px)",
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
