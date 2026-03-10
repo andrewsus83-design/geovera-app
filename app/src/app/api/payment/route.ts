@@ -3,7 +3,11 @@ import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL =
   process.env.SUPABASE_URL || "https://vozjwptzutolvkvfpknk.supabase.co";
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+// Use the anon key for JWT verification — no server-side secret required in Vercel.
+// The edge function creates its own admin client with the auto-injected service key.
+const SUPABASE_ANON_KEY =
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZvemp3cHR6dXRvbHZrdmZwa25rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk4ODI0NzcsImV4cCI6MjA4NTQ1ODQ3N30.p-RiTR1Iva9Y4KiZu8gnF2CZjvnMWNAHUVCbp57PDF8";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -33,8 +37,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: cors });
     }
 
-    const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-    const { data: { user }, error: authError } = await adminClient.auth.getUser(token);
+    const anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const { data: { user }, error: authError } = await anonClient.auth.getUser(token);
 
     if (authError || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: cors });
@@ -59,13 +63,14 @@ export async function POST(request: NextRequest) {
     const verifiedBody = { ...body, user_id: user.id };
 
     // ── Forward to edge function ─────────────────────────────────────
+    // manual-payment-handler has verify_jwt:false and creates its own admin client
     const response = await fetch(
       `${SUPABASE_URL}/functions/v1/manual-payment-handler`,
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
         },
         body: JSON.stringify(verifiedBody),
       }
