@@ -10,6 +10,9 @@ const KIE_API_KEY = Deno.env.get("KIE_API_KEY") ?? "";
 const KIE_BASE = "https://api.kie.ai/v1";
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") ?? "";
 const HEYGEN_API_KEY = Deno.env.get("HEYGEN_API_KEY") ?? "";
+// ── Gemini (script generation) + Perplexity (hashtag trending research) ──────
+const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
+const PERPLEXITY_API_KEY = Deno.env.get("PERPLEXITY_API_KEY") ?? "";
 const HEYGEN_BASE = "https://api.heygen.com";
 
 // ── Runway Gen 4 Turbo (video generation) ────────────────────────────────────
@@ -590,15 +593,44 @@ Return ONLY a valid JSON array of ${count} prompt strings. No explanation, no ma
     // ── GENERATE IMAGE ───────────────────────────────────────────────────────
     if (action === "generate_image") {
       const {
-        prompt, aspect_ratio = "1:1", negative_prompt = "",
-        batch_size = 1, target_count, score_with_claude = false, lora_model = "",
+        prompt: rawPrompt, aspect_ratio = "1:1", negative_prompt = "",
+        batch_size = 1, target_count, score_with_claude = true, lora_model = "",
         generate_script = false, objective = "", platform = "",
+        // New form params
+        topic, description, num_images, include_hashtags = false, uploaded_images: uploadedRefImages,
       } = data;
-      if (!prompt) return json({ error: "prompt is required" }, 400);
       const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
-      // 1:5 ratio — generate 5× requested, Claude picks best target_count
-      const numImages = Math.min(Number(batch_size) || 1, 30);
-      const wantedCount = target_count ? Math.min(Number(target_count), numImages) : numImages;
+
+      // Resolve final image count: num_images (1-8 user pick) → generate 5× for scoring
+      const wantedCount = Math.min(Math.max(1, Number(num_images ?? target_count ?? batch_size ?? 1)), 8);
+      const numImages = Math.min(wantedCount * 5, 30); // 5× candidates for Claude scoring
+
+      // ── Auto-generate art-directed prompt from topic+objective if no raw prompt ──
+      let prompt = rawPrompt as string | undefined;
+      if (!prompt && (topic || objective)) {
+        if (!ANTHROPIC_KEY) return json({ error: "ANTHROPIC_API_KEY not configured" }, 500);
+        try {
+          const refImgUrls = (uploadedRefImages as string[] | null) ?? [];
+          const artUser = `Create an optimized Flux Schnell image generation prompt for:
+- Topic: ${topic || "brand content"}
+- Objective: ${objective || "brand showcase"}
+- Aspect ratio: ${aspect_ratio}
+${(description as string) ? `- Brief: ${description}` : ""}
+${refImgUrls.length > 0 ? `- ${refImgUrls.length} reference image(s) provided — match their visual style/mood` : ""}
+
+Write ONE highly specific, commercially optimized prompt (max 120 words). Include lighting, composition, mood, quality descriptors. Return ONLY the prompt text, no explanation.`;
+          const artResp = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: { "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+            body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 256, messages: [{ role: "user", content: artUser }] }),
+          });
+          if (artResp.ok) {
+            const artData = await artResp.json();
+            prompt = artData.content?.[0]?.text?.trim() ?? "";
+          }
+        } catch { /* fall through */ }
+      }
+      if (!prompt) return json({ error: "prompt or topic is required" }, 400);
 
       let imageUrls: string[] = [];
       let aiProvider = "kie";
@@ -640,9 +672,10 @@ Return ONLY a valid JSON array of ${count} prompt strings. No explanation, no ma
         approvedUrls = imageUrls.slice(0, wantedCount);
       }
 
-      // Generate script+hashtags if requested
-      let scriptData: Record<string, string> | null = null;
-      if (generate_script && ANTHROPIC_KEY) {
+      // Generate script + hashtags if requested
+      let scriptData: Record<string, unknown> | null = null;
+      const wantScriptOrHashtags = Boolean(generate_script) || Boolean(include_hashtags);
+      if (wantScriptOrHashtags && ANTHROPIC_KEY) {
         try {
           const { data: bp } = await supabase.from("brand_profiles").select("brand_name, brand_dna").eq("id", brand_id).maybeSingle();
           const brandName = (bp?.brand_name as string) ?? "Brand";
@@ -651,9 +684,9 @@ Return ONLY a valid JSON array of ${count} prompt strings. No explanation, no ma
             headers: { "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
             body: JSON.stringify({
               model: "claude-haiku-4-5-20251001",
-              max_tokens: 512,
-              messages: [{ role: "user", content: `Create an engaging social media posting script for ${brandName} with image: "${prompt}". Objective: ${objective}. Platform: ${platform || "Instagram/TikTok"}.
-Return JSON only: {"caption":"Instagram caption (max 200 chars)","hashtags":"5-10 hashtags","tiktok_hook":"TikTok opening hook (max 80 chars)","cta":"call to action (max 60 chars)"}` }],
+              max_tokens: 600,
+              messages: [{ role: "user", content: `Create an engaging social media posting script for ${brandName} with image: "${prompt}". Objective: ${objective || (topic as string) || "brand content"}. Platform: ${platform || "Instagram/TikTok"}.
+Return JSON only: {"caption":"Instagram caption (max 200 chars)","hashtags":["#tag1","#tag2","#tag3","#tag4","#tag5","#tag6","#tag7","#tag8","#tag9","#tag10"],"tiktok_hook":"TikTok opening hook (max 80 chars)","cta":"call to action (max 60 chars)"}` }],
             }),
           });
           if (scriptResp.ok) {
@@ -665,16 +698,44 @@ Return JSON only: {"caption":"Instagram caption (max 200 chars)","hashtags":"5-1
         } catch { /* non-fatal */ }
       }
 
+      const refImgUrls = (uploadedRefImages as string[] | null) ?? [];
       const dbPlatform = String(platform || (aspect_ratio === "9:16" ? "instagram" : aspect_ratio === "16:9" ? "youtube" : "instagram"));
       const savedImages = await Promise.all(approvedUrls.map(async (url) => {
         const { data: ins } = await supabase.from("gv_image_generations").insert({
-          brand_id, prompt_text: prompt, negative_prompt, aspect_ratio,
-          ai_provider: aiProvider, ai_model: aiModel,
-          image_url: url, thumbnail_url: url, status: "completed",
-          target_platform: dbPlatform, style_preset: lora_model || null,
+          brand_id,
+          prompt_text: prompt,
+          negative_prompt,
+          aspect_ratio,
+          ai_provider: aiProvider,
+          ai_model: aiModel,
+          image_url: url,
+          thumbnail_url: url,
+          status: "completed",
+          target_platform: dbPlatform,
+          style_preset: lora_model || null,
+          topic: (topic as string) || null,
+          description: (description as string) || null,
+          objective: (objective as string) || null,
+          include_hashtags: Boolean(include_hashtags),
+          hashtag_list: include_hashtags && scriptData?.hashtags ? scriptData.hashtags : null,
+          uploaded_images: refImgUrls.length > 0 ? refImgUrls : null,
           metadata: scriptData ? { script: scriptData, objective, platform: dbPlatform } : null,
         }).select("id").single();
-        return { id: ins?.id ?? null, prompt_text: prompt, image_url: url, thumbnail_url: url, status: "completed", ai_model: aiModel, target_platform: dbPlatform, style_preset: lora_model || null, script: scriptData, created_at: new Date().toISOString() };
+        return {
+          id: ins?.id ?? null,
+          prompt_text: prompt,
+          image_url: url,
+          thumbnail_url: url,
+          status: "completed",
+          ai_model: aiModel,
+          target_platform: dbPlatform,
+          style_preset: lora_model || null,
+          objective: (objective as string) || null,
+          topic: (topic as string) || null,
+          script: scriptData,
+          hashtags: include_hashtags ? (scriptData?.hashtags ?? []) : null,
+          created_at: new Date().toISOString(),
+        };
       }));
 
       return json({
@@ -686,15 +747,44 @@ Return JSON only: {"caption":"Instagram caption (max 200 chars)","hashtags":"5-1
         total_generated: imageUrls.length,
         total_approved: approvedUrls.length,
         script: scriptData,
+        hashtags: include_hashtags ? (scriptData?.hashtags ?? []) : null,
       });
     }
 
     // ── GENERATE VIDEO (Full Pipeline: scenes → images × 5 → Claude pick → Runway Gen 4) ──
     if (action === "generate_video") {
-      const { prompt, duration = 32, aspect_ratio = "9:16", image_url = "",
-              objective = "", platform = "", generate_script = false,
-              generate_music = false, scene_descriptions = null } = data;
-      if (!prompt) return json({ error: "prompt is required" }, 400);
+      const {
+        prompt: rawVideoPrompt, duration = 32, aspect_ratio = "9:16", image_url = "",
+        objective = "", platform = "", generate_script = false,
+        generate_music = false, scene_descriptions = null,
+        // New form params
+        topic: videoTopic, description: videoDesc, uploaded_images: videoRefImages,
+        include_hashtags: videoIncludeHashtags = false, include_script = false, include_music = false,
+      } = data;
+      const ANTHROPIC_KEY_V = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
+      const wantVideoScript = Boolean(generate_script) || Boolean(include_script);
+      const wantVideoMusic = Boolean(generate_music) || Boolean(include_music);
+      const wantVideoHashtags = Boolean(videoIncludeHashtags);
+
+      // Auto-generate prompt from topic+objective if no raw prompt
+      let prompt = rawVideoPrompt as string | undefined;
+      if (!prompt && (videoTopic || objective)) {
+        try {
+          const artUser = `Create an optimized Runway Gen 4 Turbo video prompt for:
+- Topic: ${videoTopic || "brand content"}
+- Objective: ${objective || "brand showcase"}
+- Aspect ratio: ${aspect_ratio} video
+${(videoDesc as string) ? `- Brief: ${videoDesc}` : ""}
+Include: camera movement, scene description, mood, lighting, pacing. Write ONE cinematic video prompt (max 100 words). Return ONLY the prompt text.`;
+          const artR = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: { "x-api-key": ANTHROPIC_KEY_V, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+            body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 200, messages: [{ role: "user", content: artUser }] }),
+          });
+          if (artR.ok) { const d = await artR.json(); prompt = d.content?.[0]?.text?.trim() ?? ""; }
+        } catch { /* fall through */ }
+      }
+      if (!prompt) return json({ error: "prompt or topic is required" }, 400);
 
       // Duration range: 16–64s as set by Claude's art direction
       const totalDuration = Math.min(64, Math.max(16, Number(duration)));
@@ -790,20 +880,20 @@ Return JSON only: {"caption":"Instagram caption (max 200 chars)","hashtags":"5-1
         ai_model = kieRes.model ?? "kling-v2";
       }
 
-      // Generate script if requested
-      let videoScript: Record<string, string> | null = null;
-      if (generate_script && ANTHROPIC_KEY) {
+      // Generate script + hashtags + music if requested
+      let videoScript: Record<string, unknown> | null = null;
+      if ((wantVideoScript || wantVideoHashtags || wantVideoMusic) && ANTHROPIC_KEY_V) {
         try {
           const { data: bp } = await supabase.from("brand_profiles").select("brand_name").eq("id", brand_id).maybeSingle();
           const brandName = (bp?.brand_name as string) ?? "Brand";
           const scriptResp = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST",
-            headers: { "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+            headers: { "x-api-key": ANTHROPIC_KEY_V, "anthropic-version": "2023-06-01", "content-type": "application/json" },
             body: JSON.stringify({
               model: "claude-haiku-4-5-20251001",
-              max_tokens: 512,
-              messages: [{ role: "user", content: `Create a posting script for ${brandName} video: "${prompt}". Objective: ${objective}. Platform: ${platform || "TikTok"}. Music: ${generate_music ? "yes, suggest mood" : "no"}.
-Return JSON only: {"caption":"posting caption (max 200 chars)","hashtags":"5-10 hashtags","voiceover":"optional voiceover script (max 100 chars per scene)","music_mood":"${generate_music ? "music mood & tempo recommendation" : ""}","cta":"call to action"}` }],
+              max_tokens: 600,
+              messages: [{ role: "user", content: `Create a posting script for ${brandName} video: "${prompt}". Objective: ${objective || (videoTopic as string) || "brand content"}. Platform: ${platform || "TikTok"}. Music: ${wantVideoMusic ? "yes, suggest mood & genre" : "no"}.
+Return JSON only: {"caption":"posting caption (max 200 chars)","hashtags":["#tag1","#tag2","#tag3","#tag4","#tag5","#tag6","#tag7","#tag8","#tag9","#tag10"],"voiceover":"voiceover script (1 sentence per scene)","music_mood":"${wantVideoMusic ? "music mood, genre & tempo recommendation" : ""}","cta":"call to action"}` }],
             }),
           });
           if (scriptResp.ok) {
@@ -815,8 +905,9 @@ Return JSON only: {"caption":"posting caption (max 200 chars)","hashtags":"5-10 
         } catch { /* non-fatal */ }
       }
 
+      const videoRefImgUrls = (videoRefImages as string[] | null) ?? [];
+
       // Store scene images in gv_image_generations with status "video_scene"
-      // They appear in image history but are EXCLUDED from image quota counts
       if (scene_image_urls.length > 0) {
         await Promise.allSettled(scene_image_urls.map((url, i) =>
           supabase.from("gv_image_generations").insert({
@@ -834,13 +925,20 @@ Return JSON only: {"caption":"posting caption (max 200 chars)","hashtags":"5-10 
         ai_model, status, generation_mode,
         runway_task_id: task_id, video_url,
         video_thumbnail_url: null, video_aspect_ratio: aspect_ratio, video_status: status,
+        topic: (videoTopic as string) || null,
+        description: (videoDesc as string) || null,
+        objective: (objective as string) || null,
+        include_hashtags: wantVideoHashtags,
+        hashtag_list: wantVideoHashtags && videoScript?.hashtags ? videoScript.hashtags : null,
+        include_music: wantVideoMusic,
+        music_suggestion: wantVideoMusic ? String(videoScript?.music_mood ?? "") : null,
+        uploaded_images: videoRefImgUrls.length > 0 ? videoRefImgUrls : null,
         metadata: {
           ...(extra_task_ids.length > 0 ? { extra_task_ids } : {}),
           num_clips: numClips, total_duration: totalDuration,
           num_scenes: scenes.length,
           scene_image_urls,
           ...(videoScript ? { script: videoScript } : {}),
-          ...(generate_music ? { music_requested: true } : {}),
           objective, platform: dbPlatformV,
         },
       }).select("id").single();
@@ -851,6 +949,8 @@ Return JSON only: {"caption":"posting caption (max 200 chars)","hashtags":"5-10 
         num_scenes: scenes.length, total_duration: totalDuration,
         video_url, status, db_id: inserted?.id ?? null, ai_model,
         scene_image_urls, script: videoScript,
+        hashtags: wantVideoHashtags ? (videoScript?.hashtags ?? []) : null,
+        music_suggestion: wantVideoMusic ? String(videoScript?.music_mood ?? "") : null,
       });
     }
 
@@ -1065,7 +1165,7 @@ Return JSON only: {"caption":"posting caption (max 200 chars)","hashtags":"5-10 
       if (type === "all" || type === "article") {
         const { data: articles } = await supabase
           .from("gv_article_generations")
-          .select("id, topic, objective, length, content, meta_title, meta_description, focus_keywords, social, geo, status, image_url, created_at")
+          .select("id, topic, description, objective, length, content, content_very_long, meta_title, meta_description, focus_keywords, social, geo, hashtag_list, script_content, music_suggestion, image_count, image_size, status, scheduled_at, created_at")
           .eq("brand_id", brand_id)
           .order("created_at", { ascending: false })
           .limit(limit);
@@ -1075,7 +1175,7 @@ Return JSON only: {"caption":"posting caption (max 200 chars)","hashtags":"5-10 
       if (type === "all" || type === "image") {
         const { data: imgs } = await supabase
           .from("gv_image_generations")
-          .select("id, prompt_text, image_url, thumbnail_url, status, ai_model, target_platform, style_preset, created_at, feedback")
+          .select("id, prompt_text, topic, description, objective, image_url, thumbnail_url, status, ai_model, target_platform, style_preset, aspect_ratio, hashtag_list, include_hashtags, scheduled_at, feedback, created_at")
           .eq("brand_id", brand_id)
           .order("created_at", { ascending: false })
           .limit(limit);
@@ -1085,7 +1185,7 @@ Return JSON only: {"caption":"posting caption (max 200 chars)","hashtags":"5-10 
       if (type === "all" || type === "video") {
         const { data: vids } = await supabase
           .from("gv_video_generations")
-          .select("id, hook, video_url, video_thumbnail_url, video_status, ai_model, target_platform, video_aspect_ratio, created_at, feedback")
+          .select("id, hook, topic, description, objective, video_url, video_thumbnail_url, video_status, ai_model, target_platform, video_aspect_ratio, hashtag_list, include_hashtags, include_music, music_suggestion, scheduled_at, feedback, created_at")
           .eq("brand_id", brand_id)
           .order("created_at", { ascending: false })
           .limit(limit);
@@ -1274,9 +1374,12 @@ Return ONLY valid JSON:
 
     // ── GENERATE ARTICLE (Claude Sonnet 4.6 direct) ───────────────────────────
     if (action === "generate_article") {
-      const { topic, objective, length, image_urls, brand_context } = data;
-      const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
-      if (!ANTHROPIC_API_KEY) return json({ error: "ANTHROPIC_API_KEY not configured" }, 500);
+      const {
+        topic, objective, length, image_urls, brand_context,
+        description, uploaded_images, image_count, image_size,
+        include_script, include_hashtags, include_music,
+      } = data;
+      if (!OPENAI_API_KEY) return json({ error: "OPENAI_API_KEY not configured" }, 500);
 
       // Fetch brand profile for context
       const { data: bp } = await supabase
@@ -1293,14 +1396,20 @@ Return ONLY valid JSON:
       const rankingKws = (kwi?.ranking_keywords as string[] ?? []).slice(0, 5).join(", ");
 
       const objectiveLabels: Record<string, string> = {
-        faq: "FAQ format — pertanyaan umum pelanggan dengan jawaban detail",
-        trend: "Trend article — topik viral & trending terkini",
-        tips: "Tips & Tricks — panduan praktis langkah demi langkah",
-        new_product: "Product launch — peluncuran produk baru yang menarik",
-        tutorial: "Tutorial — panduan how-to yang mudah diikuti",
-        updates: "Brand updates — berita & perkembangan terbaru brand",
-        review: "Review & Testimonial — ulasan dan testimoni pelanggan",
-        random: "AI-recommended — konten terbaik berdasarkan rekomendasi AI",
+        faq:                 "FAQ format — pertanyaan umum pelanggan dengan jawaban detail",
+        trend:               "Trend article — topik viral & trending terkini",
+        educational:         "Educational — konten edukatif yang menambah wawasan pembaca",
+        tips:                "Tips & Tricks — panduan praktis langkah demi langkah",
+        tips_tricks:         "Tips & Tricks — panduan praktis langkah demi langkah",
+        new_product:         "Product launch — peluncuran produk baru yang menarik",
+        seasonal_greetings:  "Seasonal Greetings — konten spesial hari raya dan musim",
+        newsletter:          "Newsletter — update berkala yang informatif dan engaging",
+        updates:             "Brand updates — berita & perkembangan terbaru brand",
+        multi_product:       "Multi Product Catalog — showcase beberapa produk secara menarik",
+        ads:                 "Ads copy — teks iklan yang persuasif dan konversi tinggi",
+        tutorial:            "Tutorial — panduan how-to yang mudah diikuti",
+        review:              "Review & Testimonial — ulasan dan testimoni pelanggan",
+        random:              "AI-recommended — konten terbaik berdasarkan rekomendasi AI",
       };
       const objLabel = objectiveLabels[objective as string] ?? "konten brand relevan";
 
@@ -1311,7 +1420,21 @@ Return ONLY valid JSON:
         ? `${topic} (${objLabel})`
         : `${objLabel} untuk ${brandName}`;
 
+      const imgCount = Number(image_count ?? 0);
+      const imgSize = String(image_size ?? "1:1");
+      const wantScript = Boolean(include_script);
+      const wantHashtags = Boolean(include_hashtags);
+      const wantMusic = Boolean(include_music);
+      const uploadedImgUrls = (uploaded_images as string[] | null) ?? (image_urls as string[] | null) ?? [];
+
       const systemMsg = `You are an expert content writer and SEO specialist. Write high-quality, engaging content in Indonesian language (Bahasa Indonesia) for digital brands. You always write in proper JSON format.`;
+
+      const extraJsonFields = [
+        wantHashtags ? `  "hashtags": ["#tag1","#tag2","#tag3","#tag4","#tag5","#tag6","#tag7","#tag8","#tag9","#tag10"],` : "",
+        wantScript ? `  "script": "Full narration script for video/reel (natural spoken tone, 60-90 seconds read time)",` : "",
+        wantMusic ? `  "music_suggestion": "Recommended background music style/genre/mood for this content",` : "",
+        imgCount > 0 ? `  "image_prompts": [${Array.from({length: imgCount}, (_, i) => `"Detailed image generation prompt ${i+1} (${imgSize} aspect ratio) for this article"`).join(",")}],` : "",
+      ].filter(Boolean).join("\n");
 
       const userMsg = `Write a complete ${targetWords}-word article for this brand:
 
@@ -1324,7 +1447,12 @@ Target keywords: ${rankingKws || "brand-related keywords"}
 Topic: ${enrichedTopic}
 Format: ${objLabel}
 Target length: ~${targetWords} words
-${image_urls?.length ? `Reference images provided: ${(image_urls as string[]).length} image(s) — reference their content/context` : ""}
+${(description as string) ? `Additional context/brief: ${description}` : ""}
+${uploadedImgUrls.length > 0 ? `Reference images provided: ${uploadedImgUrls.length} image(s) — incorporate their visual content/context into the article` : ""}
+${imgCount > 0 ? `Image placeholders needed: ${imgCount} image(s) at ${imgSize} aspect ratio` : ""}
+${wantScript ? "Include: full narration script for video/reel" : ""}
+${wantHashtags ? "Include: 10 relevant hashtags" : ""}
+${wantMusic ? "Include: music/background audio suggestion" : ""}
 
 Return ONLY valid JSON (no markdown, no code blocks):
 {
@@ -1343,30 +1471,37 @@ Return ONLY valid JSON (no markdown, no code blocks):
       {"question": "Q2?", "answer": "A2."},
       {"question": "Q3?", "answer": "A3."}
     ]
-  }
+  }${extraJsonFields ? `,\n${extraJsonFields}` : ""}
 }`;
 
-      const claudeResp = await fetch("https://api.anthropic.com/v1/messages", {
+      // ── Article NLP: OpenAI GPT-4o ────────────────────────────────────────────
+      // Build messages — include uploaded images if provided (vision)
+      type OAIContent = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } };
+      const oaiUserContent: OAIContent[] = [];
+      for (const imgUrl of uploadedImgUrls.slice(0, 8)) {
+        oaiUserContent.push({ type: "image_url", image_url: { url: String(imgUrl) } });
+      }
+      oaiUserContent.push({ type: "text", text: userMsg });
+
+      const oaiResp = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
-        headers: {
-          "x-api-key": ANTHROPIC_API_KEY,
-          "anthropic-version": "2023-06-01",
-          "content-type": "application/json",
-        },
+        headers: { "Authorization": `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-6",
+          model: "gpt-4o",
           max_tokens: 8192,
-          system: systemMsg,
-          messages: [{ role: "user", content: userMsg }],
+          messages: [
+            { role: "system", content: systemMsg },
+            { role: "user", content: uploadedImgUrls.length > 0 ? oaiUserContent : userMsg },
+          ],
         }),
       });
 
-      if (!claudeResp.ok) {
-        return json({ success: false, error: `Article generation failed (${claudeResp.status})` }, 502);
+      if (!oaiResp.ok) {
+        return json({ success: false, error: `Article generation failed (${oaiResp.status})` }, 502);
       }
 
-      const claudeData = await claudeResp.json();
-      const rawText = (claudeData.content?.[0]?.text ?? "").trim();
+      const oaiData = await oaiResp.json();
+      const rawText = (oaiData.choices?.[0]?.message?.content ?? "").trim();
       let articleData: Record<string, unknown> = {};
       try {
         const match = rawText.match(/\{[\s\S]*\}/);
@@ -1376,6 +1511,61 @@ Return ONLY valid JSON (no markdown, no code blocks):
       }
 
       const articleContent = String(articleData.article ?? "");
+      const isVeryLong = (length as string) === "very_long";
+
+      // ── Script: Gemini 2.5 Flash (when include_script: true) ─────────────────
+      let geminiScript: string | null = null;
+      if (wantScript && GEMINI_API_KEY) {
+        try {
+          const geminiPrompt = `Tulis narasi script untuk konten video/reels berdasarkan artikel ini:
+
+Judul: ${String(articleData.meta_title ?? enrichedTopic)}
+Brand: ${brandName}
+Konten: ${articleContent.slice(0, 1500)}
+
+Tulis script narasi yang natural, conversational, durasi 60-90 detik saat dibacakan.
+Gunakan bahasa Indonesia yang engaging. Format: paragraf per scene.
+Return ONLY the script text, no explanation.`;
+          const gemResp = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-04-17:generateContent?key=${GEMINI_API_KEY}`,
+            { method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ contents: [{ parts: [{ text: geminiPrompt }] }] }) }
+          );
+          if (gemResp.ok) {
+            const gemData = await gemResp.json();
+            geminiScript = gemData.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? null;
+          }
+        } catch { /* fall through, no script */ }
+      } else if (wantScript) {
+        // Fallback: use script from OpenAI if Gemini not available
+        geminiScript = String(articleData.script ?? "");
+      }
+
+      // ── Hashtags: Perplexity sonar-pro trending research (when include_hashtags: true) ──
+      let finalHashtags: string[] = (articleData.hashtags as string[]) ?? [];
+      if (wantHashtags && PERPLEXITY_API_KEY) {
+        try {
+          const perpPrompt = `Give me the 15 most trending and relevant Instagram/TikTok hashtags RIGHT NOW for this content topic: "${enrichedTopic}" targeted at ${country} market for a ${String(dna.category ?? "brand")} brand.
+
+Return ONLY a JSON array of hashtag strings (with # prefix), no explanation. Example: ["#tag1","#tag2"]`;
+          const perpResp = await fetch("https://api.perplexity.ai/chat/completions", {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${PERPLEXITY_API_KEY}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ model: "sonar-pro", messages: [{ role: "user", content: perpPrompt }] }),
+          });
+          if (perpResp.ok) {
+            const perpData = await perpResp.json();
+            const perpText = perpData.choices?.[0]?.message?.content ?? "";
+            const match = perpText.match(/\[[\s\S]*?\]/);
+            if (match) {
+              const trendingTags = JSON.parse(match[0]) as string[];
+              // Merge: trending first, then OpenAI ones, deduplicate, max 15
+              const merged = [...new Set([...trendingTags, ...finalHashtags])].slice(0, 15);
+              finalHashtags = merged;
+            }
+          }
+        } catch { /* fall through, keep OpenAI hashtags */ }
+      }
 
       // Store in gv_article_generations
       const { data: stored } = await supabase.from("gv_article_generations").insert({
@@ -1383,12 +1573,23 @@ Return ONLY valid JSON (no markdown, no code blocks):
         topic: enrichedTopic,
         objective,
         length,
-        content: articleContent,
+        content: isVeryLong ? null : articleContent,
+        content_very_long: isVeryLong ? articleContent : null,
+        description: (description as string) || null,
+        uploaded_images: uploadedImgUrls.length > 0 ? uploadedImgUrls : null,
+        image_count: imgCount,
+        image_size: imgSize,
+        include_script: wantScript,
+        include_hashtags: wantHashtags,
+        include_music: wantMusic,
         meta_title: String(articleData.meta_title ?? ""),
         meta_description: String(articleData.meta_description ?? ""),
         focus_keywords: articleData.focus_keywords ?? [],
         social: articleData.social ?? {},
         geo: articleData.geo ?? {},
+        hashtag_list: wantHashtags ? finalHashtags : null,
+        script_content: wantScript ? (geminiScript ?? String(articleData.script ?? "")) : null,
+        music_suggestion: wantMusic ? String(articleData.music_suggestion ?? "") : null,
         status: "done",
       }).select("id").single();
 
@@ -1400,14 +1601,18 @@ Return ONLY valid JSON (no markdown, no code blocks):
           objective,
           length,
           content: articleContent,
-          content_short: articleContent,
-          content_medium: articleContent,
-          content_long: articleContent,
+          description: (description as string) || null,
+          image_count: imgCount,
+          image_size: imgSize,
           meta_title: String(articleData.meta_title ?? ""),
           meta_description: String(articleData.meta_description ?? ""),
           focus_keywords: (articleData.focus_keywords as string[]) ?? [],
           social: (articleData.social as Record<string, string>) ?? {},
           geo: (articleData.geo as Record<string, unknown>) ?? {},
+          hashtags: wantHashtags ? finalHashtags : null,
+          script: wantScript ? (geminiScript ?? String(articleData.script ?? "")) : null,
+          music_suggestion: wantMusic ? String(articleData.music_suggestion ?? "") : null,
+          image_prompts: imgCount > 0 ? ((articleData.image_prompts as string[]) ?? []) : null,
           created_at: new Date().toISOString(),
         },
       });
