@@ -103,11 +103,11 @@ const ChevronIcon = ({ className }: { className?: string }) => (
 
 /* ── Nav items — DS v6.0 ── */
 const navItems = [
-  { icon: <HubIcon />,       name: "Start",   path: "/start"          },
-  { icon: <AIChatIcon />,    name: "Chat",    path: "/ai-chat"        },
-  { icon: <ContentIcon />,   name: "Content", path: "/content-studio" },
-  { icon: <ChatIcon />,      name: "Reply",   path: "/auto-reply"     },
-  { icon: <AnalyticsIcon />, name: "Report",  path: "/analytics"      },
+  { icon: <HubIcon />,       name: "Start",          path: "/start"          },
+  { icon: <AIChatIcon />,    name: "AI Chat",        path: "/ai-chat"        },
+  { icon: <ContentIcon />,   name: "Content Engine", path: "/content-studio" },
+  { icon: <ChatIcon />,      name: "Smart Reply",    path: "/auto-reply"     },
+  { icon: <AnalyticsIcon />, name: "Analytics",      path: "/analytics"      },
 ];
 
 const DEMO_USER = {

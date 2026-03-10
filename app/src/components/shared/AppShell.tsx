@@ -74,11 +74,11 @@ const ChevronUpIcon = () => (
 
 /* ── Nav definitions ── */
 const NAV_ITEMS = [
-  { icon: <HubIcon />,        name: "Start",   path: "/start"          },
-  { icon: <AIChatIcon />,     name: "AI Chat", path: "/ai-chat"        },
-  { icon: <ContentIcon />,    name: "Content", path: "/content-studio" },
-  { icon: <SmartReplyIcon />, name: "Reply",   path: "/auto-reply"     },
-  { icon: <AnalyticIcon />,   name: "Report",  path: "/analytics"      },
+  { icon: <HubIcon />,        name: "Start",          path: "/start"          },
+  { icon: <AIChatIcon />,     name: "AI Chat",        path: "/ai-chat"        },
+  { icon: <ContentIcon />,    name: "Content Engine", path: "/content-studio" },
+  { icon: <SmartReplyIcon />, name: "Smart Reply",    path: "/auto-reply"     },
+  { icon: <AnalyticIcon />,   name: "Analytics",      path: "/analytics"      },
 ];
 
 /* Submenu items per section */
