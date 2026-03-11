@@ -83,20 +83,20 @@ const NAV_ITEMS = [
 
 /* Submenu items per section */
 const SUBMENUS: Record<string, string[]> = {
-  "/start":           ["101 Brand", "Chronicle", "Connect", "Subscription"],
-  "/ai-chat":         ["Chat", "Docs", "History"],
-  "/content-studio":  ["Article", "Image", "Video"],
-  "/auto-reply":      ["Manual", "Auto", "Setting"],
-  "/analytics":       ["SEO", "GEO", "Social Search"],
+  "/start":          ["101 Brand", "Connect", "Subscription"],
+  "/ai-chat":        ["Chat", "Docs", "History"],
+  "/content-studio": ["Article", "Image", "Video"],
+  "/auto-reply":     ["Manual", "Auto", "Setting"],
+  "/analytics":      ["SEO", "GEO", "Social Search"],
 };
 
 /* ── Mode accent colors per section (DS tokens) ── */
 const MODE_ACCENTS: Record<string, string> = {
-  "/start":           "var(--gv7-mode-general-accent)",
-  "/ai-chat":         "var(--gv7-mode-general-accent)",
-  "/content-studio":  "var(--gv7-mode-seo-accent)",
-  "/auto-reply":      "var(--gv7-mode-social-accent)",
-  "/analytics":       "var(--gv7-mode-geo-accent)",
+  "/start":          "var(--gv7-mode-general-accent)",
+  "/ai-chat":        "var(--gv7-mode-general-accent)",
+  "/content-studio": "var(--gv7-mode-seo-accent)",
+  "/auto-reply":     "var(--gv7-mode-social-accent)",
+  "/analytics":      "var(--gv7-mode-geo-accent)",
 };
 
 /* ── Props ── */

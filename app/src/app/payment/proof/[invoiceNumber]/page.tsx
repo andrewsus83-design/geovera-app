@@ -11,6 +11,7 @@ export default function ProofUploadPage({ params }: { params: Promise<{ invoiceN
   const [uploading, setUploading] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
+  const [subId, setSubId] = useState<string | null>(null);
   const [drag, setDrag] = useState(false);
 
   useEffect(() => {
@@ -27,6 +28,7 @@ export default function ProofUploadPage({ params }: { params: Promise<{ invoiceN
 
       if (!data) { router.replace("/pricing"); return; }
       if (data.proof_url) setDone(true);
+      setSubId(data.id);
     }
     check();
   }, [invoiceNumber, router]);
@@ -52,27 +54,28 @@ export default function ProofUploadPage({ params }: { params: Promise<{ invoiceN
   };
 
   const handleUpload = async () => {
-    if (!file || uploading) return;
+    if (!file || !subId || uploading) return;
     setUploading(true);
     setError("");
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("Sesi habis. Silakan login ulang.");
+      const ext = file.name.split(".").pop();
+      const path = `proofs/${invoiceNumber}.${ext}`;
 
-      const form = new FormData();
-      form.append("file", file);
-      form.append("invoiceNumber", invoiceNumber);
+      const { error: upErr } = await supabase.storage
+        .from("payment-proofs")
+        .upload(path, file, { upsert: true });
 
-      const res = await fetch("/api/upload-proof", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${session.access_token}` },
-        body: form,
-      });
+      if (upErr) throw upErr;
 
-      if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        throw new Error((json as { error?: string }).error ?? "Upload gagal.");
-      }
+      const { data: { publicUrl } } = supabase.storage.from("payment-proofs").getPublicUrl(path);
+
+      const { error: dbErr } = await supabase.from("subscriptions").update({
+        proof_url: publicUrl,
+        proof_uploaded_at: new Date().toISOString(),
+        status: "proof_uploaded",
+      }).eq("id", subId);
+
+      if (dbErr) throw dbErr;
 
       setDone(true);
     } catch (err: unknown) {
