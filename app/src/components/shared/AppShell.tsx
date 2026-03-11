@@ -222,7 +222,7 @@ export default function AppShell({
           .eq("user_id", session.user.id)
           .eq("status", "active")
           .maybeSingle();
-        if (data?.plans) planName = (data.plans as { name: string }).name;
+        if (data?.plans) planName = (data.plans as unknown as { name: string }).name;
       } catch { /* ignore */ }
 
       setUser({ name: rawName, email, initials, planName });
