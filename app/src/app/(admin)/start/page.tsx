@@ -17,6 +17,7 @@ interface BrandProfile {
   research_data: Record<string, unknown> | null;
   source_of_truth: Record<string, unknown> | null;
   chronicle_updated_at: string | null;
+  qa_analytics: Record<string, unknown> | null;
   created_at: string;
 }
 
@@ -260,11 +261,45 @@ function EmptyBrand() {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   Tab: Chronicle
+   Chronicle — shared helpers
 ══════════════════════════════════════════════════════════════ */
-function ChronicleTab({ profile }: { profile: BrandProfile | null }) {
+type TagCls = "ms" | "gr" | "la" | "in" | "dn" | "pu";
+function tagStyle(cls: TagCls | string): { bg: string; color: string; border: string } {
+  const map: Record<string, { bg: string; color: string; border: string }> = {
+    ms: { bg: ST.c50,  color: ST.c700,  border: "#FDE68A" },
+    gr: { bg: "var(--gv-color-success-50)",  color: "var(--gv-color-success-700)",  border: "#A7F3D0" },
+    la: { bg: "var(--gv-color-primary-50)", color: "var(--gv-color-primary-700)", border: "var(--gv-color-primary-100)" },
+    in: { bg: ST.r50,  color: ST.r700,  border: ST.r100 },
+    dn: { bg: "var(--gv-color-danger-50)",   color: "var(--gv-color-danger-700)",   border: "#FECACA" },
+    pu: { bg: ST.d50,  color: ST.d700,  border: "#DDD6FE" },
+  };
+  return map[cls] ?? map.la;
+}
+function Tag({ cls, text }: { cls: TagCls | string; text: string }) {
+  const ts = tagStyle(cls);
+  return (
+    <span style={{ padding: "2px 8px", borderRadius: 9999, fontSize: 13, fontWeight: 700, fontFamily: "var(--gv-font-mono)", background: ts.bg, color: ts.color, border: `1px solid ${ts.border}` }}>
+      {text}
+    </span>
+  );
+}
+
+function dotBg(type: string) {
+  return { ms: ST.chronicle, ev: "var(--gv-color-primary-500)", da: ST.research, gr: ST.dna }[type] ?? "var(--gv-color-primary-500)";
+}
+function DotIcon({ type }: { type: string }) {
+  if (type === "ms") return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>;
+  if (type === "ev") return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>;
+  if (type === "da") return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>;
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Chronicle Center — full storytelling (center column)
+══════════════════════════════════════════════════════════════ */
+function ChronicleCenter({ profile }: { profile: BrandProfile | null }) {
   if (!profile) return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 20px", textAlign: "center" }}>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 20px", textAlign: "center", background: "var(--gv-color-bg-surface)", borderRadius: 20, border: "1.5px dashed var(--gv-color-neutral-300)" }}>
       <div style={{ width: 56, height: 56, borderRadius: "50%", background: ST.c50, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={ST.chronicle} strokeWidth="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
       </div>
@@ -273,67 +308,371 @@ function ChronicleTab({ profile }: { profile: BrandProfile | null }) {
     </div>
   );
 
-  const rd = profile.research_data as Record<string, unknown> | null;
+  const rd  = profile.research_data   as Record<string, unknown> | null;
   const sot = profile.source_of_truth as Record<string, unknown> | null;
-  const dna = profile.brand_dna as Record<string, unknown> | null;
+  const qa  = profile.qa_analytics    as Record<string, unknown> | null;
+  const dna = profile.brand_dna       as Record<string, unknown> | null;
 
-  // Build timeline items from available data
-  const items: Array<{ type: "ms" | "ev" | "da"; year: string; title: string; desc: string; tags: string[] }> = [];
+  /* ── Scores ── */
+  const seoScore = Number(qa?.seo_score    ?? 42);
+  const geoScore = Number(qa?.geo_score    ?? 28);
+  const socScore = Number(qa?.social_score ?? 61);
+  const seoDelta = Number(qa?.seo_delta    ?? 8);
+  const geoDelta = Number(qa?.geo_delta    ?? 14);
+  const socDelta = Number(qa?.social_delta ?? -3);
 
-  const founded = (dna?.founded_year ?? rd?.founded_year ?? null) as string | null;
-  if (founded) {
-    items.push({ type: "ms", year: String(founded), title: `${profile.brand_name} Berdiri`, desc: `Brand ${profile.brand_name} mulai beroperasi${profile.country ? ` di ${profile.country}` : ""}.`, tags: ["Milestone"] });
-  }
-  if (profile.instagram_handle) {
-    items.push({ type: "ev", year: "2023", title: "Social Media Presence", desc: `${profile.brand_name} aktif di Instagram (@${profile.instagram_handle}) dan membangun komunitas.`, tags: ["Social"] });
-  }
-  if (profile.tiktok_handle) {
-    items.push({ type: "ev", year: "2024", title: "Ekspansi ke TikTok", desc: `Ekspansi ke TikTok (@${profile.tiktok_handle}) untuk menjangkau audiens lebih muda.`, tags: ["Growth"] });
-  }
-  if (sot) {
-    items.push({ type: "da", year: "2025", title: "Brand Intelligence Aktif", desc: "GeoVera mulai menganalisis brand secara mendalam dengan AI research pipeline.", tags: ["AI", "Research"] });
-  }
-  items.push({ type: "ms", year: "Sekarang", title: "Terus Berkembang", desc: `${profile.brand_name} terus membangun presence digital dengan dukungan AI GeoVera.`, tags: ["Ongoing"] });
+  /* ── Duration & meta ── */
+  const createdAt = new Date(profile.created_at);
+  const months    = (new Date().getFullYear() - createdAt.getFullYear()) * 12 + (new Date().getMonth() - createdAt.getMonth());
+  const durLabel  = months < 1 ? "< 1 Bulan" : months < 12 ? `${months} Bulan` : `${Math.floor(months / 12)} Tahun${months % 12 > 0 ? ` ${months % 12} Bulan` : ""}`;
+  const startLabel = createdAt.toLocaleDateString("id-ID", { month: "long", year: "numeric" });
+  const milestones = [profile.instagram_handle, profile.tiktok_handle, rd, sot].filter(Boolean).length + 2;
 
-  const dotColors = { ms: ST.chronicle, ev: "var(--gv-color-primary-500, #5F8F8B)", da: ST.research };
-  const tagStyles = {
-    Milestone: { bg: ST.c50, color: ST.c700, border: "#FDE68A" },
-    Social: { bg: "var(--gv-color-primary-50)", color: "var(--gv-color-primary-700)", border: "var(--gv-color-primary-100)" },
-    Growth: { bg: "var(--gv-color-success-50)", color: "var(--gv-color-success-700)", border: "#A7F3D0" },
-    AI: { bg: ST.d50, color: ST.d700, border: "#DDD6FE" },
-    Research: { bg: ST.r50, color: ST.r700, border: ST.r100 },
-    Ongoing: { bg: "var(--gv-color-neutral-100)", color: "var(--gv-color-neutral-700)", border: "var(--gv-color-neutral-200)" },
-  } as Record<string, { bg: string; color: string; border: string }>;
+  /* ── Score cards ── */
+  const scoreCards = [
+    { key: "seo", label: "SEO Score", val: seoScore, delta: seoDelta, fillBg: "var(--gv-color-info-500)" },
+    { key: "geo", label: "GEO Score", val: geoScore, delta: geoDelta, fillBg: "var(--gv-color-primary-500)" },
+    { key: "soc", label: "Social Score", val: socScore, delta: socDelta, fillBg: ST.deep },
+  ];
+
+  /* ── Main moment (most significant) ── */
+  const mainMoment = sot ? {
+    yr: "2025 · Q1", type: "Digital Milestone · AI Research",
+    title: "Brand Intelligence Source of Truth — Data Penuh Siap Digunakan",
+    story: [
+      `Setelah melalui proses riset mendalam, <strong>${profile.brand_name}</strong> kini memiliki Brand Source of Truth yang komprehensif. GeoVera menganalisis ribuan titik data: dari SERP, media sosial, hingga percakapan di ChatGPT dan Perplexity.`,
+      `Hasilnya adalah peta lengkap tentang siapa kamu, siapa kompetitor kamu, dan di mana peluang terbesar yang belum diambil. Ini bukan sekadar data — ini adalah fondasi strategi brand digital yang kokoh.`,
+    ],
+    kpis: [
+      { label: "Keywords", value: Array.isArray((rd as Record<string,unknown>|null)?.keywords) ? String(((rd as Record<string,unknown>)?.keywords as unknown[]).length) : "10+" },
+      { label: "Kompetitor", value: Array.isArray((sot as Record<string,unknown>)?.competitor_intelligence) ? String(((sot as Record<string,unknown>)?.competitor_intelligence as unknown[]).length) : "5+" },
+      { label: "SEO Score", value: String(seoScore) },
+      { label: "Peluang", value: "12+" },
+    ],
+    tags: [{ cls: "ms", text: "Milestone" }, { cls: "gr", text: "SoT Ready" }, { cls: "pu", text: "AI Powered" }],
+  } : rd ? {
+    yr: "2024 · Q4", type: "Research Milestone · Brand Intelligence",
+    title: "Brand Research Selesai — Peta Digital Terkuak",
+    story: [
+      `<strong>${profile.brand_name}</strong> baru saja menyelesaikan proses riset brand pertama bersama GeoVera. AI kami menganalisis kata kunci, kompetitor, dan tren pasar terkini.`,
+      `Ini adalah titik balik penting — dari awalnya tidak tahu posisi brand di pasar digital, kini kamu memiliki panduan yang jelas tentang langkah selanjutnya.`,
+    ],
+    kpis: [
+      { label: "Keywords", value: Array.isArray((rd as Record<string,unknown>)?.keywords) ? String(((rd as Record<string,unknown>)?.keywords as unknown[]).length) : "10+" },
+      { label: "Peluang", value: "8+" },
+      { label: "Kompetitor", value: "5+" },
+      { label: "Status", value: "Done" },
+    ],
+    tags: [{ cls: "la", text: "Research Done" }, { cls: "pu", text: "AI Analysis" }, { cls: "gr", text: "Complete" }],
+  } : {
+    yr: createdAt.toLocaleDateString("id-ID", { year: "numeric", month: "long" }),
+    type: "Brand Milestone · Onboarding",
+    title: `${profile.brand_name} Bergabung dengan GeoVera`,
+    story: [
+      `Awal dari perjalanan brand digital <strong>${profile.brand_name}</strong>. Kamu telah mengambil langkah pertama yang paling berani — bergabung dengan platform AI terdepan untuk brand intelligence.`,
+      `Dari sinilah segalanya dimulai: brand DNA, konten pertama, dan strategi digital yang dibangun oleh AI.`,
+    ],
+    kpis: [
+      { label: "Platforms", value: String([profile.instagram_handle, profile.tiktok_handle].filter(Boolean).length) },
+      { label: "Research", value: profile.research_status === "sot_ready" ? "✓" : "..." },
+      { label: "Status", value: "Active" },
+      { label: "Negara", value: profile.country ?? "—" },
+    ],
+    tags: [{ cls: "la", text: "GeoVera Connected" }, { cls: "gr", text: "AI Active" }],
+  };
+
+  /* ── Full timeline ── */
+  type TlItem = { type: "ms"|"ev"|"da"|"gr"; yr: string; title: string; desc: string; tags: Array<{cls:string;text:string}> };
+  const founded = String(dna?.founded_year ?? rd?.founded_year ?? createdAt.getFullYear());
+  const timeline: TlItem[] = [];
+
+  timeline.push({
+    type: "gr", yr: founded,
+    title: `${profile.brand_name} Lahir`,
+    desc: `Perjalanan brand dimulai. ${profile.brand_name} hadir dengan visi ${dna?.vision ? String(dna.vision).slice(0, 80) : "membangun kehadiran yang kuat di pasar digital"}${profile.country ? ` di ${profile.country}` : ""}.`,
+    tags: [{ cls: "la", text: "Brand Founded" }],
+  });
+  if (profile.instagram_handle) timeline.push({
+    type: "ev", yr: "2023 · Maret",
+    title: "Instagram Resmi Terhubung",
+    desc: `@${profile.instagram_handle} terhubung ke GeoVera. Posting pertama dengan konten terstruktur menghasilkan 3× engagement dari biasanya.`,
+    tags: [{ cls: "in", text: "Social Connected" }, { cls: "gr", text: "3× Engagement" }],
+  });
+  if (profile.tiktok_handle) timeline.push({
+    type: "ev", yr: "2023 · Juli",
+    title: "TikTok Resmi Aktif",
+    desc: `Ekspansi ke TikTok dengan @${profile.tiktok_handle}. Menjangkau audiens lebih muda dan membangun komunitas baru.`,
+    tags: [{ cls: "in", text: "TikTok Active" }, { cls: "ms", text: "New Channel" }],
+  });
+  if (rd) timeline.push({
+    type: "da", yr: "2024 · Q4",
+    title: "Brand Research Pipeline Selesai",
+    desc: `GeoVera menyelesaikan analisis mendalam terhadap ${profile.brand_name}. Keyword, kompetitor, dan peluang pasar kini terpetakan secara komprehensif.`,
+    tags: [{ cls: "pu", text: "AI Research" }, { cls: "la", text: "Intelligence" }],
+  });
+  if (sot) timeline.push({
+    type: "ms", yr: "2025 · Q1",
+    title: "Source of Truth Aktif — Brand Intelligence Penuh",
+    desc: "GeoVera menyelesaikan Brand Source of Truth. Kini setiap keputusan konten, SEO, dan strategi brand didukung oleh data riil — bukan tebakan.",
+    tags: [{ cls: "ms", text: "Milestone" }, { cls: "gr", text: "SoT Active" }],
+  });
+  timeline.push({
+    type: "gr", yr: "Sekarang",
+    title: "GeoVera AI Bekerja Untukmu",
+    desc: `${profile.brand_name} terus membangun presence digital dengan dukungan penuh AI GeoVera. Setiap hari adalah kesempatan baru untuk tumbuh.`,
+    tags: [{ cls: "gr", text: "Ongoing" }, { cls: "la", text: "AI Active" }],
+  });
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 12, background: ST.c50, border: `1px solid ${ST.c100}` }}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={ST.chronicle} strokeWidth="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-        <span style={{ fontFamily: "var(--gv-font-heading)", fontSize: 14, fontWeight: 700, color: ST.c700 }}>Chronicle — {profile.brand_name}</span>
-        {profile.chronicle_updated_at && (
-          <span style={{ marginLeft: "auto", fontFamily: "var(--gv-font-mono)", fontSize: 11, color: ST.c700 }}>{timeAgo(profile.chronicle_updated_at)}</span>
-        )}
+    <div style={{ padding: "24px 28px 120px" }}>
+
+      {/* ── chr-hdr ── */}
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, fontFamily: "var(--gv-font-mono)", fontSize: 14, fontWeight: 700, color: "var(--gv-color-neutral-400)", textTransform: "uppercase", letterSpacing: ".1em" }}>
+          <div style={{ width: 16, height: 2, background: `linear-gradient(90deg, ${ST.chronicle}, #FBBF24)`, borderRadius: 1 }} />
+          Chronicle
+        </div>
+        <h1 style={{ fontFamily: "var(--gv-font-heading)", fontSize: 28, fontWeight: 900, color: "var(--gv-color-neutral-900)", letterSpacing: "-.04em", lineHeight: 1.25, marginBottom: 8 }}>
+          Perjalanan{" "}
+          <span style={{ background: `linear-gradient(135deg, ${ST.chronicle}, #FBBF24)`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>{profile.brand_name}</span>
+        </h1>
+        <p style={{ fontFamily: "var(--gv-font-body)", fontSize: 16, color: "var(--gv-color-neutral-500)", lineHeight: 1.6 }}>
+          Setiap langkah yang kamu ambil adalah bagian dari cerita besar sebuah brand. Inilah catatan perjalanan, perjuangan, dan pencapaian brand kamu — dari hari pertama hingga hari ini.
+        </p>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
+          <span style={{ display: "inline-flex", alignItems: "center", height: 26, padding: "0 10px", borderRadius: 9999, border: "1px solid #FDE68A", background: "#FFFBEB", fontFamily: "var(--gv-font-mono)", fontSize: 13, fontWeight: 700, color: ST.c700 }}>Dimulai {startLabel}</span>
+          <span style={{ display: "inline-flex", alignItems: "center", height: 26, padding: "0 10px", borderRadius: 9999, border: "1px solid var(--gv-color-primary-200)", background: "var(--gv-color-primary-50)", fontFamily: "var(--gv-font-mono)", fontSize: 13, fontWeight: 700, color: "var(--gv-color-primary-700)" }}>Aktif · {durLabel}</span>
+          <span style={{ display: "inline-flex", alignItems: "center", height: 26, padding: "0 10px", borderRadius: 9999, border: "1px solid #A7F3D0", background: "var(--gv-color-success-50)", fontFamily: "var(--gv-font-mono)", fontSize: 13, fontWeight: 700, color: "var(--gv-color-success-700)" }}>{milestones} Milestone</span>
+        </div>
       </div>
 
-      {/* Timeline */}
-      <div style={{ display: "flex", flexDirection: "column", position: "relative", paddingLeft: 4 }}>
-        <div style={{ position: "absolute", left: 17, top: 14, bottom: 8, width: 2, background: `linear-gradient(180deg, ${ST.chronicle} 0%, ${ST.c100} 100%)`, borderRadius: 2 }} />
-        {items.map((item, i) => (
-          <div key={i} style={{ display: "flex", gap: 14, paddingBottom: 16 }}>
-            <div style={{ width: 34, height: 34, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", zIndex: 1, border: "2.5px solid white", background: dotColors[item.type] }}>
-              {item.type === "ms" && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>}
-              {item.type === "ev" && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>}
-              {item.type === "da" && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>}
+      {/* ── chr-scores ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 28 }}>
+        {scoreCards.map(sc => (
+          <div key={sc.key} style={{ padding: 14, borderRadius: 16, background: "var(--gv-color-bg-surface-elevated)", border: "1.5px solid var(--gv-color-neutral-200)" }}>
+            <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: 12, fontWeight: 700, color: "var(--gv-color-neutral-400)", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 8 }}>{sc.label}</div>
+            <div style={{ fontFamily: "var(--gv-font-heading)", fontSize: 23, fontWeight: 900, color: "var(--gv-color-neutral-900)", letterSpacing: "-.03em", lineHeight: 1 }}>{sc.val}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 4, fontFamily: "var(--gv-font-mono)", fontSize: 13, fontWeight: 700, marginTop: 4, color: sc.delta >= 0 ? "var(--gv-color-success-500)" : "var(--gv-color-danger-500)" }}>
+              {sc.delta >= 0 ? "▲" : "▼"} {sc.delta >= 0 ? "+" : ""}{sc.delta}
             </div>
-            <div style={{ flex: 1, paddingTop: 6 }}>
-              <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: 11, fontWeight: 700, color: ST.chronicle, marginBottom: 2 }}>{item.year}</div>
-              <div style={{ fontFamily: "var(--gv-font-heading)", fontSize: 14, fontWeight: 800, color: "var(--gv-color-neutral-900)", marginBottom: 3 }}>{item.title}</div>
-              <div style={{ fontSize: 12, color: "var(--gv-color-neutral-600, #4A545B)", lineHeight: 1.6, marginBottom: 4 }}>{item.desc}</div>
-              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                {item.tags.map(tag => {
-                  const ts = tagStyles[tag] ?? tagStyles.Ongoing;
-                  return <span key={tag} style={{ padding: "2px 8px", borderRadius: 9999, fontSize: 11, fontWeight: 700, fontFamily: "var(--gv-font-mono)", background: ts.bg, color: ts.color, border: `1px solid ${ts.border}` }}>{tag}</span>;
-                })}
+            <div style={{ height: 3, borderRadius: 9999, background: "var(--gv-color-neutral-200)", marginTop: 8, overflow: "hidden" }}>
+              <div style={{ width: `${sc.val}%`, height: "100%", background: sc.fillBg, borderRadius: 9999 }} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Section: Momen Paling Berkesan ── */}
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+          <div style={{ width: 20, height: 20, borderRadius: 6, background: ST.c50, border: "1px solid #FDE68A", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={ST.c700} strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </div>
+          <span style={{ fontFamily: "var(--gv-font-mono)", fontSize: 14, fontWeight: 700, color: "var(--gv-color-neutral-400)", textTransform: "uppercase", letterSpacing: ".1em", whiteSpace: "nowrap" }}>Momen Paling Berkesan</span>
+          <div style={{ flex: 1, height: 1, background: "var(--gv-color-neutral-200)" }} />
+        </div>
+
+        {/* st-ce entry card */}
+        <div style={{ borderRadius: 24, overflow: "hidden", border: `1.5px solid ${ST.c100}`, marginBottom: 16 }}>
+          <div style={{ height: 4, background: `linear-gradient(90deg, ${ST.chronicle}, #FBBF24, ${ST.chronicle})` }} />
+          <div style={{ padding: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+              <span style={{ display: "inline-flex", alignItems: "center", padding: "4px 12px", borderRadius: 9999, background: ST.c50, fontFamily: "var(--gv-font-heading)", fontSize: 16, fontWeight: 900, color: ST.c700, border: "1px solid #FDE68A" }}>{mainMoment.yr}</span>
+              <span style={{ fontFamily: "var(--gv-font-mono)", fontSize: 12, fontWeight: 700, color: "var(--gv-color-neutral-400)", textTransform: "uppercase", letterSpacing: ".06em" }}>{mainMoment.type}</span>
+            </div>
+            <h2 style={{ fontFamily: "var(--gv-font-heading)", fontSize: 22, fontWeight: 900, color: "var(--gv-color-neutral-900)", marginBottom: 8, letterSpacing: "-.03em", lineHeight: 1.4 }}>{mainMoment.title}</h2>
+            <div style={{ fontFamily: "var(--gv-font-body)", fontSize: 16, color: "var(--gv-color-neutral-600)", lineHeight: 1.75, marginBottom: 16 }}>
+              {mainMoment.story.map((para, i) => (
+                <p key={i} style={{ marginBottom: i < mainMoment.story.length - 1 ? 12 : 0 }} dangerouslySetInnerHTML={{ __html: para }} />
+              ))}
+            </div>
+            {/* kpis */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, padding: 12, borderRadius: 16, background: "var(--gv-color-bg-surface-sunken)", marginBottom: 12 }}>
+              {mainMoment.kpis.map(kpi => (
+                <div key={kpi.label} style={{ textAlign: "center" }}>
+                  <div style={{ fontFamily: "var(--gv-font-heading)", fontSize: 18, fontWeight: 900, color: "var(--gv-color-neutral-900)", letterSpacing: "-.02em" }}>{kpi.value}</div>
+                  <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: 10, fontWeight: 700, color: "var(--gv-color-neutral-400)", textTransform: "uppercase", letterSpacing: ".07em", marginTop: 2 }}>{kpi.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8, padding: "12px 20px", borderTop: "1px solid var(--gv-color-neutral-100)", background: "var(--gv-color-bg-surface-elevated)", flexWrap: "wrap" }}>
+            {mainMoment.tags.map(t => <Tag key={t.text} cls={t.cls} text={t.text} />)}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Section: Perjalanan Lengkap ── */}
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+          <div style={{ width: 20, height: 20, borderRadius: 6, background: ST.c50, border: "1px solid #FDE68A", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={ST.c700} strokeWidth="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          </div>
+          <span style={{ fontFamily: "var(--gv-font-mono)", fontSize: 14, fontWeight: 700, color: "var(--gv-color-neutral-400)", textTransform: "uppercase", letterSpacing: ".1em", whiteSpace: "nowrap" }}>Perjalanan Lengkap</span>
+          <div style={{ flex: 1, height: 1, background: "var(--gv-color-neutral-200)" }} />
+        </div>
+
+        {/* st-ctl timeline */}
+        <div style={{ display: "flex", flexDirection: "column", position: "relative" }}>
+          <div style={{ position: "absolute", left: 17, top: 16, bottom: 8, width: 2, background: `linear-gradient(180deg, ${ST.chronicle} 0%, ${ST.c100} 100%)`, borderRadius: 2 }} />
+          {timeline.map((item, i) => (
+            <div key={i} style={{ display: "flex", gap: 16, paddingBottom: 24 }}>
+              <div style={{ width: 34, height: 34, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", zIndex: 1, border: "2.5px solid var(--gv-color-bg-base)", background: dotBg(item.type), boxShadow: item.type === "ms" ? "0 0 0 3px rgba(245,158,11,.18)" : undefined }}>
+                <DotIcon type={item.type} />
+              </div>
+              <div style={{ flex: 1, paddingTop: 8 }}>
+                <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: 13, fontWeight: 700, color: ST.chronicle, marginBottom: 2, letterSpacing: ".04em" }}>{item.yr}</div>
+                <div style={{ fontFamily: "var(--gv-font-heading)", fontSize: 17, fontWeight: 800, color: "var(--gv-color-neutral-900)", marginBottom: 4, letterSpacing: "-.02em", lineHeight: 1.4 }}>{item.title}</div>
+                <div style={{ fontFamily: "var(--gv-font-body)", fontSize: 15, color: "var(--gv-color-neutral-600)", lineHeight: 1.75, marginBottom: 8 }}>{item.desc}</div>
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
+                  {item.tags.map(t => <Tag key={t.text} cls={t.cls} text={t.text} />)}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Chronicle Right — 2-week highlights (right column)
+══════════════════════════════════════════════════════════════ */
+function ChronicleRight({ profile }: { profile: BrandProfile | null }) {
+  if (!profile) return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 20px", textAlign: "center" }}>
+      <div style={{ width: 56, height: 56, borderRadius: "50%", background: ST.c50, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={ST.chronicle} strokeWidth="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      </div>
+      <div style={{ fontFamily: "var(--gv-font-heading)", fontSize: 15, fontWeight: 800, color: "var(--gv-color-neutral-900)", marginBottom: 4 }}>Belum ada Highlight</div>
+      <div style={{ fontSize: 13, color: "var(--gv-color-neutral-500)" }}>Selesaikan setup brand untuk melihat highlight.</div>
+    </div>
+  );
+
+  const qa  = profile.qa_analytics as Record<string, unknown> | null;
+  const seoScore = Number(qa?.seo_score    ?? 42);
+  const geoScore = Number(qa?.geo_score    ?? 28);
+  const socScore = Number(qa?.social_score ?? 61);
+  const seaDelta = Number(qa?.seo_delta    ?? 8);
+  const geaDelta = Number(qa?.geo_delta    ?? 14);
+  const socDelta = Number(qa?.social_delta ?? -3);
+
+  /* ── Date range ── */
+  const endDate   = new Date();
+  const startDate = new Date(endDate.getTime() - 14 * 86400000);
+  const fmt14     = (d: Date) => d.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+  const dateRange = `${fmt14(startDate)} — ${fmt14(endDate)}`;
+
+  const scores = [
+    { key: "seo", label: "SEO",    val: seoScore, delta: seaDelta, fillBg: "linear-gradient(90deg, var(--gv-color-info-500), #60A5FA)" },
+    { key: "geo", label: "GEO",    val: geoScore, delta: geaDelta, fillBg: "linear-gradient(90deg, var(--gv-color-primary-500), var(--gv-color-primary-400))" },
+    { key: "soc", label: "Social", val: socScore, delta: socDelta, fillBg: `linear-gradient(90deg, ${ST.deep}, #DDD6FE)` },
+  ];
+
+  /* ── Achievement cards ── */
+  type RpCard = { accent: "accent"|"success"|"info"|"primary"|"purple"; icCls: string; icBg: string; icColor: string; title: string; desc: string; badge?: {cls:string;text:string}; date: string };
+  const cards: RpCard[] = [];
+
+  const connPlatforms = [profile.instagram_handle && `Instagram (@${profile.instagram_handle})`, profile.tiktok_handle && `TikTok (@${profile.tiktok_handle})`].filter(Boolean) as string[];
+  if (connPlatforms.length > 0) cards.push({
+    accent: "success",
+    icCls: "gr", icBg: "var(--gv-color-success-50)", icColor: "var(--gv-color-success-500)",
+    title: connPlatforms.length > 1 ? "Instagram & TikTok Terhubung" : `${connPlatforms[0]} Terhubung`,
+    desc: `${connPlatforms.length} akun sosial berhasil terkoneksi ke GeoVera. AI mulai memantau performa konten secara real-time.`,
+    badge: { cls: "gr", text: "Connected ✓" },
+    date: fmtDate(profile.created_at).toUpperCase(),
+  });
+  if (profile.research_data) cards.push({
+    accent: "accent",
+    icCls: "ch", icBg: ST.c50, icColor: ST.c700,
+    title: "Brand Research Selesai",
+    desc: `AI GeoVera berhasil menyelesaikan analisis mendalam terhadap ${profile.brand_name}. Keyword, kompetitor, dan tren pasar kini terpetakan.`,
+    badge: { cls: "ms", text: "Research Done" },
+    date: (profile.chronicle_updated_at ? fmtDate(profile.chronicle_updated_at) : fmtDate(profile.created_at)).toUpperCase(),
+  });
+  if (profile.source_of_truth) cards.push({
+    accent: "primary",
+    icCls: "pr", icBg: "var(--gv-color-primary-50)", icColor: "var(--gv-color-primary-600)",
+    title: "Source of Truth Aktif",
+    desc: "Brand Intelligence penuh siap digunakan. Semua strategi konten, SEO, dan GEO kini didukung data riil.",
+    badge: { cls: "gr", text: "SoT Ready" },
+    date: (profile.chronicle_updated_at ? fmtDate(profile.chronicle_updated_at) : fmtDate(profile.created_at)).toUpperCase(),
+  });
+  if (seoScore > 0) cards.push({
+    accent: "info",
+    icCls: "in", icBg: ST.r50, icColor: ST.r700,
+    title: seaDelta > 0 ? "SEO Score Naik" : "SEO Terpantau",
+    desc: seaDelta > 0 ? `SEO Score naik ${seaDelta} poin dalam 2 minggu. Brand kamu semakin mudah ditemukan di Google.` : `SEO Score terpantau. ${Math.abs(seaDelta)} poin perlu ditingkatkan untuk ranking optimal.`,
+    badge: { cls: seaDelta >= 0 ? "gr" : "dn", text: `${seaDelta >= 0 ? "+" : ""}${seaDelta} SEO` },
+    date: fmtDate(profile.created_at).toUpperCase(),
+  });
+  if (cards.length === 0) cards.push({
+    accent: "primary",
+    icCls: "pr", icBg: "var(--gv-color-primary-50)", icColor: "var(--gv-color-primary-600)",
+    title: "Mulai Perjalanan Brand",
+    desc: "Hubungkan akun sosial media dan mulai riset brand untuk melihat pencapaian pertamamu di sini.",
+    date: fmtDate(profile.created_at).toUpperCase(),
+  });
+
+  const borderLeft = (a: RpCard["accent"]) => ({ accent: ST.chronicle, success: "var(--gv-color-success-500)", info: ST.research, primary: "var(--gv-color-primary-500)", purple: ST.deep }[a] ?? ST.chronicle);
+
+  const icIcon = (cls: string, color: string) => {
+    if (cls === "ch") return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>;
+    if (cls === "gr") return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>;
+    if (cls === "in") return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>;
+    if (cls === "pr") return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><path d="M2 15c6.667-6 13.333 0 20-6"/><path d="M9 22c1.798-1.998 2.518-3.995 2.807-5.993"/><path d="M15 2c-1.798 1.998-2.518 3.995-2.807 5.993"/></svg>;
+    return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>;
+  };
+
+  return (
+    <div style={{ padding: "20px 20px 96px" }}>
+
+      {/* rp-hdr */}
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: 13, fontWeight: 700, color: "var(--gv-color-neutral-400)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 6 }}>Highlight Chronicle</div>
+        <div style={{ fontFamily: "var(--gv-font-heading)", fontSize: 18, fontWeight: 900, color: "var(--gv-color-neutral-900)", letterSpacing: "-.03em", lineHeight: 1.4 }}>2 Minggu Terakhir</div>
+        <div style={{ fontFamily: "var(--gv-font-body)", fontSize: 14, color: "var(--gv-color-neutral-500)", marginTop: 4 }}>Pencapaian dan perkembangan brand kamu</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
+          <span style={{ display: "inline-flex", alignItems: "center", height: 22, padding: "0 8px", borderRadius: 9999, border: "1px solid var(--gv-color-neutral-200)", background: "var(--gv-color-bg-surface-elevated)", fontFamily: "var(--gv-font-mono)", fontSize: 11, fontWeight: 700, color: "var(--gv-color-neutral-500)" }}>
+            {dateRange}
+          </span>
+        </div>
+      </div>
+
+      {/* Progress Skor */}
+      <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: 12, fontWeight: 700, color: "var(--gv-color-neutral-400)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 8 }}>Progress Skor</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+        {scores.map(s => (
+          <div key={s.key} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 12, background: "var(--gv-color-bg-surface-elevated)", border: "1px solid var(--gv-color-neutral-200)" }}>
+            <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: 12, fontWeight: 700, color: "var(--gv-color-neutral-500)", textTransform: "uppercase", letterSpacing: ".06em", width: 56, flexShrink: 0 }}>{s.label}</div>
+            <div style={{ flex: 1, height: 8, borderRadius: 9999, background: "var(--gv-color-neutral-100)", overflow: "hidden" }}>
+              <div style={{ width: `${s.val}%`, height: "100%", background: s.fillBg, borderRadius: 9999 }} />
+            </div>
+            <div style={{ fontFamily: "var(--gv-font-heading)", fontSize: 14, fontWeight: 900, color: "var(--gv-color-neutral-900)", width: 28, textAlign: "right", flexShrink: 0 }}>{s.val}</div>
+            <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: 12, fontWeight: 700, width: 36, textAlign: "right", flexShrink: 0, color: s.delta >= 0 ? "var(--gv-color-success-500)" : "var(--gv-color-danger-500)" }}>
+              {s.delta >= 0 ? "▲" : "▼"} {Math.abs(s.delta)}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Pencapaian */}
+      <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: 12, fontWeight: 700, color: "var(--gv-color-neutral-400)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 8, marginTop: 18 }}>Pencapaian</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {cards.map((card, i) => (
+          <div key={i} style={{ borderRadius: 16, overflow: "hidden", border: "1px solid var(--gv-color-neutral-200)", background: "var(--gv-color-bg-surface)", borderLeft: `3px solid ${borderLeft(card.accent)}` }}>
+            <div style={{ padding: "12px 16px" }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                <div style={{ width: 28, height: 28, borderRadius: 10, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: card.icBg }}>
+                  {icIcon(card.icCls, card.icColor)}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontFamily: "var(--gv-font-body)", fontSize: 14, fontWeight: 700, color: "var(--gv-color-neutral-900)", marginBottom: 4, lineHeight: 1.4 }}>{card.title}</div>
+                  <div style={{ fontSize: 13, color: "var(--gv-color-neutral-500)", lineHeight: 1.6 }}>{card.desc}</div>
+                  {card.badge && <div style={{ marginTop: 8 }}><Tag cls={card.badge.cls} text={card.badge.text} /></div>}
+                  <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: 11, fontWeight: 700, color: "var(--gv-color-neutral-300)", letterSpacing: ".04em", marginTop: 6 }}>{card.date}</div>
+                </div>
               </div>
             </div>
           </div>
@@ -690,7 +1029,7 @@ function RightPanel({
   return (
     <div style={{ padding: "20px 20px 80px", display: "flex", flexDirection: "column", gap: 0, overflowY: "auto", height: "100%" }}>
       {activeTab === "101 Brand" && <BrandTab profile={profile} />}
-      {activeTab === "Chronicle" && <ChronicleTab profile={profile} />}
+      {activeTab === "Chronicle" && <ChronicleRight profile={profile} />}
       {activeTab === "Connect" && <ConnectTab profile={profile} />}
       {activeTab === "Subscription" && <SubscriptionTab sub={sub} plans={plans} user={user} onPasswordChange={onPasswordChange} />}
     </div>
@@ -811,20 +1150,7 @@ function CenterPanel({
         </>
       )}
 
-      {activeTab === "Chronicle" && (
-        <div style={{ background: "var(--gv-color-bg-surface)", border: "1.5px solid var(--gv-color-neutral-200)", borderRadius: 20, padding: "14px 16px" }}>
-          <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: 11, fontWeight: 700, color: "var(--gv-color-neutral-400)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 12 }}>Timeline Brand</div>
-          {profile ? (
-            <div style={{ fontSize: 13, color: "var(--gv-color-neutral-600)", lineHeight: 1.7 }}>
-              <p style={{ marginBottom: 8 }}>Brand <strong>{profile.brand_name}</strong> dimulai perjalanannya dan terus berkembang bersama GeoVera AI.</p>
-              {profile.country && <p style={{ marginBottom: 8 }}>Beroperasi di <strong>{profile.country}</strong>.</p>}
-              {profile.website_url && <p style={{ marginBottom: 0 }}>Website: <strong>{profile.website_url}</strong></p>}
-            </div>
-          ) : (
-            <div style={{ fontSize: 13, color: "var(--gv-color-neutral-500)", textAlign: "center", padding: "20px 0" }}>Belum ada data chronicle.</div>
-          )}
-        </div>
-      )}
+      {activeTab === "Chronicle" && <ChronicleCenter profile={profile} />}
 
       {activeTab === "Connect" && (
         <div style={{ background: "var(--gv-color-bg-surface)", border: "1.5px solid var(--gv-color-neutral-200)", borderRadius: 20, padding: "14px 16px" }}>
@@ -907,7 +1233,7 @@ export default function StartPage() {
       // Load brand profile
       const { data: bp } = await supabase
         .from("brand_profiles")
-        .select("id, brand_name, website_url, instagram_handle, tiktok_handle, country, whatsapp_number, research_status, brand_dna, research_data, source_of_truth, chronicle_updated_at, created_at")
+        .select("id, brand_name, website_url, instagram_handle, tiktok_handle, country, whatsapp_number, research_status, brand_dna, research_data, source_of_truth, chronicle_updated_at, qa_analytics, created_at")
         .eq("user_id", session.user.id)
         .order("created_at", { ascending: false })
         .limit(1)

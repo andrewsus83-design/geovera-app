@@ -77,6 +77,7 @@ const T = (children: React.ReactNode) => {
 };
 
 const TTag       = T(<><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></>);
+const TChronicle = T(<><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></>);
 const TLink      = T(<><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></>);
 const TCard      = T(<><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></>);
 const TChat      = T(<><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></>);
@@ -112,6 +113,7 @@ const TAB_MAP: Record<string, SectionDef> = {
     label: "Start",
     tabs: [
       { key: "101 Brand",    label: "101 Brand",    icon: <TTag /> },
+      { key: "Chronicle",    label: "Chronicle",    icon: <TChronicle /> },
       { key: "Connect",      label: "Connect",      icon: <TLink /> },
       { key: "Subscription", label: "Subscription", icon: <TCard /> },
     ],
