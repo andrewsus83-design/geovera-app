@@ -43,6 +43,28 @@ interface Plan {
   is_active: boolean;
 }
 
+interface PlanQuota {
+  plan_name: string;
+  brands_limit: number;
+  onboarding_runs_limit: number;
+  ai_chat_messages_per_day: number;
+  content_articles_per_day: number;
+  content_images_per_day: number;
+  content_videos_per_day: number;
+  qa_probes_total: number;
+  qa_runs_per_cycle: number;
+  chronicle_runs_per_cycle: number;
+}
+
+interface Invoice {
+  id: string;
+  activated_at: string | null;
+  expires_at: string | null;
+  status: string;
+  invoice_number: string | null;
+  plan: { name: string; slug: string; price_idr: number } | null;
+}
+
 /* ── Color tokens (ST/BL DS v5.8/5.9) ── */
 const ST = {
   research: "#3B82F6", r50: "#EFF6FF", r100: "#DBEAFE", r700: "#1D4ED8",
@@ -112,11 +134,49 @@ const REC_PLATFORMS = [
   { id: "medium", name: "Medium", tag: "Thought Leadership", logoColor: "#222222", initial: "M", placeholder: "https://medium.com/@username" },
 ];
 
-/* ── Plan feature lists ── */
-const PLAN_FEATURES: Record<string, string[]> = {
-  basic: ["10 artikel/bulan", "5 gambar/bulan", "2 video/bulan", "AI Chat (basic)", "Smart Reply (100 komentar)"],
-  premium: ["50 artikel/bulan", "20 gambar/bulan", "10 video/bulan", "AI Chat (full)", "Smart Reply (500 komentar)", "Brand DNA + Chronicle", "Deep Research"],
-  enterprise: ["Unlimited artikel", "Unlimited gambar", "30 video/bulan", "AI Chat (priority)", "Smart Reply (unlimited)", "Full Brand Intelligence", "Dedicated Support"],
+/* ── Subscription DS component tokens (gv_start_subscription source of truth) ── */
+const SUB = {
+  glassXs:     "rgba(255,255,255,0.12)",
+  glassSm:     "rgba(255,255,255,0.20)",
+  glassMd:     "rgba(255,255,255,0.30)",
+  glassFill:   "rgba(255,255,255,0.80)",
+  glowPrimary: "0 2px 8px rgba(95,143,139,0.30)",
+  glowSuccess: "0 0 6px rgba(111,255,212,0.80)",
+};
+
+/* ── Plan display metadata ── */
+const PLAN_DISPLAY: Record<string, { name: string; tagline: string; badge?: string; badgePro?: boolean }> = {
+  basic:      { name: "Free",   tagline: "Mulai tanpa biaya" },
+  premium:    { name: "Growth", tagline: "Untuk tim yang berkembang", badge: "Paket Kamu" },
+  enterprise: { name: "Pro",    tagline: "Full power, no limits", badge: "★ Most Popular", badgePro: true },
+};
+
+/* ── Plan feature lists — check / cross per plan (sb-plan__feats DS pattern) ── */
+const PLAN_FEATS: Record<string, Array<{ label: string; check: boolean }>> = {
+  basic: [
+    { label: "1 Brand Profile",     check: true  },
+    { label: "6 AI Questions/hari", check: true  },
+    { label: "10 Artikel/bulan",    check: true  },
+    { label: "5 Gambar/bulan",      check: true  },
+    { label: "Auto-Reply",          check: false },
+    { label: "Deep Research",       check: false },
+  ],
+  premium: [
+    { label: "1 Brand Profile",      check: true },
+    { label: "12 AI Questions/hari", check: true },
+    { label: "30 Artikel/bulan",     check: true },
+    { label: "20 Gambar/bulan",      check: true },
+    { label: "Auto-Reply 50x/5min",  check: true },
+    { label: "Deep Research",        check: true },
+  ],
+  enterprise: [
+    { label: "1 Brand Profile",        check: true },
+    { label: "20 AI Questions/hari",   check: true },
+    { label: "50 Artikel/bulan",       check: true },
+    { label: "30 Gambar/bulan",        check: true },
+    { label: "Auto-Reply 100x/5min",   check: true },
+    { label: "Deep Research Priority", check: true },
+  ],
 };
 
 /* ── Formatters ── */
@@ -1057,156 +1117,485 @@ function ConnectRight({
 }
 
 /* ══════════════════════════════════════════════════════════════
-   Tab: Subscription
+   Tab: Subscription — Center (sb-* DS token pattern)
 ══════════════════════════════════════════════════════════════ */
-function SubscriptionTab({
-  sub, plans, user, onPasswordChange,
+function SubscriptionCenter({
+  plans, sub, onUpgrade, upgrading,
 }: {
-  sub: Subscription | null;
   plans: Plan[];
-  user: { name: string; email: string; initials: string } | null;
-  onPasswordChange: () => void;
+  sub: Subscription | null;
+  onUpgrade: (planId: string) => Promise<void>;
+  upgrading: string | null;
 }) {
-  const activePlan = sub?.plan ?? null;
+  const [billing, setBilling] = useState<"monthly" | "annual">("monthly");
+  const currentSlug = sub?.status === "active" ? (sub.plan?.slug ?? null) : null;
   const isActive = sub?.status === "active";
 
+  const VP_ITEMS = [
+    { icon: "⚡", title: "Efisiensi Waktu", desc: "Otomasi konten & riset brand 10× lebih cepat" },
+    { icon: "💰", title: "Hemat Cost",       desc: "Ganti 3–5 tool dengan satu platform terintegrasi" },
+    { icon: "∞",  title: "Unlimited Ideation", desc: "AI menghasilkan ide konten tanpa batas setiap hari" },
+    { icon: "🎯", title: "Optimized UGC",    desc: "Konten UGC yang teroptimasi untuk setiap platform" },
+  ];
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* Profile card (ST18 style) */}
-      <div style={{ borderRadius: 24, overflow: "hidden", border: "1.5px solid var(--gv-color-neutral-200)" }}>
-        <div style={{ height: 64, background: "linear-gradient(135deg, var(--gv-color-primary-700), var(--gv-color-primary-400), #8B5CF6)", position: "relative" }} />
-        <div style={{ padding: "0 18px 16px" }}>
-          <div style={{ position: "relative", marginTop: -24, marginBottom: 8, width: "fit-content" }}>
-            <div style={{ width: 52, height: 52, borderRadius: "50%", background: "var(--gv-gradient-primary)", border: "3px solid white", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 12px rgba(0,0,0,.12)" }}>
-              <span style={{ fontFamily: "var(--gv-font-heading)", fontSize: 18, fontWeight: 900, color: "white" }}>{user?.initials ?? "?"}</span>
+    <div style={{ overflowY: "auto", height: "100%" }}>
+      {/* sb-wrap */}
+      <div style={{ padding: "24px 24px 80px" }}>
+
+        {/* sb-hero */}
+        <div style={{
+          background: "linear-gradient(145deg, var(--gv-color-primary-900), #111827, #0a0a14)",
+          border: `1px solid ${SUB.glassXs}`,
+          borderRadius: "var(--gv-radius-xl, 24px)",
+          padding: "28px 24px",
+          marginBottom: 20,
+          position: "relative",
+          overflow: "hidden",
+        }}>
+          <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at 20% 50%, rgba(95,143,139,0.15) 0%, transparent 50%), radial-gradient(ellipse at 80% 20%, rgba(139,92,246,0.10) 0%, transparent 50%)", pointerEvents: "none" }} />
+          <div style={{ position: "relative" }}>
+            {/* sb-hero__eyebrow */}
+            <div style={{
+              display: "inline-flex", alignItems: "center", gap: 7, padding: "4px 12px",
+              borderRadius: "var(--gv-radius-full, 9999px)",
+              background: SUB.glassXs, border: `1px solid ${SUB.glassSm}`,
+              fontFamily: "var(--gv-font-mono)", fontSize: 10, fontWeight: 700,
+              color: "var(--gv-color-primary-300, #90C4BE)",
+              textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 14,
+            }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--gv-color-primary-400, #7AB3AB)" }} />
+              Subscription
+            </div>
+            {/* sb-hero__title */}
+            <div style={{ fontFamily: "var(--gv-font-heading)", fontSize: 26, fontWeight: 900, color: "white", letterSpacing: "-0.04em", lineHeight: 1.15, marginBottom: 8 }}>
+              Pilih Plan{" "}
+              {/* sb-hero__accent */}
+              <span style={{ background: "var(--gv-gradient-primary)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>Terbaik</span>{" "}
+              Kamu
+            </div>
+            {/* sb-hero__sub */}
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.50)", lineHeight: 1.6, marginBottom: 20 }}>
+              Satu platform. Semua yang kamu butuhkan untuk dominasi brand digital.
+            </div>
+            {/* sb-vp-grid */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              {VP_ITEMS.map(vp => (
+                <div key={vp.title} style={{
+                  padding: "12px 14px",
+                  background: SUB.glassXs,
+                  border: `1px solid ${SUB.glassSm}`,
+                  borderRadius: "var(--gv-radius-md, 16px)",
+                }}>
+                  {/* sb-vp__icon */}
+                  <div style={{ fontSize: 20, marginBottom: 6 }}>{vp.icon}</div>
+                  {/* sb-vp__label */}
+                  <div style={{ fontFamily: "var(--gv-font-heading)", fontSize: 13, fontWeight: 800, color: "white", marginBottom: 3 }}>{vp.title}</div>
+                  {/* sb-vp__desc */}
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", lineHeight: 1.55 }}>{vp.desc}</div>
+                </div>
+              ))}
             </div>
           </div>
-          <div style={{ fontFamily: "var(--gv-font-heading)", fontSize: 16, fontWeight: 900, color: "var(--gv-color-neutral-900)", marginBottom: 1 }}>{user?.name ?? "—"}</div>
-          <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: 12, color: "var(--gv-color-neutral-400)", marginBottom: 12 }}>{user?.email ?? "—"}</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 14, background: "var(--gv-color-bg-surface-sunken)", border: "1px solid var(--gv-color-neutral-200)" }}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 8px", borderRadius: 9999, background: "linear-gradient(135deg, #F59E0B, #FBBF24)", fontFamily: "var(--gv-font-heading)", fontSize: 12, fontWeight: 800, color: "#1C1400" }}>
-              {activePlan ? activePlan.name.toUpperCase() : "FREE"}
-            </span>
-            <span style={{ flex: 1, fontSize: 12, color: "var(--gv-color-neutral-700)" }}>
-              {isActive ? `Aktif · Berakhir ${fmtDate(sub?.expires_at ?? null)}` : sub?.status === "pending_payment" ? "Menunggu pembayaran" : "Tidak ada langganan aktif"}
-            </span>
+        </div>
+
+        {/* sb-plans-hdr */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: 11, fontWeight: 700, color: "var(--gv-color-neutral-400)", textTransform: "uppercase", letterSpacing: "0.10em" }}>
+            Pilih Plan
+          </div>
+          {/* sb-plans-hdr__toggle */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 12, color: billing === "monthly" ? "var(--gv-color-neutral-900)" : "var(--gv-color-neutral-400)", fontWeight: billing === "monthly" ? 700 : 400, transition: "color 0.15s" }}>Bulanan</span>
+            {/* sb-toggle */}
+            <button
+              onClick={() => setBilling(b => b === "monthly" ? "annual" : "monthly")}
+              style={{ width: 44, height: 24, borderRadius: 12, border: "none", cursor: "pointer", background: billing === "annual" ? "var(--gv-gradient-primary)" : "var(--gv-color-neutral-200)", position: "relative", padding: 0 }}
+            >
+              <span style={{ position: "absolute", top: 3, left: billing === "annual" ? 23 : 3, width: 18, height: 18, borderRadius: "50%", background: "white", boxShadow: "0 1px 3px rgba(0,0,0,0.20)", transition: "left 0.2s", display: "block" }} />
+            </button>
+            <span style={{ fontSize: 12, color: billing === "annual" ? "var(--gv-color-neutral-900)" : "var(--gv-color-neutral-400)", fontWeight: billing === "annual" ? 700 : 400, transition: "color 0.15s" }}>Tahunan</span>
+            {/* sb-save-badge */}
+            {billing === "annual" && (
+              <span style={{ padding: "2px 8px", borderRadius: "var(--gv-radius-full, 9999px)", background: "var(--gv-color-success-100, #D1FAE5)", color: "var(--gv-color-success-700, #047857)", fontFamily: "var(--gv-font-mono)", fontSize: 10, fontWeight: 800 }}>Hemat 20%</span>
+            )}
           </div>
         </div>
-      </div>
 
-      {/* Change Password */}
-      <div style={{ border: "1.5px solid var(--gv-color-neutral-200)", borderRadius: 16, overflow: "hidden" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "var(--gv-color-bg-surface-elevated)", borderBottom: "1px solid var(--gv-color-neutral-200)" }}>
-          <div style={{ width: 26, height: 26, borderRadius: 6, background: "var(--gv-color-primary-50)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--gv-color-primary-500)" strokeWidth="2"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-          </div>
-          <span style={{ fontSize: 14, fontWeight: 700, color: "var(--gv-color-neutral-900)", flex: 1 }}>Ubah Password</span>
-        </div>
-        <div style={{ padding: "12px 14px" }}>
-          <button
-            onClick={onPasswordChange}
-            style={{ width: "100%", padding: "10px 16px", borderRadius: 10, background: "var(--gv-color-bg-surface-elevated)", border: "1.5px solid var(--gv-color-neutral-200)", fontSize: 13, fontWeight: 700, color: "var(--gv-color-neutral-700)", fontFamily: "var(--gv-font-body)", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: 8 }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            Kirim link reset password ke email
-          </button>
+        {/* sb-plans — 3-col grid */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
+          {plans.map(plan => {
+            const disp  = PLAN_DISPLAY[plan.slug] ?? { name: plan.name, tagline: "" };
+            const feats = PLAN_FEATS[plan.slug] ?? [];
+            const isCurrent = currentSlug === plan.slug;
+            const isPro     = plan.slug === "enterprise";
+            const isDark    = isCurrent || isPro;
+            const price     = billing === "annual" ? Math.round(plan.price_idr * 0.8) : plan.price_idr;
+
+            return (
+              /* sb-plan / sb-plan--active / sb-plan--pro */
+              <div key={plan.id} style={{
+                borderRadius: "var(--gv-radius-xl, 24px)",
+                border: `1.5px solid ${isCurrent ? "var(--gv-color-primary-400, #7AB3AB)" : isPro ? "rgba(139,92,246,0.40)" : "var(--gv-color-neutral-200)"}`,
+                background: isPro
+                  ? "linear-gradient(145deg,#1a0f2e,#0f1923)"
+                  : isCurrent
+                  ? "linear-gradient(145deg,var(--gv-color-primary-900),#111827)"
+                  : "var(--gv-color-bg-surface)",
+                padding: "18px 16px",
+                position: "relative",
+                overflow: "hidden",
+                boxShadow: isCurrent ? SUB.glowPrimary : isPro ? "0 2px 16px rgba(139,92,246,0.15)" : undefined,
+              }}>
+                {/* sb-plan__badge */}
+                {disp.badge && (
+                  <div style={{
+                    display: "inline-flex", padding: "3px 10px", marginBottom: 10,
+                    borderRadius: "var(--gv-radius-full, 9999px)",
+                    background: disp.badgePro ? "rgba(139,92,246,0.20)" : "var(--gv-color-primary-100, #D4EAE7)",
+                    border: `1px solid ${disp.badgePro ? "rgba(139,92,246,0.35)" : "var(--gv-color-primary-200, #A8D5CF)"}`,
+                    fontFamily: "var(--gv-font-mono)", fontSize: 9, fontWeight: 700,
+                    color: disp.badgePro ? "#C4B5FD" : "var(--gv-color-primary-700, #3D6562)",
+                  }}>{disp.badge}</div>
+                )}
+                {/* sb-plan__top — name */}
+                <div style={{ fontFamily: "var(--gv-font-heading)", fontSize: 18, fontWeight: 900, color: isDark ? "white" : "var(--gv-color-neutral-900)", letterSpacing: "-0.03em", marginBottom: 2 }}>
+                  {disp.name}
+                </div>
+                {/* sb-plan__price */}
+                <div style={{ marginBottom: 3 }}>
+                  <span style={{ fontFamily: "var(--gv-font-heading)", fontSize: 20, fontWeight: 900, color: isDark ? "white" : "var(--gv-color-neutral-900)", letterSpacing: "-0.04em" }}>
+                    {plan.price_idr === 0 ? "Gratis" : fmtIDR(price)}
+                  </span>
+                  {plan.price_idr > 0 && (
+                    <span style={{ fontFamily: "var(--gv-font-mono)", fontSize: 10, color: isDark ? "rgba(255,255,255,0.50)" : "var(--gv-color-neutral-400)", marginLeft: 4 }}>/bln</span>
+                  )}
+                </div>
+                {/* sb-plan__tagline */}
+                <div style={{ fontSize: 11, color: isDark ? "rgba(255,255,255,0.45)" : "var(--gv-color-neutral-500)", marginBottom: 14, lineHeight: 1.5 }}>{disp.tagline}</div>
+                <div style={{ height: 1, background: isDark ? "rgba(255,255,255,0.10)" : "var(--gv-color-neutral-200)", marginBottom: 14 }} />
+                {/* sb-plan__feats */}
+                <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 7, marginBottom: 16 }}>
+                  {feats.map(f => (
+                    <li key={f.label} style={{
+                      display: "flex", alignItems: "flex-start", gap: 7, fontSize: 11, lineHeight: 1.45,
+                      color: isDark ? (f.check ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.30)") : (f.check ? "var(--gv-color-neutral-700)" : "var(--gv-color-neutral-400)"),
+                    }}>
+                      <div style={{
+                        width: 14, height: 14, borderRadius: "50%", flexShrink: 0, marginTop: 1,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        background: f.check
+                          ? (isPro ? "rgba(139,92,246,0.45)" : isCurrent ? "var(--gv-color-primary-500, #5F8F8B)" : "var(--gv-color-success-500, #10B981)")
+                          : (isDark ? "rgba(255,255,255,0.08)" : "var(--gv-color-neutral-200)"),
+                      }}>
+                        {f.check
+                          ? <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+                          : <svg width="6" height="6" viewBox="0 0 24 24" fill="none" stroke={isDark ? "rgba(255,255,255,0.30)" : "var(--gv-color-neutral-400)"} strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        }
+                      </div>
+                      {f.label}
+                    </li>
+                  ))}
+                </ul>
+                {/* sb-plan__btn */}
+                <button
+                  onClick={() => !isCurrent && onUpgrade(plan.id)}
+                  disabled={isCurrent || upgrading !== null}
+                  style={{
+                    width: "100%", padding: "10px 14px", borderRadius: "var(--gv-radius-md, 12px)",
+                    fontSize: 12, fontWeight: 700, fontFamily: "var(--gv-font-body)",
+                    cursor: isCurrent ? "default" : upgrading ? "not-allowed" : "pointer",
+                    border: "1.5px solid",
+                    opacity: upgrading !== null && upgrading !== plan.id ? 0.55 : 1,
+                    background: isCurrent
+                      ? "transparent"
+                      : isPro
+                      ? "linear-gradient(135deg,#7C3AED,#5B21B6)"
+                      : "var(--gv-gradient-primary)",
+                    borderColor: isCurrent
+                      ? "rgba(255,255,255,0.15)"
+                      : isPro ? "rgba(139,92,246,0.50)" : "transparent",
+                    color: isCurrent ? (isDark ? "rgba(255,255,255,0.35)" : "var(--gv-color-neutral-400)") : "white",
+                    boxShadow: isCurrent ? undefined : (isPro ? "0 2px 10px rgba(139,92,246,0.30)" : plan.price_idr > 0 ? SUB.glowPrimary : undefined),
+                  }}
+                >
+                  {upgrading === plan.id
+                    ? "Memproses…"
+                    : isCurrent
+                    ? "Plan Aktif"
+                    : isActive
+                    ? "Upgrade"
+                    : plan.price_idr === 0
+                    ? "Mulai Gratis"
+                    : "Pilih Plan"}
+                </button>
+              </div>
+            );
+          })}
         </div>
       </div>
+    </div>
+  );
+}
 
-      {/* Subscription Status (BL08 style) */}
-      {sub && (
-        <div style={{ background: "var(--gv-color-bg-surface)", border: "1.5px solid var(--gv-color-neutral-200)", borderRadius: 24, overflow: "hidden" }}>
-          <div style={{ background: "var(--gv-color-primary-900)", padding: "18px 22px", display: "flex", alignItems: "flex-start", gap: 14, position: "relative", overflow: "hidden" }}>
-            <div style={{ position: "absolute", right: -20, top: -20, width: 120, height: 120, borderRadius: "50%", background: "radial-gradient(circle, rgba(122,179,171,.15) 0%, transparent 70%)" }} />
-            <div style={{ padding: "10px 14px", borderRadius: 14, background: "rgba(95,143,139,.2)", border: "1.5px solid rgba(122,179,171,.25)", flexShrink: 0 }}>
-              <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: 8, fontWeight: 700, color: "var(--gv-color-primary-200, #A8D5CF)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 3 }}>Plan</div>
-              <div style={{ fontFamily: "var(--gv-font-heading)", fontSize: 15, fontWeight: 900, color: "white" }}>{activePlan?.name ?? "—"}</div>
+/* ══════════════════════════════════════════════════════════════
+   Tab: Subscription — Right Panel (sbr-* DS token pattern)
+══════════════════════════════════════════════════════════════ */
+function SubscriptionRight({
+  sub, user, quotas, invoices, brandCount, onCancel, onPasswordChange,
+}: {
+  sub: Subscription | null;
+  user: { name: string; email: string; initials: string } | null;
+  quotas: PlanQuota[];
+  invoices: Invoice[];
+  brandCount: number;
+  onCancel: () => void;
+  onPasswordChange: () => void;
+}) {
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+
+  const activePlan = sub?.plan ?? null;
+  const isActive   = sub?.status === "active";
+
+  // Resolve quota for current plan (plans.slug "premium" → plan_quotas.plan_name "pro")
+  const quotaKey = activePlan?.slug === "premium" ? "pro" : (activePlan?.slug ?? "basic");
+  const quota    = quotas.find(q => q.plan_name === quotaKey) ?? null;
+
+  // Countdown
+  const now          = Date.now();
+  const expiresMs    = sub?.expires_at    ? new Date(sub.expires_at).getTime()    : null;
+  const activatedMs  = sub?.activated_at  ? new Date(sub.activated_at).getTime()  : null;
+  const totalDays    = activatedMs && expiresMs ? Math.max(1, Math.ceil((expiresMs - activatedMs) / 86400000)) : 30;
+  const remainDays   = expiresMs ? Math.max(0, Math.ceil((expiresMs - now) / 86400000)) : null;
+  const progressPct  = remainDays !== null ? Math.min(100, Math.max(0, ((totalDays - remainDays) / totalDays) * 100)) : 0;
+
+  // Usage bars
+  const usageBars = quota ? [
+    { name: "Brand Monitor",    current: brandCount, limit: quota.brands_limit,              warn: brandCount >= Math.ceil(quota.brands_limit * 0.75) },
+    { name: "AI Chat / Hari",   current: 0,          limit: quota.ai_chat_messages_per_day,  warn: false },
+    { name: "Artikel / Bulan",  current: 0,          limit: quota.content_articles_per_day,  warn: false },
+    { name: "Signal Cycles",    current: 0,          limit: quota.qa_runs_per_cycle,          warn: false },
+  ] : [];
+
+  /* ── shared: password reset section ── */
+  const PasswordSection = () => (
+    <div style={{ border: "1.5px solid var(--gv-color-neutral-200)", borderRadius: "var(--gv-radius-lg, 20px)", overflow: "hidden" }}>
+      <div style={{ padding: "10px 14px", background: "var(--gv-color-bg-surface-elevated)", borderBottom: "1px solid var(--gv-color-neutral-100)", display: "flex", alignItems: "center", gap: 8 }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--gv-color-primary-500)" strokeWidth="2"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--gv-color-neutral-900)" }}>Keamanan Akun</span>
+      </div>
+      <div style={{ padding: "12px 14px" }}>
+        <button onClick={onPasswordChange} style={{ width: "100%", padding: "9px 14px", borderRadius: "var(--gv-radius-sm, 10px)", background: "var(--gv-color-bg-surface-elevated)", border: "1.5px solid var(--gv-color-neutral-200)", fontSize: 12, fontWeight: 700, color: "var(--gv-color-neutral-700)", fontFamily: "var(--gv-font-body)", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: 8 }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Reset password via email
+        </button>
+      </div>
+    </div>
+  );
+
+  /* ── No-subscription state ── */
+  if (!sub) {
+    return (
+      <div style={{ overflowY: "auto", height: "100%" }}>
+        <div style={{ padding: "20px 20px 80px", display: "flex", flexDirection: "column", gap: 14 }}>
+          {/* Profile mini card */}
+          <div style={{ background: "var(--gv-color-bg-surface)", border: "1.5px solid var(--gv-color-neutral-200)", borderRadius: "var(--gv-radius-xl, 24px)", padding: 16, display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 44, height: 44, borderRadius: "50%", background: "var(--gv-gradient-primary)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <span style={{ fontFamily: "var(--gv-font-heading)", fontSize: 16, fontWeight: 900, color: "white" }}>{user?.initials ?? "?"}</span>
             </div>
-            <div style={{ flex: 1, paddingTop: 4 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                <div style={{ width: 7, height: 7, borderRadius: "50%", background: isActive ? "var(--gv-color-success-500)" : "#9CA3AF" }} />
-                <span style={{ fontFamily: "var(--gv-font-mono)", fontSize: 10, fontWeight: 700, color: isActive ? "var(--gv-color-success-500)" : "#9CA3AF", textTransform: "uppercase", letterSpacing: ".1em" }}>
-                  {isActive ? "AKTIF" : sub.status.toUpperCase().replace("_", " ")}
+            <div>
+              <div style={{ fontFamily: "var(--gv-font-heading)", fontSize: 14, fontWeight: 800, color: "var(--gv-color-neutral-900)" }}>{user?.name ?? "—"}</div>
+              <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: 11, color: "var(--gv-color-neutral-400)" }}>{user?.email ?? "—"}</div>
+            </div>
+            <div style={{ marginLeft: "auto" }}>
+              <span style={{ padding: "4px 10px", borderRadius: "var(--gv-radius-full)", background: "var(--gv-color-neutral-100)", fontFamily: "var(--gv-font-mono)", fontSize: 11, fontWeight: 700, color: "var(--gv-color-neutral-500)" }}>FREE</span>
+            </div>
+          </div>
+          <div style={{ padding: "14px 16px", background: "var(--gv-color-warning-50, #FFFBEB)", border: "1.5px solid var(--gv-color-warning-200, #FDE68A)", borderRadius: "var(--gv-radius-lg, 20px)", fontSize: 12, color: "var(--gv-color-warning-700, #B45309)", lineHeight: 1.6 }}>
+            Kamu belum memiliki langganan aktif. Pilih plan di sebelah kiri untuk mulai.
+          </div>
+          <PasswordSection />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ overflowY: "auto", height: "100%" }}>
+      {/* sbr-wrap */}
+      <div style={{ padding: "20px 20px 80px", display: "flex", flexDirection: "column", gap: 14 }}>
+
+        {/* sbr-card--active */}
+        <div style={{
+          background: "var(--gv-gradient-primary)",
+          borderRadius: "var(--gv-radius-xl, 24px)",
+          padding: "20px",
+          position: "relative",
+          overflow: "hidden",
+          boxShadow: SUB.glowPrimary,
+        }}>
+          <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at 80% 20%, rgba(255,255,255,0.08) 0%, transparent 60%)", pointerEvents: "none" }} />
+          <div style={{ position: "relative" }}>
+            {/* sbr-card__header */}
+            <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
+              {/* sbr-card__eyebrow */}
+              <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: 10, fontWeight: 700, color: SUB.glassFill, textTransform: "uppercase", letterSpacing: "0.10em" }}>Plan Aktif</div>
+              {/* sbr-status */}
+              <div style={{ display: "flex", alignItems: "center", gap: 5, marginLeft: "auto" }}>
+                {/* sbr-status__dot — pulsing */}
+                <div style={{ width: 7, height: 7, borderRadius: "50%", background: isActive ? "#4ADE80" : "#9CA3AF", boxShadow: isActive ? SUB.glowSuccess : undefined }} />
+                <span style={{ fontFamily: "var(--gv-font-mono)", fontSize: 10, fontWeight: 700, color: isActive ? "#4ADE80" : "#9CA3AF", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                  {isActive ? "AKTIF" : sub.status.toUpperCase().replace(/_/g, " ")}
                 </span>
               </div>
-              {activePlan && <div style={{ fontFamily: "var(--gv-font-heading)", fontSize: 20, fontWeight: 900, color: "white", letterSpacing: "-.04em" }}>
-                {fmtIDR(activePlan.price_idr)}<span style={{ fontSize: 11, fontWeight: 500, color: "var(--gv-color-primary-300, #90C4BE)" }}>/bulan</span>
-              </div>}
-              {sub.expires_at && <div style={{ fontSize: 12, color: "var(--gv-color-primary-300, #90C4BE)", marginTop: 2 }}>Berakhir {fmtDate(sub.expires_at)}</div>}
             </div>
-          </div>
-          {/* Invoice detail rows */}
-          <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 2 }}>
-            {[
-              { lbl: "No. Invoice", val: sub.invoice_number ?? "—" },
-              { lbl: "Tanggal Aktif", val: fmtDate(sub.activated_at) },
-              { lbl: "Status Bukti", val: sub.proof_url ? "Terkirim ✓" : "Belum upload" },
-            ].map(r => (
-              <div key={r.lbl} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--gv-color-neutral-100)" }}>
-                <span style={{ fontSize: 12, color: "var(--gv-color-neutral-500)" }}>{r.lbl}</span>
-                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--gv-color-neutral-900)", fontFamily: r.lbl === "No. Invoice" ? "var(--gv-font-mono)" : undefined }}>{r.val}</span>
-              </div>
-            ))}
+            {/* sbr-card__plan-name */}
+            <div style={{ fontFamily: "var(--gv-font-heading)", fontSize: 22, fontWeight: 900, color: "white", letterSpacing: "-0.04em", marginBottom: 2 }}>
+              {PLAN_DISPLAY[activePlan?.slug ?? ""]?.name ?? activePlan?.name ?? "Free"}
+            </div>
+            {/* sbr-card__plan-price */}
+            <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 6 }}>
+              <span style={{ fontFamily: "var(--gv-font-heading)", fontSize: 26, fontWeight: 900, color: "white", letterSpacing: "-0.05em", lineHeight: 1 }}>
+                {activePlan?.price_idr ? fmtIDR(activePlan.price_idr) : "Rp 0"}
+              </span>
+              {activePlan && activePlan.price_idr > 0 && (
+                <span style={{ fontSize: 12, color: SUB.glassFill }}>/bulan</span>
+              )}
+            </div>
+            {/* sbr-card__billing */}
+            <div style={{ fontSize: 12, color: SUB.glassFill }}>
+              Berakhir {fmtDate(sub.expires_at)} · Tagihan Bulanan
+            </div>
           </div>
         </div>
-      )}
 
-      {/* Pricing Cards (BL01 style) */}
-      <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: 11, fontWeight: 700, color: "var(--gv-color-neutral-400)", textTransform: "uppercase", letterSpacing: ".1em", marginTop: 8 }}>
-        {isActive ? "Upgrade Plan" : "Pilih Plan"}
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {plans.map(plan => {
-          const isFeatured = plan.slug === "premium";
-          const isCurrent = sub?.plan?.slug === plan.slug && isActive;
-          const features = PLAN_FEATURES[plan.slug] ?? [];
-          return (
-            <div key={plan.id} style={{
-              background: isFeatured ? "var(--gv-color-primary-900)" : "var(--gv-color-bg-surface)",
-              border: `1.5px solid ${isFeatured ? "var(--gv-color-primary-400)" : "var(--gv-color-neutral-200)"}`,
-              borderRadius: 20, padding: "20px 18px", position: "relative", overflow: "hidden",
-              boxShadow: isFeatured ? "0 0 30px rgba(95,143,139,.15)" : undefined,
-            }}>
-              {isFeatured && <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: "var(--gv-gradient-primary)" }} />}
-              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 12 }}>
-                <div>
-                  <div style={{ display: "inline-flex", alignItems: "center", padding: "3px 10px", borderRadius: 9999, fontSize: 9, fontWeight: 700, fontFamily: "var(--gv-font-mono)", letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 6,
-                    background: isFeatured ? "rgba(95,143,139,.2)" : "var(--gv-color-neutral-100)",
-                    color: isFeatured ? "var(--gv-color-primary-200, #A8D5CF)" : "var(--gv-color-neutral-700)",
-                  }}>
-                    {plan.name}{isFeatured && " ★ Popular"}
+        {/* sbr-countdown */}
+        {sub.expires_at && (
+          <div style={{ background: "var(--gv-color-bg-surface)", border: "1.5px solid var(--gv-color-neutral-200)", borderRadius: "var(--gv-radius-lg, 20px)", padding: "14px 16px" }}>
+            {/* sbr-countdown__label */}
+            <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: 10, fontWeight: 700, color: "var(--gv-color-neutral-400)", textTransform: "uppercase", letterSpacing: "0.10em", marginBottom: 8 }}>Masa Berlaku</div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              {/* sbr-countdown__date */}
+              <div style={{ fontFamily: "var(--gv-font-heading)", fontSize: 15, fontWeight: 800, color: "var(--gv-color-neutral-900)" }}>{fmtDate(sub.expires_at)}</div>
+              {/* sbr-countdown__days */}
+              {remainDays !== null && (
+                <span style={{
+                  fontFamily: "var(--gv-font-mono)", fontSize: 11, fontWeight: 700,
+                  padding: "2px 9px", borderRadius: "var(--gv-radius-full, 9999px)",
+                  background: remainDays <= 7 ? "var(--gv-color-danger-50)" : "var(--gv-color-primary-50, #EDF5F4)",
+                  color: remainDays <= 7 ? "var(--gv-color-danger-700)" : "var(--gv-color-primary-700, #3D6562)",
+                }}>
+                  {remainDays} hari lagi
+                </span>
+              )}
+            </div>
+            {/* sbr-countdown__bar */}
+            <div style={{ height: 6, background: "var(--gv-color-neutral-100)", borderRadius: "var(--gv-radius-full, 9999px)", overflow: "hidden", marginBottom: 6 }}>
+              {/* sbr-countdown__fill */}
+              <div style={{ height: "100%", width: `${progressPct}%`, background: progressPct > 85 ? "var(--gv-color-danger-500)" : "var(--gv-gradient-primary)", borderRadius: "var(--gv-radius-full, 9999px)" }} />
+            </div>
+            {/* sbr-countdown__meta */}
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ fontFamily: "var(--gv-font-mono)", fontSize: 10, color: "var(--gv-color-neutral-400)" }}>Aktif {fmtDate(sub.activated_at)}</span>
+              <span style={{ fontFamily: "var(--gv-font-mono)", fontSize: 10, color: "var(--gv-color-neutral-400)" }}>{Math.round(progressPct)}% terpakai</span>
+            </div>
+          </div>
+        )}
+
+        {/* sbr-usage */}
+        {usageBars.length > 0 && (
+          <div style={{ background: "var(--gv-color-bg-surface)", border: "1.5px solid var(--gv-color-neutral-200)", borderRadius: "var(--gv-radius-lg, 20px)", overflow: "hidden" }}>
+            <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--gv-color-neutral-100)", fontFamily: "var(--gv-font-mono)", fontSize: 10, fontWeight: 700, color: "var(--gv-color-neutral-400)", textTransform: "uppercase", letterSpacing: "0.10em" }}>
+              Penggunaan Quota
+            </div>
+            <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 12 }}>
+              {usageBars.map(bar => {
+                const pct = bar.limit > 0 ? Math.min(100, Math.round((bar.current / bar.limit) * 100)) : 0;
+                return (
+                  <div key={bar.name}>
+                    {/* sbr-usage__row */}
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 5 }}>
+                      {/* sbr-usage__name */}
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--gv-color-neutral-700)" }}>{bar.name}</span>
+                      {/* sbr-usage__count */}
+                      <span style={{ fontFamily: "var(--gv-font-mono)", fontSize: 11, fontWeight: 700, color: bar.warn ? "var(--gv-color-warning-700, #B45309)" : "var(--gv-color-neutral-500)" }}>
+                        {bar.current}/{bar.limit}
+                      </span>
+                    </div>
+                    {/* sbr-usage__bar */}
+                    <div style={{ height: 5, background: "var(--gv-color-neutral-100)", borderRadius: "var(--gv-radius-full, 9999px)", overflow: "hidden" }}>
+                      {/* sbr-usage__fill / sbr-usage__fill--warn */}
+                      <div style={{ height: "100%", width: `${pct}%`, background: bar.warn ? "var(--gv-color-warning-400, #FBBF24)" : "var(--gv-gradient-primary)", borderRadius: "var(--gv-radius-full, 9999px)" }} />
+                    </div>
                   </div>
-                  <div style={{ fontFamily: "var(--gv-font-heading)", fontSize: 18, fontWeight: 900, color: isFeatured ? "white" : "var(--gv-color-neutral-900)", letterSpacing: "-.03em" }}>{plan.name}</div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* sbr-invoices */}
+        {invoices.length > 0 && (
+          <div style={{ background: "var(--gv-color-bg-surface)", border: "1.5px solid var(--gv-color-neutral-200)", borderRadius: "var(--gv-radius-lg, 20px)", overflow: "hidden" }}>
+            <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--gv-color-neutral-100)", fontFamily: "var(--gv-font-mono)", fontSize: 10, fontWeight: 700, color: "var(--gv-color-neutral-400)", textTransform: "uppercase", letterSpacing: "0.10em" }}>
+              Riwayat Invoice
+            </div>
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              {invoices.slice(0, 5).map((inv, i) => (
+                /* sbr-invoice */
+                <div key={inv.id} style={{ display: "flex", alignItems: "center", padding: "10px 14px", borderBottom: i < Math.min(invoices.length, 5) - 1 ? "1px solid var(--gv-color-neutral-100)" : undefined }}>
+                  <div style={{ flex: 1 }}>
+                    {/* sbr-invoice__date */}
+                    <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: 11, fontWeight: 700, color: "var(--gv-color-neutral-900)" }}>{inv.invoice_number ?? "—"}</div>
+                    {/* sbr-invoice__plan */}
+                    <div style={{ fontSize: 11, color: "var(--gv-color-neutral-400)", marginTop: 1 }}>{fmtDate(inv.activated_at)} · {PLAN_DISPLAY[inv.plan?.slug ?? ""]?.name ?? inv.plan?.name ?? "—"}</div>
+                  </div>
+                  {/* sbr-invoice__right */}
+                  <div style={{ textAlign: "right" }}>
+                    {/* sbr-invoice__amount */}
+                    <div style={{ fontFamily: "var(--gv-font-heading)", fontSize: 13, fontWeight: 800, color: "var(--gv-color-neutral-900)" }}>
+                      {inv.plan?.price_idr ? fmtIDR(inv.plan.price_idr) : "Gratis"}
+                    </div>
+                    {/* sbr-invoice__status / sbr-invoice__status--paid */}
+                    <span style={{ display: "inline-block", marginTop: 2, padding: "1px 7px", borderRadius: "var(--gv-radius-full, 9999px)", fontFamily: "var(--gv-font-mono)", fontSize: 10, fontWeight: 700, background: inv.status === "active" ? "var(--gv-color-success-100, #D1FAE5)" : "var(--gv-color-neutral-100)", color: inv.status === "active" ? "var(--gv-color-success-700, #047857)" : "var(--gv-color-neutral-500)" }}>
+                      {inv.status === "active" ? "Lunas" : inv.status.replace(/_/g, " ")}
+                    </span>
+                  </div>
                 </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontFamily: "var(--gv-font-heading)", fontSize: 22, fontWeight: 900, color: isFeatured ? "white" : "var(--gv-color-neutral-900)", letterSpacing: "-.04em", lineHeight: 1 }}>
-                    {fmtIDR(plan.price_idr)}
-                  </div>
-                  <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: 10, color: isFeatured ? "var(--gv-color-primary-200, #A8D5CF)" : "var(--gv-color-neutral-400)", marginTop: 2 }}>/bulan</div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <PasswordSection />
+
+        {/* sbr-cancel-btn */}
+        {isActive && (
+          <div>
+            {!showCancelConfirm ? (
+              <button
+                onClick={() => setShowCancelConfirm(true)}
+                style={{ width: "100%", padding: "10px 16px", borderRadius: "var(--gv-radius-md, 12px)", background: "transparent", border: "1.5px solid var(--gv-color-danger-200, #FECACA)", fontSize: 12, fontWeight: 700, color: "var(--gv-color-danger-600)", fontFamily: "var(--gv-font-body)", cursor: "pointer" }}
+              >
+                Batalkan Langganan
+              </button>
+            ) : (
+              <div style={{ border: "1.5px solid var(--gv-color-danger-200, #FECACA)", borderRadius: "var(--gv-radius-lg, 20px)", padding: 14, background: "var(--gv-color-danger-50, #FEF2F2)" }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--gv-color-danger-700)", marginBottom: 6 }}>Yakin batalkan langganan?</div>
+                <div style={{ fontSize: 12, color: "var(--gv-color-danger-600)", marginBottom: 12, lineHeight: 1.6 }}>Akses premium akan berakhir. Kamu bisa berlangganan lagi kapan saja.</div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => setShowCancelConfirm(false)} style={{ flex: 1, padding: "8px", borderRadius: 8, background: "white", border: "1.5px solid var(--gv-color-neutral-200)", fontSize: 12, fontWeight: 700, cursor: "pointer", color: "var(--gv-color-neutral-700)", fontFamily: "var(--gv-font-body)" }}>
+                    Batal
+                  </button>
+                  <button onClick={() => { setShowCancelConfirm(false); onCancel(); }} style={{ flex: 1, padding: "8px", borderRadius: 8, background: "var(--gv-color-danger-500)", border: "none", fontSize: 12, fontWeight: 700, cursor: "pointer", color: "white", fontFamily: "var(--gv-font-body)" }}>
+                    Ya, Batalkan
+                  </button>
                 </div>
               </div>
-              <div style={{ height: 1, background: isFeatured ? "rgba(255,255,255,.1)" : "var(--gv-color-neutral-200)", marginBottom: 12 }} />
-              <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 7, marginBottom: 14 }}>
-                {features.map(f => (
-                  <li key={f} style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 12, color: isFeatured ? "var(--gv-color-primary-100, #D4EAE7)" : "var(--gv-color-neutral-700)", lineHeight: 1.4 }}>
-                    <div style={{ width: 15, height: 15, borderRadius: "50%", flexShrink: 0, marginTop: 1, display: "flex", alignItems: "center", justifyContent: "center", background: isFeatured ? "var(--gv-color-primary-400)" : "var(--gv-color-success-500)" }}>
-                      <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
-                    </div>
-                    {f}
-                  </li>
-                ))}
-              </ul>
-              <button style={{
-                width: "100%", padding: "10px 16px", borderRadius: 10, fontSize: 13, fontWeight: 700, fontFamily: "var(--gv-font-body)", cursor: isCurrent ? "default" : "pointer", border: "1.5px solid",
-                background: isCurrent ? "transparent" : isFeatured ? "var(--gv-gradient-primary)" : "var(--gv-color-primary-50)",
-                borderColor: isCurrent ? "rgba(255,255,255,.2)" : isFeatured ? "transparent" : "var(--gv-color-primary-300, #8EC8C2)",
-                color: isCurrent ? (isFeatured ? "rgba(255,255,255,.4)" : "var(--gv-color-neutral-400)") : isFeatured ? "white" : "var(--gv-color-primary-600)",
-              }}>
-                {isCurrent ? "Plan Aktif" : isActive ? "Upgrade" : "Pilih Plan"}
-              </button>
-            </div>
-          );
-        })}
+            )}
+          </div>
+        )}
+
       </div>
     </div>
   );
@@ -1309,22 +1698,36 @@ function PasswordResetModal({ email, onClose }: { email: string; onClose: () => 
    Right Panel
 ══════════════════════════════════════════════════════════════ */
 function RightPanel({
-  activeTab, profile, sub, plans, user, onPasswordChange, connPlatform,
+  activeTab, profile, sub, user, quotas, invoices, brandCount,
+  onPasswordChange, onCancel, connPlatform,
 }: {
   activeTab: string;
   profile: BrandProfile | null;
   sub: Subscription | null;
-  plans: Plan[];
   user: { name: string; email: string; initials: string } | null;
+  quotas: PlanQuota[];
+  invoices: Invoice[];
+  brandCount: number;
   onPasswordChange: () => void;
+  onCancel: () => void;
   connPlatform: string;
 }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 0, overflowY: "auto", height: "100%" }}>
-      {activeTab === "101 Brand" && <div style={{ padding: "20px 20px 80px" }}><BrandTab profile={profile} /></div>}
-      {activeTab === "Chronicle" && <div style={{ padding: "20px 20px 80px" }}><ChronicleRight profile={profile} /></div>}
-      {activeTab === "Connect" && <ConnectRight profile={profile} selectedPlatform={connPlatform} />}
-      {activeTab === "Subscription" && <div style={{ padding: "20px 20px 80px" }}><SubscriptionTab sub={sub} plans={plans} user={user} onPasswordChange={onPasswordChange} /></div>}
+      {activeTab === "101 Brand"    && <div style={{ padding: "20px 20px 80px" }}><BrandTab profile={profile} /></div>}
+      {activeTab === "Chronicle"    && <div style={{ padding: "20px 20px 80px" }}><ChronicleRight profile={profile} /></div>}
+      {activeTab === "Connect"      && <ConnectRight profile={profile} selectedPlatform={connPlatform} />}
+      {activeTab === "Subscription" && (
+        <SubscriptionRight
+          sub={sub}
+          user={user}
+          quotas={quotas}
+          invoices={invoices}
+          brandCount={brandCount}
+          onCancel={onCancel}
+          onPasswordChange={onPasswordChange}
+        />
+      )}
     </div>
   );
 }
@@ -1333,24 +1736,27 @@ function RightPanel({
    Center Panel
 ══════════════════════════════════════════════════════════════ */
 function CenterPanel({
-  activeTab, profile, sub, plans, user, connPlatform, onConnPlatform,
+  activeTab, profile, sub, plans, user, quotas, connPlatform, onConnPlatform, onUpgrade, upgrading,
 }: {
   activeTab: string;
   profile: BrandProfile | null;
   sub: Subscription | null;
   plans: Plan[];
   user: { name: string; email: string; initials: string } | null;
+  quotas: PlanQuota[];
   connPlatform: string;
   onConnPlatform: (id: string) => void;
+  onUpgrade: (planId: string) => Promise<void>;
+  upgrading: string | null;
 }) {
   const sot = profile?.source_of_truth as Record<string, unknown> | null;
   const rd  = profile?.research_data  as Record<string, unknown> | null;
 
   // Market intelligence for 101 Brand center
-  const marketIntel = (sot?.market_intelligence as Record<string, unknown> | null) ?? null;
-  const competitors  = (sot?.competitor_intelligence as Array<Record<string, unknown>> | null) ?? [];
+  const marketIntel   = (sot?.market_intelligence as Record<string, unknown> | null) ?? null;
+  const competitors   = (sot?.competitor_intelligence as Array<Record<string, unknown>> | null) ?? [];
   const opportunities = (sot?.opportunity_map as Record<string, unknown> | null) ?? null;
-  const quickWins    = (opportunities?.immediate_wins as string[] | null) ?? [];
+  const quickWins     = (opportunities?.immediate_wins as string[] | null) ?? [];
 
   // Daily insights
   const dailyInsights = profile?.source_of_truth as Record<string, unknown> | null;
@@ -1362,6 +1768,18 @@ function CenterPanel({
       <div style={{ overflowY: "auto", height: "100%" }}>
         <ConnectCenter profile={profile} selectedPlatform={connPlatform} onSelectPlatform={onConnPlatform} />
       </div>
+    );
+  }
+
+  /* Subscription tab: full-page SubscriptionCenter (sb-* DS token pattern) */
+  if (activeTab === "Subscription") {
+    return (
+      <SubscriptionCenter
+        plans={plans}
+        sub={sub}
+        onUpgrade={onUpgrade}
+        upgrading={upgrading}
+      />
     );
   }
 
@@ -1455,33 +1873,6 @@ function CenterPanel({
       )}
 
       {activeTab === "Chronicle" && <ChronicleCenter profile={profile} />}
-
-      {activeTab === "Subscription" && (
-        <div style={{ background: "var(--gv-color-bg-surface)", border: "1.5px solid var(--gv-color-neutral-200)", borderRadius: 20, padding: "14px 16px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={ST.chronicle} strokeWidth="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-            <span style={{ fontFamily: "var(--gv-font-heading)", fontSize: 14, fontWeight: 800, color: "var(--gv-color-neutral-900)" }}>Riwayat Transaksi</span>
-          </div>
-          {sub ? (
-            <div>
-              {[
-                { lbl: "Invoice", val: sub.invoice_number ?? "—", mono: true },
-                { lbl: "Status", val: sub.status, mono: false },
-                { lbl: "Aktif Sejak", val: fmtDate(sub.activated_at), mono: false },
-                { lbl: "Berakhir", val: fmtDate(sub.expires_at), mono: false },
-                { lbl: "Bukti Transfer", val: sub.proof_url ? "Terkirim" : "Belum", mono: false },
-              ].map((r, i) => (
-                <div key={r.lbl} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 0", borderBottom: i < 4 ? "1px solid var(--gv-color-neutral-100)" : undefined }}>
-                  <span style={{ fontSize: 12, color: "var(--gv-color-neutral-500)" }}>{r.lbl}</span>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: "var(--gv-color-neutral-900)", fontFamily: r.mono ? "var(--gv-font-mono)" : undefined }}>{r.val}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div style={{ fontSize: 13, color: "var(--gv-color-neutral-500)", textAlign: "center", padding: "20px 0" }}>Belum ada transaksi.</div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -1491,13 +1882,17 @@ function CenterPanel({
 ══════════════════════════════════════════════════════════════ */
 export default function StartPage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState("101 Brand");
-  const [profile, setProfile] = useState<BrandProfile | null>(null);
-  const [sub, setSub] = useState<Subscription | null>(null);
-  const [plans, setPlans] = useState<Plan[]>([]);
-  const [user, setUser] = useState<{ name: string; email: string; initials: string } | null>(null);
+  const [activeTab, setActiveTab]     = useState("101 Brand");
+  const [profile, setProfile]         = useState<BrandProfile | null>(null);
+  const [sub, setSub]                 = useState<Subscription | null>(null);
+  const [plans, setPlans]             = useState<Plan[]>([]);
+  const [quotas, setQuotas]           = useState<PlanQuota[]>([]);
+  const [invoices, setInvoices]       = useState<Invoice[]>([]);
+  const [brandCount, setBrandCount]   = useState(0);
+  const [upgrading, setUpgrading]     = useState<string | null>(null);
+  const [user, setUser]               = useState<{ name: string; email: string; initials: string } | null>(null);
   const [showPwModal, setShowPwModal] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]         = useState(true);
   const [connPlatform, setConnPlatform] = useState("instagram");
 
   useEffect(() => {
@@ -1505,48 +1900,153 @@ export default function StartPage() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { router.replace("/signin"); return; }
 
+      const uid     = session.user.id;
       const email   = session.user.email ?? "";
       const rawName = (session.user.user_metadata?.full_name as string | undefined) || email.split("@")[0];
       const initials = rawName.split(" ").map((n: string) => n[0] ?? "").join("").toUpperCase().slice(0, 2);
       setUser({ name: rawName, email, initials });
 
-      // Load brand profile
-      const { data: bp } = await supabase
-        .from("brand_profiles")
-        .select("id, brand_name, website_url, instagram_handle, tiktok_handle, country, whatsapp_number, research_status, brand_dna, research_data, source_of_truth, chronicle_updated_at, qa_analytics, created_at")
-        .eq("user_id", session.user.id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
-      setProfile(bp ?? null);
+      // Run all fetches in parallel
+      const [
+        { data: bp },
+        { data: subData },
+        { data: plansData },
+        { data: quotasData },
+        { data: invoicesData },
+        { count: bpCount },
+      ] = await Promise.all([
+        // Brand profile (latest)
+        supabase
+          .from("brand_profiles")
+          .select("id, brand_name, website_url, instagram_handle, tiktok_handle, country, whatsapp_number, research_status, brand_dna, research_data, source_of_truth, chronicle_updated_at, qa_analytics, created_at")
+          .eq("user_id", uid)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .single(),
 
-      // Load active subscription with plan
-      const { data: subData } = await supabase
-        .from("subscriptions")
-        .select("id, status, invoice_number, activated_at, expires_at, proof_url, plans(id, name, slug, price_idr)")
-        .eq("user_id", session.user.id)
-        .in("status", ["active", "pending_payment", "proof_uploaded"])
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
+        // Active subscription (current plan)
+        supabase
+          .from("subscriptions")
+          .select("id, status, invoice_number, activated_at, expires_at, proof_url, plans(id, name, slug, price_idr)")
+          .eq("user_id", uid)
+          .in("status", ["active", "pending_payment", "proof_uploaded"])
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .single(),
+
+        // All plans (for plan selector)
+        supabase
+          .from("plans")
+          .select("id, name, slug, price_idr, is_active")
+          .eq("is_active", true)
+          .order("price_idr", { ascending: true }),
+
+        // Quota limits per plan
+        supabase
+          .from("plan_quotas")
+          .select("plan_name, brands_limit, onboarding_runs_limit, ai_chat_messages_per_day, content_articles_per_day, content_images_per_day, content_videos_per_day, qa_probes_total, qa_runs_per_cycle, chronicle_runs_per_cycle"),
+
+        // Full invoice history (all statuses)
+        supabase
+          .from("subscriptions")
+          .select("id, activated_at, expires_at, status, invoice_number, plans(name, slug, price_idr)")
+          .eq("user_id", uid)
+          .order("created_at", { ascending: false }),
+
+        // Brand profile count (for usage bar)
+        supabase
+          .from("brand_profiles")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", uid),
+      ]);
+
+      setProfile(bp ?? null);
 
       if (subData) {
         const planRaw = subData.plans as unknown as { id: string; name: string; slug: string; price_idr: number } | null;
         setSub({ ...subData, plan: planRaw });
       }
 
-      // Load all plans
-      const { data: plansData } = await supabase
-        .from("plans")
-        .select("id, name, slug, price_idr, is_active")
-        .eq("is_active", true)
-        .order("price_idr", { ascending: true });
       setPlans(plansData ?? []);
+      setQuotas(quotasData ?? []);
+      setBrandCount(bpCount ?? 0);
+
+      if (invoicesData) {
+        setInvoices(invoicesData.map(inv => ({
+          id: inv.id,
+          activated_at: inv.activated_at,
+          expires_at: inv.expires_at,
+          status: inv.status,
+          invoice_number: inv.invoice_number,
+          plan: inv.plans as unknown as { name: string; slug: string; price_idr: number } | null,
+        })));
+      }
 
       setLoading(false);
     }
     load();
   }, [router]);
+
+  /** Upgrade / create subscription — calls /api/payment (JWT-verified proxy) */
+  const handleUpgrade = async (planId: string) => {
+    setUpgrading(planId);
+    try {
+      const { data: { session: sess } } = await supabase.auth.getSession();
+      const token = sess?.access_token;
+      const res = await fetch("/api/payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ action: "request_subscription", plan_id: planId }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        // Reload active subscription
+        const { data: sd } = await supabase
+          .from("subscriptions")
+          .select("id, status, invoice_number, activated_at, expires_at, proof_url, plans(id, name, slug, price_idr)")
+          .eq("user_id", sess!.user.id)
+          .in("status", ["active", "pending_payment", "proof_uploaded"])
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .single();
+        if (sd) {
+          const planRaw = sd.plans as unknown as { id: string; name: string; slug: string; price_idr: number } | null;
+          setSub({ ...sd, plan: planRaw });
+        }
+        // Reload invoice history
+        const { data: invData } = await supabase
+          .from("subscriptions")
+          .select("id, activated_at, expires_at, status, invoice_number, plans(name, slug, price_idr)")
+          .eq("user_id", sess!.user.id)
+          .order("created_at", { ascending: false });
+        if (invData) {
+          setInvoices(invData.map(inv => ({
+            id: inv.id, activated_at: inv.activated_at, expires_at: inv.expires_at,
+            status: inv.status, invoice_number: inv.invoice_number,
+            plan: inv.plans as unknown as { name: string; slug: string; price_idr: number } | null,
+          })));
+        }
+      } else {
+        alert(json?.error ?? "Gagal membuat subscription. Silahkan coba lagi.");
+      }
+    } catch (err) {
+      console.error("handleUpgrade error:", err);
+      alert("Terjadi kesalahan. Periksa koneksi internet kamu.");
+    } finally {
+      setUpgrading(null);
+    }
+  };
+
+  /** Cancel active subscription — sets status to cancelled in DB */
+  const handleCancel = async () => {
+    if (!sub) return;
+    try {
+      await supabase.from("subscriptions").update({ status: "cancelled" }).eq("id", sub.id);
+      setSub(null);
+    } catch (err) {
+      console.error("handleCancel error:", err);
+    }
+  };
 
   if (loading) {
     return (
@@ -1573,8 +2073,11 @@ export default function StartPage() {
             sub={sub}
             plans={plans}
             user={user}
+            quotas={quotas}
             connPlatform={connPlatform}
             onConnPlatform={setConnPlatform}
+            onUpgrade={handleUpgrade}
+            upgrading={upgrading}
           />
         }
         right={
@@ -1582,9 +2085,12 @@ export default function StartPage() {
             activeTab={activeTab}
             profile={profile}
             sub={sub}
-            plans={plans}
             user={user}
+            quotas={quotas}
+            invoices={invoices}
+            brandCount={brandCount}
             onPasswordChange={() => setShowPwModal(true)}
+            onCancel={handleCancel}
             connPlatform={connPlatform}
           />
         }
