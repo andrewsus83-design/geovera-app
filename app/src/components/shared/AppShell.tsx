@@ -43,6 +43,11 @@ const AnalyticIcon = mkIcon(16, <>
   <line x1="6" y1="20" x2="6" y2="14"/>
 </>);
 
+const SmartReplyIcon = mkIcon(16, <>
+  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+  <polyline points="10 8 13 11 17 7"/>
+</>);
+
 /* ── User menu icons (15×15) ── */
 const SettingsIcon = mkIcon(15, <>
   <circle cx="12" cy="12" r="3"/>
@@ -92,18 +97,22 @@ const TList      = T(<><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" 
 const TSearch    = T(<><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></>);
 const TGlobe     = T(<><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></>);
 const TBars      = T(<><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></>);
+const TEdit      = T(<><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></>);
+const TBolt      = T(<><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></>);
+const TGear      = T(<><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></>);
 
 /* ── Nav definitions ── */
 const NAV_ITEMS = [
-  { icon: <HubIcon />,      name: "Start",          path: "/start"          },
-  { icon: <AIChatIcon />,   name: "AI Chat",        path: "/ai-chat"        },
-  { icon: <ContentIcon />,  name: "Content Engine", path: "/content-studio" },
-  { icon: <CalendarIcon />, name: "Calendar",       path: "/calendar"       },
-  { icon: <AnalyticIcon />, name: "Analytics",      path: "/analytics"      },
+  { icon: <HubIcon />,          name: "Start",          path: "/start"          },
+  { icon: <AIChatIcon />,       name: "AI Chat",        path: "/ai-chat"        },
+  { icon: <SmartReplyIcon />,   name: "Smart Reply",    path: "/auto-reply"     },
+  { icon: <ContentIcon />,      name: "Content Engine", path: "/content-studio" },
+  { icon: <CalendarIcon />,     name: "Calendar",       path: "/calendar"       },
+  { icon: <AnalyticIcon />,     name: "Analytics",      path: "/analytics"      },
 ];
 
 /* Divider appears before these nav paths */
-const NAV_DIVIDER_BEFORE = new Set(["/analytics"]);
+const NAV_DIVIDER_BEFORE = new Set(["/content-studio", "/analytics"]);
 
 /* ── Tab map per section ── */
 type TabDef = { key: string; label: string; icon: React.ReactNode };
@@ -124,6 +133,14 @@ const TAB_MAP: Record<string, SectionDef> = {
       { key: "Chat",    label: "Chat",    icon: <TChat /> },
       { key: "Docs",    label: "Docs",    icon: <TFile /> },
       { key: "History", label: "History", icon: <TClock /> },
+    ],
+  },
+  "/auto-reply": {
+    label: "Smart Reply",
+    tabs: [
+      { key: "Manual Reply", label: "Manual Reply", icon: <TEdit /> },
+      { key: "Auto Reply",   label: "Auto Reply",   icon: <TBolt /> },
+      { key: "Setting",      label: "Setting",      icon: <TGear /> },
     ],
   },
   "/content-studio": {
