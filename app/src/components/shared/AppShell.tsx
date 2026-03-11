@@ -35,6 +35,15 @@ const ContentIcon = () => (
   </svg>
 );
 
+const SmartReplyIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square" strokeLinejoin="miter">
+    <path d="M21 11.5C21 16.75 16.97 21 12 21C10.5 21 9.1 20.65 7.85 20.05L3 21L4.35 16.85C3.45 15.45 3 13.8 3 12C3 7.03 7.03 3 12 3C16.97 3 21 7.03 21 11.5Z" />
+    <circle cx="8"  cy="12" r="1" fill="currentColor" stroke="none" />
+    <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
+    <circle cx="16" cy="12" r="1" fill="currentColor" stroke="none" />
+  </svg>
+);
+
 const AnalyticIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square" strokeLinejoin="miter">
     <polyline points="3 17 9 11 13 15 21 7" />
@@ -65,10 +74,11 @@ const ChevronUpIcon = () => (
 
 /* ── Nav definitions ── */
 const NAV_ITEMS = [
-  { icon: <HubIcon />,      name: "Start",          path: "/start"          },
-  { icon: <AIChatIcon />,   name: "AI Chat",        path: "/ai-chat"        },
-  { icon: <ContentIcon />,  name: "Content Engine", path: "/content-studio" },
-  { icon: <AnalyticIcon />, name: "Analytics",      path: "/analytics"      },
+  { icon: <HubIcon />,        name: "Start",          path: "/start"          },
+  { icon: <AIChatIcon />,     name: "AI Chat",        path: "/ai-chat"        },
+  { icon: <ContentIcon />,    name: "Content Engine", path: "/content-studio" },
+  { icon: <SmartReplyIcon />, name: "Smart Reply",    path: "/auto-reply"     },
+  { icon: <AnalyticIcon />,   name: "Analytics",      path: "/analytics"      },
 ];
 
 /* Submenu items per section */
@@ -76,6 +86,7 @@ const SUBMENUS: Record<string, string[]> = {
   "/start":          ["101 Brand", "Connect", "Subscription"],
   "/ai-chat":        ["Chat", "Docs", "History"],
   "/content-studio": ["Article", "Image", "Video"],
+  "/auto-reply":     ["Manual", "Auto", "Setting"],
   "/analytics":      ["SEO", "GEO", "Social Search"],
 };
 
@@ -84,6 +95,7 @@ const MODE_ACCENTS: Record<string, string> = {
   "/start":          "var(--gv7-mode-general-accent)",
   "/ai-chat":        "var(--gv7-mode-general-accent)",
   "/content-studio": "var(--gv7-mode-seo-accent)",
+  "/auto-reply":     "var(--gv7-mode-social-accent)",
   "/analytics":      "var(--gv7-mode-geo-accent)",
 };
 
