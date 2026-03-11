@@ -796,7 +796,7 @@ function ConnectCenter({
     CONNECT_PLATFORMS
       .filter(p => {
         if (!p.fieldKey || !profile) return false;
-        const v = (profile as Record<string, unknown>)[p.fieldKey];
+        const v = (profile as unknown as Record<string, unknown>)[p.fieldKey];
         return v && String(v).trim() !== "";
       })
       .map(p => p.id)
@@ -855,7 +855,7 @@ function ConnectCenter({
           {CONNECT_PLATFORMS.map(p => {
             const isConnected = connectedIds.has(p.id);
             const isSelected = selectedPlatform === p.id;
-            const handle = p.fieldKey && profile ? (profile as Record<string, unknown>)[p.fieldKey] as string : null;
+            const handle = p.fieldKey && profile ? (profile as unknown as Record<string, unknown>)[p.fieldKey] as string : null;
             return (
               <div
                 key={p.id}
@@ -983,8 +983,8 @@ function ConnectRight({
   selectedPlatform: string;
 }) {
   const plat = CONNECT_PLATFORMS.find(p => p.id === selectedPlatform) ?? CONNECT_PLATFORMS[0];
-  const isConnected = !!(plat.fieldKey && profile && (profile as Record<string, unknown>)[plat.fieldKey] && String((profile as Record<string, unknown>)[plat.fieldKey]).trim());
-  const handle = plat.fieldKey && profile ? (profile as Record<string, unknown>)[plat.fieldKey] as string : null;
+  const isConnected = !!(plat.fieldKey && profile && (profile as unknown as Record<string, unknown>)[plat.fieldKey] && String((profile as unknown as Record<string, unknown>)[plat.fieldKey]).trim());
+  const handle = plat.fieldKey && profile ? (profile as unknown as Record<string, unknown>)[plat.fieldKey] as string : null;
   const brandName = profile?.brand_name ?? "Brand Kamu";
   const tagline = ((profile?.brand_dna as Record<string, unknown> | null)?.tagline as string | undefined) ?? "";
 
@@ -1371,10 +1371,10 @@ function SubscriptionRight({
 
   // Usage bars
   const usageBars = quota ? [
-    { name: "Brand Monitor",    current: brandCount, limit: quota.brands_limit,              warn: brandCount >= Math.ceil(quota.brands_limit * 0.75) },
-    { name: "AI Chat / Hari",   current: 0,          limit: quota.ai_chat_messages_per_day,  warn: false },
-    { name: "Artikel / Bulan",  current: 0,          limit: quota.content_articles_per_day,  warn: false },
-    { name: "Signal Cycles",    current: 0,          limit: quota.qa_runs_per_cycle,          warn: false },
+    { name: "Brand Monitor",   current: brandCount, limit: quota.brands_limit,             warn: brandCount >= Math.ceil(quota.brands_limit * 0.75) },
+    { name: "AI Chat / Hari",  current: 0,          limit: quota.ai_chat_messages_per_day, warn: false },
+    { name: "Artikel / Hari",  current: 0,          limit: quota.content_articles_per_day, warn: false },
+    { name: "Signal Cycles",   current: 0,          limit: quota.qa_runs_per_cycle,         warn: false },
   ] : [];
 
   /* ── shared: password reset section ── */
@@ -1606,7 +1606,7 @@ function SubscriptionRight({
 ══════════════════════════════════════════════════════════════ */
 function StartHeader({ profile, sub }: { profile: BrandProfile | null; sub: Subscription | null }) {
   const stats = [
-    { mod: "c", icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>, val: CONNECT_PLATFORMS.filter(p => profile && p.fieldKey && (profile as Record<string, unknown>)[p.fieldKey]).length, lb: "Platforms" },
+    { mod: "c", icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>, val: CONNECT_PLATFORMS.filter(p => profile && p.fieldKey && (profile as unknown as Record<string, unknown>)[p.fieldKey]).length, lb: "Platforms" },
     { mod: "r", icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>, val: profile?.research_data ? 1 : 0, lb: "Research" },
     { mod: "d", icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>, val: profile?.source_of_truth ? 1 : 0, lb: "Deep" },
     { mod: "ch", icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>, val: profile?.chronicle_updated_at ? 1 : 0, lb: "Chronicle" },
@@ -1736,14 +1736,12 @@ function RightPanel({
    Center Panel
 ══════════════════════════════════════════════════════════════ */
 function CenterPanel({
-  activeTab, profile, sub, plans, user, quotas, connPlatform, onConnPlatform, onUpgrade, upgrading,
+  activeTab, profile, sub, plans, connPlatform, onConnPlatform, onUpgrade, upgrading,
 }: {
   activeTab: string;
   profile: BrandProfile | null;
   sub: Subscription | null;
   plans: Plan[];
-  user: { name: string; email: string; initials: string } | null;
-  quotas: PlanQuota[];
   connPlatform: string;
   onConnPlatform: (id: string) => void;
   onUpgrade: (planId: string) => Promise<void>;
@@ -1827,7 +1825,7 @@ function CenterPanel({
                       <div style={{ fontSize: 13, fontWeight: 700, color: "var(--gv-color-neutral-900)" }}>{String(c.name ?? "—")}</div>
                       <div style={{ fontSize: 11, color: "var(--gv-color-neutral-400)", marginTop: 1 }}>{String(c.website ?? c.strengths ?? "").slice(0, 80)}</div>
                     </div>
-                    {c.threat_level && (
+                    {c.threat_level != null && (
                       <span style={{ fontFamily: "var(--gv-font-mono)", fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 9999,
                         background: c.threat_level === "high" ? "var(--gv-color-danger-50)" : c.threat_level === "medium" ? "var(--gv-color-warning-50)" : "var(--gv-color-success-50)",
                         color: c.threat_level === "high" ? "var(--gv-color-danger-700)" : c.threat_level === "medium" ? "var(--gv-color-warning-700)" : "var(--gv-color-success-700)",
@@ -1906,145 +1904,198 @@ export default function StartPage() {
       const initials = rawName.split(" ").map((n: string) => n[0] ?? "").join("").toUpperCase().slice(0, 2);
       setUser({ name: rawName, email, initials });
 
-      // Run all fetches in parallel
-      const [
-        { data: bp },
-        { data: subData },
-        { data: plansData },
-        { data: quotasData },
-        { data: invoicesData },
-        { count: bpCount },
-      ] = await Promise.all([
-        // Brand profile (latest)
-        supabase
-          .from("brand_profiles")
-          .select("id, brand_name, website_url, instagram_handle, tiktok_handle, country, whatsapp_number, research_status, brand_dna, research_data, source_of_truth, chronicle_updated_at, qa_analytics, created_at")
-          .eq("user_id", uid)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .single(),
+      // Run all fetches in parallel — BUG 3 FIX: wrap in try/catch so network
+      // errors don't leave the page stuck on the infinite spinner
+      try {
+        const [
+          { data: bp },
+          { data: subData },
+          { data: plansData },
+          { data: quotasData },
+          { data: invoicesData },
+          { count: bpCount },
+        ] = await Promise.all([
+          // Brand profile (latest) — .single() returns data:null on PGRST116, not throw
+          supabase
+            .from("brand_profiles")
+            .select("id, brand_name, website_url, instagram_handle, tiktok_handle, country, research_status, brand_dna, research_data, source_of_truth, chronicle_updated_at, qa_analytics, created_at")
+            .eq("user_id", uid)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .single(),
 
-        // Active subscription (current plan)
-        supabase
-          .from("subscriptions")
-          .select("id, status, invoice_number, activated_at, expires_at, proof_url, plans(id, name, slug, price_idr)")
-          .eq("user_id", uid)
-          .in("status", ["active", "pending_payment", "proof_uploaded"])
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .single(),
+          // Active / pending subscription with plan join
+          supabase
+            .from("subscriptions")
+            .select("id, status, invoice_number, activated_at, expires_at, proof_url, plans(id, name, slug, price_idr)")
+            .eq("user_id", uid)
+            .in("status", ["active", "pending_payment", "proof_uploaded"])
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .single(),
 
-        // All plans (for plan selector)
-        supabase
-          .from("plans")
-          .select("id, name, slug, price_idr, is_active")
-          .eq("is_active", true)
-          .order("price_idr", { ascending: true }),
+          // All active plans ordered by price (free first)
+          supabase
+            .from("plans")
+            .select("id, name, slug, price_idr, is_active")
+            .eq("is_active", true)
+            .order("price_idr", { ascending: true })
+            .limit(10),
 
-        // Quota limits per plan
-        supabase
-          .from("plan_quotas")
-          .select("plan_name, brands_limit, onboarding_runs_limit, ai_chat_messages_per_day, content_articles_per_day, content_images_per_day, content_videos_per_day, qa_probes_total, qa_runs_per_cycle, chronicle_runs_per_cycle"),
+          // Quota limits — all rows (no filter, small table)
+          supabase
+            .from("plan_quotas")
+            .select("plan_name, brands_limit, onboarding_runs_limit, ai_chat_messages_per_day, content_articles_per_day, content_images_per_day, content_videos_per_day, qa_probes_total, qa_runs_per_cycle, chronicle_runs_per_cycle"),
 
-        // Full invoice history (all statuses)
-        supabase
-          .from("subscriptions")
-          .select("id, activated_at, expires_at, status, invoice_number, plans(name, slug, price_idr)")
-          .eq("user_id", uid)
-          .order("created_at", { ascending: false }),
+          // Full invoice history (all statuses, most recent first)
+          supabase
+            .from("subscriptions")
+            .select("id, activated_at, expires_at, status, invoice_number, plans(name, slug, price_idr)")
+            .eq("user_id", uid)
+            .order("created_at", { ascending: false }),
 
-        // Brand profile count (for usage bar)
-        supabase
-          .from("brand_profiles")
-          .select("id", { count: "exact", head: true })
-          .eq("user_id", uid),
-      ]);
+          // Brand profile count for usage bar
+          supabase
+            .from("brand_profiles")
+            .select("id", { count: "exact", head: true })
+            .eq("user_id", uid),
+        ]);
 
-      setProfile(bp ?? null);
+        setProfile(bp ?? null);
 
-      if (subData) {
-        const planRaw = subData.plans as unknown as { id: string; name: string; slug: string; price_idr: number } | null;
-        setSub({ ...subData, plan: planRaw });
+        if (subData) {
+          const planRaw = subData.plans as unknown as { id: string; name: string; slug: string; price_idr: number } | null;
+          setSub({ ...subData, plan: planRaw });
+        }
+
+        setPlans(plansData ?? []);
+        setQuotas(quotasData ?? []);
+        setBrandCount(bpCount ?? 0);
+
+        if (invoicesData) {
+          setInvoices(invoicesData.map(inv => ({
+            id: inv.id,
+            activated_at: inv.activated_at,
+            expires_at: inv.expires_at,
+            status: inv.status,
+            invoice_number: inv.invoice_number,
+            plan: inv.plans as unknown as { name: string; slug: string; price_idr: number } | null,
+          })));
+        }
+      } catch (err) {
+        console.error("[StartPage] load error:", err);
+      } finally {
+        setLoading(false);
       }
-
-      setPlans(plansData ?? []);
-      setQuotas(quotasData ?? []);
-      setBrandCount(bpCount ?? 0);
-
-      if (invoicesData) {
-        setInvoices(invoicesData.map(inv => ({
-          id: inv.id,
-          activated_at: inv.activated_at,
-          expires_at: inv.expires_at,
-          status: inv.status,
-          invoice_number: inv.invoice_number,
-          plan: inv.plans as unknown as { name: string; slug: string; price_idr: number } | null,
-        })));
-      }
-
-      setLoading(false);
     }
     load();
   }, [router]);
 
-  /** Upgrade / create subscription — calls /api/payment (JWT-verified proxy) */
+  /** Helper — reloads subscription + invoice list after any mutation */
+  const reloadSubData = async (uid: string) => {
+    const [{ data: sd }, { data: invData }] = await Promise.all([
+      supabase
+        .from("subscriptions")
+        .select("id, status, invoice_number, activated_at, expires_at, proof_url, plans(id, name, slug, price_idr)")
+        .eq("user_id", uid)
+        .in("status", ["active", "pending_payment", "proof_uploaded"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single(),
+      supabase
+        .from("subscriptions")
+        .select("id, activated_at, expires_at, status, invoice_number, plans(name, slug, price_idr)")
+        .eq("user_id", uid)
+        .order("created_at", { ascending: false }),
+    ]);
+    if (sd) {
+      const planRaw = sd.plans as unknown as { id: string; name: string; slug: string; price_idr: number } | null;
+      setSub({ ...sd, plan: planRaw });
+    } else {
+      setSub(null);
+    }
+    if (invData) {
+      setInvoices(invData.map(inv => ({
+        id: inv.id, activated_at: inv.activated_at, expires_at: inv.expires_at,
+        status: inv.status, invoice_number: inv.invoice_number,
+        plan: inv.plans as unknown as { name: string; slug: string; price_idr: number } | null,
+      })));
+    }
+  };
+
+  /**
+   * BUG 1 FIX: Upgrade / create subscription — calls /api/payment (JWT-verified proxy).
+   * Now correctly forwards email + full_name so send-invoice can deliver the payment email.
+   * BUG 4 FIX: Guard against expired session before making the API call.
+   */
   const handleUpgrade = async (planId: string) => {
     setUpgrading(planId);
     try {
       const { data: { session: sess } } = await supabase.auth.getSession();
-      const token = sess?.access_token;
+
+      // Guard: session may have expired between page load and click
+      if (!sess) {
+        alert("Sesi kamu sudah berakhir. Silahkan login ulang.");
+        router.replace("/signin");
+        return;
+      }
+
+      const token    = sess.access_token;
+      const email    = sess.user.email ?? "";
+      const fullName = (sess.user.user_metadata?.full_name as string | undefined)
+        ?? email.split("@")[0];
+
       const res = await fetch("/api/payment", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-        body: JSON.stringify({ action: "request_subscription", plan_id: planId }),
+        body: JSON.stringify({
+          action:    "request_subscription",
+          plan_id:   planId,
+          email,                 // required by send-invoice
+          full_name: fullName,   // required by send-invoice
+        }),
       });
       const json = await res.json();
+
       if (res.ok) {
-        // Reload active subscription
-        const { data: sd } = await supabase
-          .from("subscriptions")
-          .select("id, status, invoice_number, activated_at, expires_at, proof_url, plans(id, name, slug, price_idr)")
-          .eq("user_id", sess!.user.id)
-          .in("status", ["active", "pending_payment", "proof_uploaded"])
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .single();
-        if (sd) {
-          const planRaw = sd.plans as unknown as { id: string; name: string; slug: string; price_idr: number } | null;
-          setSub({ ...sd, plan: planRaw });
-        }
-        // Reload invoice history
-        const { data: invData } = await supabase
-          .from("subscriptions")
-          .select("id, activated_at, expires_at, status, invoice_number, plans(name, slug, price_idr)")
-          .eq("user_id", sess!.user.id)
-          .order("created_at", { ascending: false });
-        if (invData) {
-          setInvoices(invData.map(inv => ({
-            id: inv.id, activated_at: inv.activated_at, expires_at: inv.expires_at,
-            status: inv.status, invoice_number: inv.invoice_number,
-            plan: inv.plans as unknown as { name: string; slug: string; price_idr: number } | null,
-          })));
-        }
+        await reloadSubData(sess.user.id);
       } else {
         alert(json?.error ?? "Gagal membuat subscription. Silahkan coba lagi.");
       }
     } catch (err) {
-      console.error("handleUpgrade error:", err);
-      alert("Terjadi kesalahan. Periksa koneksi internet kamu.");
+      console.error("[handleUpgrade] error:", err);
+      alert("Terjadi kesalahan jaringan. Periksa koneksi internet kamu.");
     } finally {
       setUpgrading(null);
     }
   };
 
-  /** Cancel active subscription — sets status to cancelled in DB */
+  /**
+   * BUG 2 FIX: Cancel active subscription.
+   * Uses the authenticated Supabase client (JWT auto-attached from browser session).
+   * RLS UPDATE policy now enforces users can only set their own sub to 'cancelled'.
+   * Checks for DB errors, reloads invoice history after success.
+   */
   const handleCancel = async () => {
     if (!sub) return;
     try {
-      await supabase.from("subscriptions").update({ status: "cancelled" }).eq("id", sub.id);
-      setSub(null);
+      const { error } = await supabase
+        .from("subscriptions")
+        .update({ status: "cancelled" })
+        .eq("id", sub.id);
+
+      if (error) throw error;
+
+      // Reload both sub state and invoice history to reflect new status
+      const { data: { session: sess } } = await supabase.auth.getSession();
+      if (sess) {
+        await reloadSubData(sess.user.id);
+      } else {
+        setSub(null);
+      }
     } catch (err) {
-      console.error("handleCancel error:", err);
+      console.error("[handleCancel] error:", err);
+      alert("Gagal membatalkan langganan. Silahkan coba lagi atau hubungi support.");
     }
   };
 
@@ -2072,8 +2123,6 @@ export default function StartPage() {
             profile={profile}
             sub={sub}
             plans={plans}
-            user={user}
-            quotas={quotas}
             connPlatform={connPlatform}
             onConnPlatform={setConnPlatform}
             onUpgrade={handleUpgrade}
