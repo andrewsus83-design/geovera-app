@@ -53,33 +53,63 @@ const ST = {
   dark: "#0F1923", dark2: "#162030",
 };
 
-/* ── Platform logos ── */
-const PLATFORMS = [
+/* ── Connect DS: gv_start_connect platform definitions ── */
+interface ConnectPlatformDef {
+  id: string; name: string; fieldKey: string | null;
+  logo: React.ReactNode;
+  coverGrad: string;  // platform identity cover gradient
+}
+
+const CONNECT_PLATFORMS: ConnectPlatformDef[] = [
   {
-    id: "instagram", name: "Instagram",
+    id: "instagram", name: "Instagram", fieldKey: "instagram_handle",
+    coverGrad: "linear-gradient(135deg,#f09433 0%,#e6683c 25%,#dc2743 50%,#cc2366 75%,#bc1888 100%)",
     logo: <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>,
-    fieldKey: "instagram_handle",
   },
   {
-    id: "tiktok", name: "TikTok",
+    id: "tiktok", name: "TikTok", fieldKey: "tiktok_handle",
+    coverGrad: "linear-gradient(135deg,#010101,#2a2a2a)",
     logo: <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.28 6.28 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.69a8.15 8.15 0 0 0 4.77 1.52V6.75a4.85 4.85 0 0 1-1-.06z"/></svg>,
-    fieldKey: "tiktok_handle",
   },
   {
-    id: "linkedin", name: "LinkedIn",
-    logo: <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect width="4" height="12" x="2" y="9"/><circle cx="4" cy="4" r="2"/></svg>,
-    fieldKey: null,
-  },
-  {
-    id: "youtube", name: "YouTube",
+    id: "youtube", name: "YouTube", fieldKey: null,
+    coverGrad: "linear-gradient(135deg,#CC0000,#FF0000)",
     logo: <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46a2.78 2.78 0 0 0-1.95 1.96A29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58A2.78 2.78 0 0 0 3.41 19.6C5.12 20 12 20 12 20s6.88 0 8.59-.46a2.78 2.78 0 0 0 1.95-1.95A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z"/><polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="white"/></svg>,
-    fieldKey: null,
   },
   {
-    id: "whatsapp", name: "WhatsApp",
-    logo: <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.12 1.527 5.854L.057 23.928a.5.5 0 0 0 .609.637l6.333-1.657A11.942 11.942 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.907 0-3.69-.513-5.22-1.406l-.374-.222-3.88 1.016 1.035-3.775-.243-.389A9.957 9.957 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>,
-    fieldKey: "whatsapp_number",
+    id: "twitter", name: "X (Twitter)", fieldKey: null,
+    coverGrad: "linear-gradient(135deg,#1a1a1a,#333)",
+    logo: <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>,
   },
+  {
+    id: "linkedin", name: "LinkedIn", fieldKey: null,
+    coverGrad: "linear-gradient(135deg,#004182,#0A66C2)",
+    logo: <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452z"/></svg>,
+  },
+  {
+    id: "facebook", name: "Facebook", fieldKey: null,
+    coverGrad: "linear-gradient(135deg,#0d47a1,#1877F2)",
+    logo: <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>,
+  },
+  {
+    id: "pinterest", name: "Pinterest", fieldKey: null,
+    coverGrad: "linear-gradient(135deg,#8b0000,#E60023)",
+    logo: <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0a12 12 0 0 0-4.373 23.178c-.01-.937-.002-2.065.233-3.085l1.676-7.1s-.428-.856-.428-2.121c0-1.988 1.153-3.473 2.586-3.473 1.219 0 1.81.915 1.81 2.013 0 1.227-.782 3.065-1.186 4.768-.337 1.425.714 2.585 2.12 2.585 2.546 0 4.255-3.27 4.255-7.14 0-2.944-1.988-5.133-5.576-5.133-4.06 0-6.575 3.03-6.575 6.41 0 1.162.337 1.985.863 2.614.242.286.275.4.187.73-.062.24-.203.82-.262 1.048-.087.33-.352.45-.645.327-1.797-.738-2.636-2.722-2.636-4.952 0-3.67 3.09-8.083 9.221-8.083 4.951 0 8.218 3.594 8.218 7.452 0 5.1-2.834 8.903-7.007 8.903-1.4 0-2.72-.758-3.17-1.612l-.862 3.33c-.312 1.144-1.16 2.577-1.727 3.449A12 12 0 1 0 12 0z"/></svg>,
+  },
+  {
+    id: "threads", name: "Threads", fieldKey: null,
+    coverGrad: "linear-gradient(135deg,#0d0d0d,#2a2a2a)",
+    logo: <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12.186 24h-.007c-3.581-.024-6.334-1.205-8.184-3.509C2.35 18.44 1.5 15.586 1.5 12.01v-.017c.024-7.533 4.76-11.993 10.52-11.993h.013c4.21.013 6.927 1.989 8.11 5.23.347.953.544 2.032.594 3.195.04.974-.096 1.906-.395 2.745-.77 2.164-2.537 3.395-4.89 3.395-.923 0-1.804-.275-2.548-.796a3.35 3.35 0 0 1-3.222 2.418 3.373 3.373 0 0 1-3.373-3.373c0-.898.35-1.715.916-2.322C7.447 9.57 8.654 8.918 10.39 8.918c.466 0 .906.057 1.313.169V8.2c0-.888-.72-1.608-1.609-1.608-.564 0-1.063.29-1.35.73L6.99 6.39c.6-1.066 1.74-1.785 3.049-1.785 1.934 0 3.508 1.574 3.508 3.508v3.59c.354.505.571 1.122.571 1.788a3.373 3.373 0 0 1-3.373 3.373z"/></svg>,
+  },
+];
+
+/* ── Recommended Indonesian platforms (URL-only, no API) ── */
+const REC_PLATFORMS = [
+  { id: "kompasiana", name: "Kompasiana", tag: "UGC · Kompas", logoColor: "#E31E24", initial: "K", placeholder: "https://www.kompasiana.com/username" },
+  { id: "detik", name: "Blog Detik", tag: "Blog UGC", logoColor: "#E4002B", initial: "D", placeholder: "https://blog.detik.com/username" },
+  { id: "mojok", name: "Mojok.co", tag: "Gen-Z · Opini", logoColor: "#FF6B35", initial: "Mo", placeholder: "https://mojok.co/terminal/username" },
+  { id: "idntimes", name: "IDN Times Community", tag: "Mass Reach", logoColor: "#5433FF", initial: "I", placeholder: "https://www.idntimes.com/community/username" },
+  { id: "medium", name: "Medium", tag: "Thought Leadership", logoColor: "#222222", initial: "M", placeholder: "https://medium.com/@username" },
 ];
 
 /* ── Plan feature lists ── */
@@ -104,6 +134,13 @@ function timeAgo(s: string | null) {
   if (days === 0) return "Hari ini";
   if (days === 1) return "Kemarin";
   return `${days} hari lalu`;
+}
+function fmtNumber(n: number | unknown) {
+  const v = Number(n);
+  if (isNaN(v)) return "—";
+  if (v >= 1000000) return (v / 1000000).toFixed(1) + "M";
+  if (v >= 1000) return (v / 1000).toFixed(1) + "K";
+  return String(v);
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -683,83 +720,338 @@ function ChronicleRight({ profile }: { profile: BrandProfile | null }) {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   Tab: Connect
+   Connect — Center Column
+   DS: gv_start_connect (cn-* token system)
 ══════════════════════════════════════════════════════════════ */
-function ConnectTab({ profile }: { profile: BrandProfile | null }) {
-  const connected = PLATFORMS.filter(p => {
-    if (!profile) return false;
-    if (!p.fieldKey) return false;
-    const val = (profile as Record<string, unknown>)[p.fieldKey];
-    return val && String(val).trim() !== "";
-  });
-  const disconnected = PLATFORMS.filter(p => !connected.includes(p));
+function ConnectCenter({
+  profile, selectedPlatform, onSelectPlatform,
+}: {
+  profile: BrandProfile | null;
+  selectedPlatform: string;
+  onSelectPlatform: (id: string) => void;
+}) {
+  const [recUrls, setRecUrls] = useState<Record<string, string>>({});
+
+  const connectedIds = new Set(
+    CONNECT_PLATFORMS
+      .filter(p => {
+        if (!p.fieldKey || !profile) return false;
+        const v = (profile as Record<string, unknown>)[p.fieldKey];
+        return v && String(v).trim() !== "";
+      })
+      .map(p => p.id)
+  );
+  const connectedCount = connectedIds.size;
+  const availableCount = CONNECT_PLATFORMS.length - connectedCount;
+
+  /* icon helper */
+  const LinkIcon = () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+    </svg>
+  );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* Platform Grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
-        {PLATFORMS.map(p => {
-          const isOn = connected.includes(p);
-          const handle = profile && p.fieldKey ? (profile as Record<string, unknown>)[p.fieldKey] as string : null;
-          return (
-            <div key={p.id} style={{
-              padding: "14px 10px", borderRadius: 16,
-              border: `1.5px solid ${isOn ? "var(--gv-color-primary-500, #5F8F8B)" : "var(--gv-color-neutral-200)"}`,
-              background: isOn ? "var(--gv-color-primary-50)" : "var(--gv-color-bg-surface-elevated)",
-              display: "flex", flexDirection: "column", alignItems: "center", gap: 8, position: "relative",
-              cursor: "pointer",
-            }}>
-              {isOn && (
-                <div style={{ position: "absolute", top: 7, right: 7, width: 7, height: 7, borderRadius: "50%", background: "var(--gv-color-success-500)", boxShadow: "0 0 0 2px var(--gv-color-success-50, #ECFDF3)" }} />
-              )}
-              <div style={{ width: 38, height: 38, borderRadius: 10, background: isOn ? "var(--gv-color-primary-100)" : "var(--gv-color-neutral-100)", display: "flex", alignItems: "center", justifyContent: "center", color: isOn ? "var(--gv-color-primary-600)" : "var(--gv-color-neutral-700)" }}>
-                {p.logo}
-              </div>
-              <div style={{ fontFamily: "var(--gv-font-heading)", fontSize: 12, fontWeight: 700, color: isOn ? "var(--gv-color-primary-700)" : "var(--gv-color-neutral-700)", textAlign: "center" }}>{p.name}</div>
-              <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: 11, color: isOn ? "var(--gv-color-success-500)" : "var(--gv-color-neutral-400)" }}>
-                {isOn ? (handle ? `@${handle}` : "Connected") : "Connect"}
-              </div>
-            </div>
-          );
-        })}
+    <div style={{ padding: "24px 28px 120px" }}>
+
+      {/* ── cn-hdr ── */}
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--gv-font-mono)", fontSize: "var(--gv-font-size-xs)", fontWeight: 700, color: "var(--gv-color-neutral-400)", textTransform: "uppercase", letterSpacing: "0.10em", marginBottom: 8 }}>
+          <span style={{ width: 16, height: 2, background: "var(--gv-gradient-primary)", borderRadius: 2, flexShrink: 0 }} />
+          Social Discovery
+        </div>
+        <h1 style={{ fontFamily: "var(--gv-font-heading)", fontSize: "var(--gv-font-size-5xl)", fontWeight: 900, color: "var(--gv-color-neutral-900)", letterSpacing: "-0.04em", lineHeight: 1.15, margin: "0 0 8px" }}>
+          Hubungkan{" "}
+          <span style={{ background: "var(--gv-gradient-primary)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
+            Platform Kamu
+          </span>
+        </h1>
+        <p style={{ fontFamily: "var(--gv-font-body)", fontSize: "var(--gv-font-size-md)", color: "var(--gv-color-neutral-500)", lineHeight: 1.6, margin: 0 }}>
+          Satu dashboard untuk semua platform. GeoVera lacak perjalanan digital brand kamu secara real-time.
+        </p>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
+          <span style={{ display: "inline-flex", alignItems: "center", height: 26, padding: "0 8px", borderRadius: 9999, border: "1.5px solid var(--gv-color-success-200)", background: "var(--gv-color-success-50)", fontFamily: "var(--gv-font-mono)", fontSize: 11, fontWeight: 700, color: "var(--gv-color-success-700)", letterSpacing: "0.04em" }}>
+            {connectedCount} Connected
+          </span>
+          <span style={{ display: "inline-flex", alignItems: "center", height: 26, padding: "0 8px", borderRadius: 9999, border: "1.5px solid var(--gv-color-warning-200)", background: "var(--gv-color-warning-50)", fontFamily: "var(--gv-font-mono)", fontSize: 11, fontWeight: 700, color: "var(--gv-color-warning-700)", letterSpacing: "0.04em" }}>
+            {availableCount} Tersedia
+          </span>
+        </div>
       </div>
 
-      {/* Connected platforms detail */}
-      {connected.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: 11, fontWeight: 700, color: "var(--gv-color-neutral-400)", textTransform: "uppercase", letterSpacing: ".1em" }}>Platform Terkoneksi</div>
-          {connected.map(p => {
-            const handle = profile && p.fieldKey ? (profile as Record<string, unknown>)[p.fieldKey] as string : "";
+      {/* ── cn-section: Platform Tersedia ── */}
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+          <div style={{ width: 34, height: 34, borderRadius: "var(--gv-radius-xs)", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid var(--gv-color-primary-200)", background: "var(--gv-color-primary-50)", color: "var(--gv-color-primary-700)", flexShrink: 0 }}>
+            <LinkIcon />
+          </div>
+          <span style={{ fontFamily: "var(--gv-font-mono)", fontSize: 11, fontWeight: 700, color: "var(--gv-color-neutral-400)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Platform Tersedia</span>
+          <div style={{ flex: 1, height: 1, background: "var(--gv-color-neutral-200)" }} />
+        </div>
+
+        {/* cn-platform-grid — 2 col */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 12 }}>
+          {CONNECT_PLATFORMS.map(p => {
+            const isConnected = connectedIds.has(p.id);
+            const isSelected = selectedPlatform === p.id;
+            const handle = p.fieldKey && profile ? (profile as Record<string, unknown>)[p.fieldKey] as string : null;
             return (
-              <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 14, border: "1px solid var(--gv-color-primary-200)", background: "var(--gv-color-primary-50)" }}>
-                <div style={{ width: 32, height: 32, borderRadius: 8, background: "var(--gv-color-primary-100)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--gv-color-primary-600)", flexShrink: 0 }}>{p.logo}</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: "var(--gv-color-neutral-900)" }}>{p.name}</div>
-                  <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: 11, color: "var(--gv-color-primary-600)", marginTop: 1 }}>@{handle}</div>
+              <div
+                key={p.id}
+                onClick={() => onSelectPlatform(p.id)}
+                style={{
+                  background: isSelected ? "var(--gv-color-primary-50)" : "var(--gv-color-bg-surface)",
+                  border: `1.5px solid ${isSelected ? "var(--gv-color-primary-500)" : isConnected ? "var(--gv-color-success-500)" : "var(--gv-color-neutral-200)"}`,
+                  borderRadius: "var(--gv-radius-md)",
+                  padding: 16, cursor: "pointer", position: "relative",
+                  transition: "border-color 0.15s, box-shadow 0.15s",
+                }}
+              >
+                {/* top: logo + badge */}
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 12 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: "var(--gv-radius-sm)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, background: isConnected ? "var(--gv-color-primary-50)" : "var(--gv-color-neutral-100)", color: isConnected ? "var(--gv-color-primary-600)" : "var(--gv-color-neutral-500)" }}>
+                    {p.logo}
+                  </div>
+                  <span style={{ fontFamily: "var(--gv-font-mono)", fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 9999, textTransform: "uppercase", letterSpacing: "0.04em", background: isConnected ? "var(--gv-color-success-50)" : "var(--gv-color-neutral-100)", color: isConnected ? "var(--gv-color-success-700)" : "var(--gv-color-neutral-500)", border: `1px solid ${isConnected ? "var(--gv-color-success-200)" : "var(--gv-color-neutral-200)"}` }}>
+                    {isConnected ? "Connected" : "Available"}
+                  </span>
                 </div>
-                <div style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--gv-color-success-500)" }} />
+                {/* name + handle */}
+                <div style={{ fontFamily: "var(--gv-font-heading)", fontSize: "var(--gv-font-size-md)", fontWeight: 800, color: "var(--gv-color-neutral-900)", marginBottom: 4 }}>{p.name}</div>
+                <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: "var(--gv-font-size-xs)", color: isConnected ? "var(--gv-color-primary-600)" : "var(--gv-color-neutral-400)", marginBottom: 12 }}>
+                  {isConnected && handle ? `@${handle}` : "Belum terhubung"}
+                </div>
+                {/* stats or connect btn */}
+                {isConnected ? (
+                  <div style={{ display: "flex", gap: 16 }}>
+                    <div style={{ display: "flex", flexDirection: "column" }}>
+                      <span style={{ fontFamily: "var(--gv-font-heading)", fontSize: "var(--gv-font-size-md)", fontWeight: 800, color: "var(--gv-color-neutral-900)", lineHeight: 1.2 }}>—</span>
+                      <span style={{ fontFamily: "var(--gv-font-mono)", fontSize: "var(--gv-font-size-2xs)", color: "var(--gv-color-neutral-400)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Followers</span>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column" }}>
+                      <span style={{ fontFamily: "var(--gv-font-heading)", fontSize: "var(--gv-font-size-md)", fontWeight: 800, color: "var(--gv-color-neutral-900)", lineHeight: 1.2 }}>—</span>
+                      <span style={{ fontFamily: "var(--gv-font-mono)", fontSize: "var(--gv-font-size-2xs)", color: "var(--gv-color-neutral-400)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Posts</span>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={e => { e.stopPropagation(); onSelectPlatform(p.id); }}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 9999, fontFamily: "var(--gv-font-body)", fontSize: "var(--gv-font-size-xs)", fontWeight: 600, cursor: "pointer", background: "var(--gv-gradient-primary)", color: "white", border: "none" }}
+                  >
+                    <LinkIcon />
+                    Connect {p.name}
+                  </button>
+                )}
               </div>
             );
           })}
         </div>
-      )}
+      </div>
 
-      {/* Disconnected platforms */}
-      {disconnected.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: 11, fontWeight: 700, color: "var(--gv-color-neutral-400)", textTransform: "uppercase", letterSpacing: ".1em" }}>Belum Terkoneksi</div>
-          {disconnected.map(p => (
-            <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 14, border: "1px solid var(--gv-color-neutral-200)", background: "var(--gv-color-bg-surface-elevated)", opacity: 0.75 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 8, background: "var(--gv-color-neutral-100)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--gv-color-neutral-700)", flexShrink: 0 }}>{p.logo}</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--gv-color-neutral-900)" }}>{p.name}</div>
-                <div style={{ fontSize: 11, color: "var(--gv-color-neutral-400)", marginTop: 1 }}>Hubungkan akun untuk sync data</div>
+      {/* ── cn-section: GeoVera Recommendations ── */}
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+          <div style={{ width: 34, height: 34, borderRadius: "var(--gv-radius-xs)", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid var(--gv-color-warning-200)", background: "var(--gv-color-warning-50)", color: "var(--gv-color-warning-700)", flexShrink: 0 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </div>
+          <span style={{ fontFamily: "var(--gv-font-mono)", fontSize: 11, fontWeight: 700, color: "var(--gv-color-neutral-400)", textTransform: "uppercase", letterSpacing: "0.06em" }}>GeoVera Sangat Merekomendasikan</span>
+          <div style={{ flex: 1, height: 1, background: "var(--gv-color-neutral-200)" }} />
+        </div>
+
+        {/* cn-rec-box */}
+        <div style={{ background: "var(--gv-color-warning-50)", border: "1.5px solid var(--gv-color-warning-200)", borderRadius: "var(--gv-radius-md)", overflow: "hidden" }}>
+          {/* cn-rec-banner */}
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "16px 16px 12px", borderBottom: "1px solid var(--gv-color-warning-200)" }}>
+            <div style={{ width: 34, height: 34, borderRadius: "var(--gv-radius-sm)", background: "var(--gv-color-warning-500)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            </div>
+            <div>
+              <div style={{ fontFamily: "var(--gv-font-heading)", fontSize: "var(--gv-font-size-md)", fontWeight: 800, color: "var(--gv-color-warning-700)", marginBottom: 4 }}>Kamu tidak bisa connect langsung ke platform ini</div>
+              <div style={{ fontFamily: "var(--gv-font-body)", fontSize: "var(--gv-font-size-sm)", color: "var(--gv-color-warning-700)", lineHeight: 1.55 }}>
+                Platform ini tidak punya API publik, tapi sangat strategis untuk authority &amp; SEO Indonesia. Masukkan URL profil — GeoVera akan memantau perkembangannya.
               </div>
-              <button style={{ padding: "5px 12px", borderRadius: 9999, fontSize: 12, fontWeight: 700, fontFamily: "var(--gv-font-body)", background: "var(--gv-gradient-primary)", color: "white", border: "none", cursor: "pointer" }}>Connect</button>
+            </div>
+          </div>
+
+          {/* cn-rec-list */}
+          <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+            {REC_PLATFORMS.map(rp => (
+              <div key={rp.id} style={{ background: "var(--gv-color-bg-surface)", border: "1px solid var(--gv-color-neutral-200)", borderRadius: "var(--gv-radius-sm)", overflow: "hidden" }}>
+                {/* header row */}
+                <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 12px 8px" }}>
+                  <div style={{ width: 28, height: 28, borderRadius: "var(--gv-radius-xs)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--gv-font-heading)", fontSize: "var(--gv-font-size-sm)", fontWeight: 900, color: "white", background: rp.logoColor }}>
+                    {rp.initial}
+                  </div>
+                  <div style={{ fontFamily: "var(--gv-font-heading)", fontSize: "var(--gv-font-size-base)", fontWeight: 700, color: "var(--gv-color-neutral-900)", flex: 1 }}>{rp.name}</div>
+                  <span style={{ fontFamily: "var(--gv-font-mono)", fontSize: "var(--gv-font-size-2xs)", fontWeight: 700, color: "var(--gv-color-neutral-400)", background: "var(--gv-color-neutral-100)", borderRadius: 9999, padding: "2px 8px", textTransform: "uppercase", letterSpacing: "0.04em" }}>{rp.tag}</span>
+                </div>
+                {/* URL input row */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px 12px" }}>
+                  <input
+                    type="url"
+                    placeholder={rp.placeholder}
+                    value={recUrls[rp.id] ?? ""}
+                    onChange={e => setRecUrls(prev => ({ ...prev, [rp.id]: e.target.value }))}
+                    style={{ flex: 1, height: 26, background: "var(--gv-color-neutral-100)", border: "1px solid var(--gv-color-neutral-200)", borderRadius: "var(--gv-radius-sm)", padding: "0 12px", fontFamily: "var(--gv-font-mono)", fontSize: "var(--gv-font-size-xs)", color: "var(--gv-color-neutral-700)", outline: "none" }}
+                  />
+                  <button
+                    onClick={() => alert(`Saved: ${rp.name} — ${recUrls[rp.id] ?? ""}`)}
+                    style={{ height: 26, padding: "0 12px", background: "var(--gv-gradient-primary)", color: "white", border: "none", borderRadius: "var(--gv-radius-sm)", fontFamily: "var(--gv-font-body)", fontSize: "var(--gv-font-size-xs)", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
+                  >
+                    Simpan
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Connect — Right Column
+   DS: gv_start_connect (cn-* token system)
+   Shows selected platform profile + biweekly growth + 30d perf
+══════════════════════════════════════════════════════════════ */
+function ConnectRight({
+  profile, selectedPlatform,
+}: {
+  profile: BrandProfile | null;
+  selectedPlatform: string;
+}) {
+  const plat = CONNECT_PLATFORMS.find(p => p.id === selectedPlatform) ?? CONNECT_PLATFORMS[0];
+  const isConnected = !!(plat.fieldKey && profile && (profile as Record<string, unknown>)[plat.fieldKey] && String((profile as Record<string, unknown>)[plat.fieldKey]).trim());
+  const handle = plat.fieldKey && profile ? (profile as Record<string, unknown>)[plat.fieldKey] as string : null;
+  const brandName = profile?.brand_name ?? "Brand Kamu";
+  const tagline = ((profile?.brand_dna as Record<string, unknown> | null)?.tagline as string | undefined) ?? "";
+
+  /* apify_data might contain scraped stats (from brand-apify-research) */
+  const sotRaw = profile?.source_of_truth as Record<string, unknown> | null;
+  const apify = (sotRaw?.apify_data as Record<string, unknown> | null) ?? null;
+  const platData = apify ? (apify[selectedPlatform] as Record<string, unknown> | null) : null;
+
+  /* KPIs — 3-col grid */
+  const kpis: { v: string; l: string }[] = [];
+  if (selectedPlatform === "instagram") {
+    kpis.push(
+      { v: fmtNumber(platData?.followers_count ?? "—"), l: "Followers" },
+      { v: fmtNumber(platData?.following_count ?? "—"), l: "Following" },
+      { v: fmtNumber(platData?.media_count ?? "—"), l: "Posts" },
+    );
+  } else if (selectedPlatform === "tiktok") {
+    kpis.push(
+      { v: fmtNumber(platData?.fans_count ?? "—"), l: "Followers" },
+      { v: fmtNumber(platData?.video_count ?? "—"), l: "Videos" },
+      { v: fmtNumber(platData?.heart_count ?? "—"), l: "Likes" },
+    );
+  } else {
+    kpis.push({ v: "—", l: "Followers" }, { v: "—", l: "Following" }, { v: "—", l: "Posts" });
+  }
+
+  /* 30-day performance stats */
+  const stats: { v: string; l: string; dir: "up" | "dn" | ""; d: string }[] = [
+    { v: fmtNumber(platData?.reach ?? "—"), l: "Reach", dir: "up", d: "Late API sync" },
+    { v: platData?.avg_engagement ? `${platData.avg_engagement}%` : "—", l: "Engagement", dir: "up", d: "" },
+    { v: fmtNumber(platData?.likes_count ?? "—"), l: "Likes", dir: "up", d: "" },
+    { v: fmtNumber(platData?.comments_count ?? "—"), l: "Comments", dir: "up", d: "" },
+    { v: fmtNumber(platData?.posts_count ?? "—"), l: "Posts", dir: "up", d: "" },
+    { v: fmtNumber(platData?.saves_count ?? "—"), l: "Saves", dir: "up", d: "" },
+  ];
+
+  return (
+    <div style={{ padding: "20px 20px 96px" }}>
+
+      {/* ── cn-profile ── */}
+      <div style={{ background: "var(--gv-color-bg-surface)", border: "1.5px solid var(--gv-color-neutral-200)", borderRadius: "var(--gv-radius-md)", overflow: "hidden", boxShadow: "var(--gv7-depth-1)", marginBottom: 16 }}>
+        {/* cover gradient */}
+        <div style={{ height: 48, position: "relative", background: plat.coverGrad }}>
+          {/* avatar */}
+          <div style={{ position: "absolute", bottom: -20, left: 16, width: 44, height: 44, borderRadius: "var(--gv-radius-md)", background: "var(--gv-color-bg-surface)", border: "2.5px solid var(--gv-color-bg-surface)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "var(--gv7-depth-2)", overflow: "hidden" }}>
+            <div style={{ color: "var(--gv-color-primary-500)" }}>{plat.logo}</div>
+          </div>
+          {/* platform badge */}
+          <div style={{ position: "absolute", top: 12, right: 12, width: 26, height: 26, borderRadius: "var(--gv-radius-xs)", display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.2)", backdropFilter: "blur(8px)" }}>
+            <div style={{ color: "white", opacity: 0.9 }}>{plat.logo}</div>
+          </div>
+        </div>
+
+        {/* profile body */}
+        <div style={{ padding: "28px 16px 16px" }}>
+          <div style={{ fontFamily: "var(--gv-font-heading)", fontSize: "var(--gv-font-size-xl)", fontWeight: 800, color: "var(--gv-color-neutral-900)", lineHeight: 1.2, marginBottom: 4 }}>
+            {isConnected ? brandName : "—"}
+          </div>
+          <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: "var(--gv-font-size-xs)", color: "var(--gv-color-primary-600)", marginBottom: 8 }}>
+            {isConnected && handle ? `@${handle} · ${plat.name}` : `${plat.name} · Belum Connect`}
+          </div>
+          <div style={{ fontFamily: "var(--gv-font-body)", fontSize: "var(--gv-font-size-sm)", color: "var(--gv-color-neutral-500)", lineHeight: 1.55, marginBottom: 16 }}>
+            {isConnected ? (tagline || "Connect akun untuk melihat data performa.") : "Akun belum terhubung. Klik Connect di panel tengah untuk menghubungkan."}
+          </div>
+          {/* KPIs */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 4, padding: 12, background: "var(--gv-color-bg-base)", borderRadius: "var(--gv-radius-sm)" }}>
+            {kpis.map(k => (
+              <div key={k.l} style={{ textAlign: "center", padding: 4 }}>
+                <div style={{ fontFamily: "var(--gv-font-heading)", fontSize: "var(--gv-font-size-md)", fontWeight: 800, color: "var(--gv-color-neutral-900)", lineHeight: 1.2 }}>{k.v}</div>
+                <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: "var(--gv-font-size-2xs)", color: "var(--gv-color-neutral-400)", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: 2 }}>{k.l}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── cn-growth: Follower growth chart ── */}
+      <div style={{ background: "var(--gv-color-bg-surface)", border: "1px solid var(--gv-color-neutral-200)", borderRadius: "var(--gv-radius-md)", padding: 16, marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <div style={{ fontFamily: "var(--gv-font-heading)", fontSize: "var(--gv-font-size-base)", fontWeight: 700, color: "var(--gv-color-neutral-900)" }}>Pertumbuhan Followers</div>
+          <span style={{ fontFamily: "var(--gv-font-mono)", fontSize: "var(--gv-font-size-2xs)", fontWeight: 700, color: isConnected ? "var(--gv-color-success-700)" : "var(--gv-color-neutral-400)", background: isConnected ? "var(--gv-color-success-50)" : "var(--gv-color-neutral-100)", padding: "2px 8px", borderRadius: 9999, border: `1px solid ${isConnected ? "var(--gv-color-success-200)" : "var(--gv-color-neutral-200)"}` }}>
+            {isConnected ? "▲ Sync Biweekly · Late API" : "— Belum connect"}
+          </span>
+        </div>
+        {/* SVG area chart — all DS token colors */}
+        <div style={{ width: "100%", height: 64, position: "relative" }}>
+          <svg viewBox="0 0 300 64" preserveAspectRatio="none" style={{ width: "100%", height: "100%" }}>
+            <defs>
+              <linearGradient id="cnGrowthGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--gv-color-primary-500)" stopOpacity="0.3"/>
+                <stop offset="100%" stopColor="var(--gv-color-primary-500)" stopOpacity="0.02"/>
+              </linearGradient>
+            </defs>
+            <path d="M0 58 C20 56 35 54 55 50 C75 46 90 48 110 43 C130 38 145 41 165 32 C185 23 200 26 220 16 C240 6 255 10 300 3 L300 64 L0 64 Z" fill="url(#cnGrowthGrad)"/>
+            <path d="M0 58 C20 56 35 54 55 50 C75 46 90 48 110 43 C130 38 145 41 165 32 C185 23 200 26 220 16 C240 6 255 10 300 3" fill="none" stroke="var(--gv-color-primary-500)" strokeWidth="2" strokeLinecap="round"/>
+            <circle cx="55" cy="50" r="2.5" fill="var(--gv-color-primary-500)"/>
+            <circle cx="165" cy="32" r="2.5" fill="var(--gv-color-primary-500)"/>
+            <circle cx="300" cy="3" r="3.5" fill="var(--gv-color-primary-500)" stroke="white" strokeWidth="1.5"/>
+          </svg>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
+          {["Mar","Jun","Sep","Des","Mar"].map(m => (
+            <span key={m} style={{ fontFamily: "var(--gv-font-mono)", fontSize: "var(--gv-font-size-2xs)", color: "var(--gv-color-neutral-400)", letterSpacing: "0.04em" }}>{m}</span>
+          ))}
+        </div>
+      </div>
+
+      {/* ── cn-preview: 30-day performance stats ── */}
+      <div style={{ background: "var(--gv-color-bg-surface)", border: "1px solid var(--gv-color-neutral-200)", borderRadius: "var(--gv-radius-md)", overflow: "hidden" }}>
+        <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--gv-color-neutral-100)", fontFamily: "var(--gv-font-mono)", fontSize: "var(--gv-font-size-2xs)", fontWeight: 700, color: "var(--gv-color-neutral-400)", textTransform: "uppercase", letterSpacing: "0.10em" }}>
+          Performa · 30 Hari Terakhir
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)" }}>
+          {stats.map((s, i) => (
+            <div key={s.l} style={{ padding: "12px 16px", borderBottom: i < stats.length - 2 ? "1px solid var(--gv-color-neutral-100)" : undefined, borderRight: i % 2 === 0 ? "1px solid var(--gv-color-neutral-100)" : undefined }}>
+              <div style={{ fontFamily: "var(--gv-font-heading)", fontSize: "var(--gv-font-size-xl)", fontWeight: 800, color: "var(--gv-color-neutral-900)", lineHeight: 1.2, marginBottom: 4 }}>{s.v}</div>
+              <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: "var(--gv-font-size-2xs)", color: "var(--gv-color-neutral-400)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{s.l}</div>
+              {s.d && (
+                <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: "var(--gv-font-size-2xs)", fontWeight: 700, marginTop: 4, color: s.dir === "up" ? "var(--gv-color-success-700)" : s.dir === "dn" ? "var(--gv-color-danger-500)" : "var(--gv-color-neutral-400)" }}>
+                  {s.dir === "up" ? "▲ " : s.dir === "dn" ? "▼ " : ""}{s.d}
+                </div>
+              )}
             </div>
           ))}
         </div>
-      )}
+      </div>
+
     </div>
   );
 }
@@ -925,7 +1217,7 @@ function SubscriptionTab({
 ══════════════════════════════════════════════════════════════ */
 function StartHeader({ profile, sub }: { profile: BrandProfile | null; sub: Subscription | null }) {
   const stats = [
-    { mod: "c", icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>, val: PLATFORMS.filter(p => profile && p.fieldKey && (profile as Record<string, unknown>)[p.fieldKey]).length, lb: "Platforms" },
+    { mod: "c", icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>, val: CONNECT_PLATFORMS.filter(p => profile && p.fieldKey && (profile as Record<string, unknown>)[p.fieldKey]).length, lb: "Platforms" },
     { mod: "r", icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>, val: profile?.research_data ? 1 : 0, lb: "Research" },
     { mod: "d", icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>, val: profile?.source_of_truth ? 1 : 0, lb: "Deep" },
     { mod: "ch", icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>, val: profile?.chronicle_updated_at ? 1 : 0, lb: "Chronicle" },
@@ -1017,7 +1309,7 @@ function PasswordResetModal({ email, onClose }: { email: string; onClose: () => 
    Right Panel
 ══════════════════════════════════════════════════════════════ */
 function RightPanel({
-  activeTab, profile, sub, plans, user, onPasswordChange,
+  activeTab, profile, sub, plans, user, onPasswordChange, connPlatform,
 }: {
   activeTab: string;
   profile: BrandProfile | null;
@@ -1025,13 +1317,14 @@ function RightPanel({
   plans: Plan[];
   user: { name: string; email: string; initials: string } | null;
   onPasswordChange: () => void;
+  connPlatform: string;
 }) {
   return (
-    <div style={{ padding: "20px 20px 80px", display: "flex", flexDirection: "column", gap: 0, overflowY: "auto", height: "100%" }}>
-      {activeTab === "101 Brand" && <BrandTab profile={profile} />}
-      {activeTab === "Chronicle" && <ChronicleRight profile={profile} />}
-      {activeTab === "Connect" && <ConnectTab profile={profile} />}
-      {activeTab === "Subscription" && <SubscriptionTab sub={sub} plans={plans} user={user} onPasswordChange={onPasswordChange} />}
+    <div style={{ display: "flex", flexDirection: "column", gap: 0, overflowY: "auto", height: "100%" }}>
+      {activeTab === "101 Brand" && <div style={{ padding: "20px 20px 80px" }}><BrandTab profile={profile} /></div>}
+      {activeTab === "Chronicle" && <div style={{ padding: "20px 20px 80px" }}><ChronicleRight profile={profile} /></div>}
+      {activeTab === "Connect" && <ConnectRight profile={profile} selectedPlatform={connPlatform} />}
+      {activeTab === "Subscription" && <div style={{ padding: "20px 20px 80px" }}><SubscriptionTab sub={sub} plans={plans} user={user} onPasswordChange={onPasswordChange} /></div>}
     </div>
   );
 }
@@ -1040,13 +1333,15 @@ function RightPanel({
    Center Panel
 ══════════════════════════════════════════════════════════════ */
 function CenterPanel({
-  activeTab, profile, sub, plans, user,
+  activeTab, profile, sub, plans, user, connPlatform, onConnPlatform,
 }: {
   activeTab: string;
   profile: BrandProfile | null;
   sub: Subscription | null;
   plans: Plan[];
   user: { name: string; email: string; initials: string } | null;
+  connPlatform: string;
+  onConnPlatform: (id: string) => void;
 }) {
   const sot = profile?.source_of_truth as Record<string, unknown> | null;
   const rd  = profile?.research_data  as Record<string, unknown> | null;
@@ -1060,6 +1355,15 @@ function CenterPanel({
   // Daily insights
   const dailyInsights = profile?.source_of_truth as Record<string, unknown> | null;
   const tasks = (dailyInsights?.tasks as Array<Record<string, unknown>> | null) ?? [];
+
+  /* Connect tab handles its own padding via cn-page */
+  if (activeTab === "Connect") {
+    return (
+      <div style={{ overflowY: "auto", height: "100%" }}>
+        <ConnectCenter profile={profile} selectedPlatform={connPlatform} onSelectPlatform={onConnPlatform} />
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: "20px 20px 80px", display: "flex", flexDirection: "column", gap: 16, overflowY: "auto", height: "100%" }}>
@@ -1152,31 +1456,6 @@ function CenterPanel({
 
       {activeTab === "Chronicle" && <ChronicleCenter profile={profile} />}
 
-      {activeTab === "Connect" && (
-        <div style={{ background: "var(--gv-color-bg-surface)", border: "1.5px solid var(--gv-color-neutral-200)", borderRadius: 20, padding: "14px 16px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--gv-color-primary-500)" strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-            <span style={{ fontFamily: "var(--gv-font-heading)", fontSize: 14, fontWeight: 800, color: "var(--gv-color-neutral-900)" }}>Platform Onboarding</span>
-          </div>
-          <div style={{ fontSize: 13, color: "var(--gv-color-neutral-600)", lineHeight: 1.7, marginBottom: 12 }}>
-            Hubungkan akun sosial media brand kamu agar GeoVera bisa menganalisis performa, scraping konten, dan optimasi otomatis.
-          </div>
-          {[
-            { title: "Langkah 1", desc: "Pilih platform di panel kanan" },
-            { title: "Langkah 2", desc: "Klik Connect → masukkan handle akun" },
-            { title: "Langkah 3", desc: "GeoVera sync data secara otomatis" },
-          ].map((step, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 0", borderBottom: i < 2 ? "1px solid var(--gv-color-neutral-100)" : undefined }}>
-              <div style={{ width: 22, height: 22, borderRadius: "50%", background: "var(--gv-color-primary-50)", border: "1.5px solid var(--gv-color-primary-200)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontFamily: "var(--gv-font-mono)", fontSize: 11, fontWeight: 800, color: "var(--gv-color-primary-600)" }}>{i + 1}</div>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--gv-color-neutral-900)" }}>{step.title}</div>
-                <div style={{ fontSize: 12, color: "var(--gv-color-neutral-500)", marginTop: 1 }}>{step.desc}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
       {activeTab === "Subscription" && (
         <div style={{ background: "var(--gv-color-bg-surface)", border: "1.5px solid var(--gv-color-neutral-200)", borderRadius: 20, padding: "14px 16px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
@@ -1219,6 +1498,7 @@ export default function StartPage() {
   const [user, setUser] = useState<{ name: string; email: string; initials: string } | null>(null);
   const [showPwModal, setShowPwModal] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [connPlatform, setConnPlatform] = useState("instagram");
 
   useEffect(() => {
     async function load() {
@@ -1293,6 +1573,8 @@ export default function StartPage() {
             sub={sub}
             plans={plans}
             user={user}
+            connPlatform={connPlatform}
+            onConnPlatform={setConnPlatform}
           />
         }
         right={
@@ -1303,6 +1585,7 @@ export default function StartPage() {
             plans={plans}
             user={user}
             onPasswordChange={() => setShowPwModal(true)}
+            connPlatform={connPlatform}
           />
         }
       />
