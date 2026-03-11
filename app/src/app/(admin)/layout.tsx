@@ -4,8 +4,8 @@ import { useRouter, usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 // Routes inside (admin) that don't need an active subscription
-// Note: /subscription was removed — it now redirects to /start
-const OPEN_PATHS = ["/backend"];
+// /start is open so non-subscribers aren't stuck in a redirect loop
+const OPEN_PATHS = ["/backend", "/start"];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
