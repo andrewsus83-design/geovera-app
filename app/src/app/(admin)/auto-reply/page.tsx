@@ -1,6 +1,7 @@
 "use client";
 import { useState, CSSProperties } from "react";
 import AppShell from "@/components/shared/AppShell";
+import { supabase } from "@/lib/supabase";
 
 /* ── Mock data ── */
 const MOCK_COMMENTS = [
@@ -121,11 +122,80 @@ function BarRow({ label, val, max, plat }: { label: string; val: number; max: nu
    MANUAL REPLY — Center
 ──────────────────────────────────────────── */
 function ManualCenter() {
-  const [filter, setFilter]       = useState("all");
-  const [selected, setSelected]   = useState("c1");
-  const [replyText, setReplyText] = useState("");
-  const [charCount, setCharCount] = useState(0);
+  const [filter, setFilter]         = useState("all");
+  const [selected, setSelected]     = useState("c1");
+  const [replyText, setReplyText]   = useState("");
+  const [charCount, setCharCount]   = useState(0);
+  const [suggesting, setSuggesting] = useState(false);
+  const [sending, setSending]       = useState(false);
+  const [toast, setToast]           = useState<{ msg: string; ok: boolean } | null>(null);
   const MAX_CHARS = 280;
+
+  const showToast = (msg: string, ok: boolean) => {
+    setToast({ msg, ok });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const getToken = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token ?? null;
+  };
+
+  const callSmartReply = async (payload: Record<string, unknown>) => {
+    const token = await getToken();
+    if (!token) throw new Error("Not authenticated");
+    const { data, error } = await supabase.functions.invoke("smart-reply-handler", {
+      body: payload,
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (error) throw error;
+    return data;
+  };
+
+  const handleSuggest = async (tone: string) => {
+    const c = MOCK_COMMENTS.find(x => x.id === selected);
+    if (!c) return;
+    setSuggesting(true);
+    try {
+      const res = await callSmartReply({
+        action: "suggest",
+        comment_text: c.txt,
+        comment_user: c.user,
+        platform: c.plat,
+        tone,
+      });
+      setReplyText(res.reply ?? "");
+      setCharCount((res.reply ?? "").length);
+    } catch (err) {
+      showToast("Gagal generate reply, coba lagi.", false);
+      console.error(err);
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
+  const handleSend = async () => {
+    const c = MOCK_COMMENTS.find(x => x.id === selected);
+    if (!c || !replyText.trim()) return;
+    setSending(true);
+    try {
+      await callSmartReply({
+        action: "send",
+        comment_text: c.txt,
+        comment_user: c.user,
+        platform: c.plat,
+        reply_text: replyText,
+      });
+      showToast("Reply terkirim!", true);
+      setReplyText("");
+      setCharCount(0);
+    } catch (err) {
+      showToast("Gagal mengirim reply, coba lagi.", false);
+      console.error(err);
+    } finally {
+      setSending(false);
+    }
+  };
 
   const filters = [
     { key: "all",     label: "All (12)"    },
@@ -154,7 +224,24 @@ function ManualCenter() {
   } as CSSProperties);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", position: "relative" }}>
+      {/* Toast */}
+      {toast && (
+        <div style={{
+          position: "absolute", top: 16, left: "50%", transform: "translateX(-50%)",
+          zIndex: 100, padding: "10px 18px", borderRadius: "var(--gv-radius-full)",
+          background: toast.ok ? "var(--gv-color-success-50)" : "var(--gv-color-error-50)",
+          border: `1px solid ${toast.ok ? "var(--gv-color-success-200)" : "var(--gv-color-error-200)"}`,
+          color: toast.ok ? "var(--gv-color-success-700)" : "var(--gv-color-error-700)",
+          fontSize: 12, fontWeight: 600, whiteSpace: "nowrap",
+          boxShadow: "var(--gv-shadow-md)",
+          animation: "gv-float-in 0.3s var(--gv-easing-spring) both",
+          pointerEvents: "none",
+        }}>
+          {toast.msg}
+        </div>
+      )}
+
       {/* Header */}
       <div style={{ padding: "20px 24px 0", flexShrink: 0 }}>
         <h1 style={{ fontFamily: "var(--gv-font-heading)", fontSize: "var(--gv-font-size-2xl)", fontWeight: 800, color: "var(--gv-color-neutral-900)", letterSpacing: "-0.02em", marginBottom: 2 }}>
@@ -228,38 +315,41 @@ function ManualCenter() {
 
           {/* AI tone buttons */}
           <div style={{ display: "flex", gap: 6, marginBottom: 10, overflowX: "auto", scrollbarWidth: "none" }}>
-            {["Professional","Friendly","Casual","Empathetic"].map(tone => (
-              <button key={tone} style={{
+            {["professional","friendly","casual","empathetic"].map(tone => (
+              <button key={tone} disabled={suggesting} style={{
                 padding: "5px 12px", borderRadius: "var(--gv-radius-full)",
                 border: "1px solid var(--gv-color-neutral-200)", background: "transparent",
                 fontFamily: "var(--gv-font-mono)", fontSize: 10, fontWeight: 600,
-                color: "var(--gv-color-neutral-500)", cursor: "pointer", flexShrink: 0,
+                color: "var(--gv-color-neutral-500)", cursor: suggesting ? "not-allowed" : "pointer", flexShrink: 0,
                 letterSpacing: "0.03em",
                 transition: "all var(--gv-duration-fast)",
+                opacity: suggesting ? 0.5 : 1,
               }}
               onMouseEnter={e => {
-                (e.currentTarget as HTMLElement).style.background = "var(--gv-color-primary-50)";
-                (e.currentTarget as HTMLElement).style.color = "var(--gv-color-primary-600)";
-                (e.currentTarget as HTMLElement).style.borderColor = "var(--gv-color-primary-200)";
+                if (!suggesting) {
+                  (e.currentTarget as HTMLElement).style.background = "var(--gv-color-primary-50)";
+                  (e.currentTarget as HTMLElement).style.color = "var(--gv-color-primary-600)";
+                  (e.currentTarget as HTMLElement).style.borderColor = "var(--gv-color-primary-200)";
+                }
               }}
               onMouseLeave={e => {
                 (e.currentTarget as HTMLElement).style.background = "transparent";
                 (e.currentTarget as HTMLElement).style.color = "var(--gv-color-neutral-500)";
                 (e.currentTarget as HTMLElement).style.borderColor = "var(--gv-color-neutral-200)";
               }}
-              onClick={() => setReplyText(`[${tone} reply] Halo! Terima kasih sudah menghubungi kami. Ada yang bisa kami bantu lebih lanjut?`)}>
-                {tone}
+              onClick={() => handleSuggest(tone)}>
+                {tone.charAt(0).toUpperCase() + tone.slice(1)}
               </button>
             ))}
-            <button style={{
+            <button disabled={suggesting} style={{
               padding: "5px 14px", borderRadius: "var(--gv-radius-full)",
               border: "none", background: "var(--gv-gradient-primary)",
               fontFamily: "var(--gv-font-mono)", fontSize: 10, fontWeight: 700,
-              color: "var(--gv-color-bg-surface)", cursor: "pointer", flexShrink: 0,
-              letterSpacing: "0.04em",
+              color: "var(--gv-color-bg-surface)", cursor: suggesting ? "not-allowed" : "pointer", flexShrink: 0,
+              letterSpacing: "0.04em", opacity: suggesting ? 0.7 : 1,
             }}
-            onClick={() => setReplyText("Halo! Terima kasih sudah menghubungi kami 😊 Ada yang bisa kami bantu hari ini?")}>
-              ✨ AI Suggest
+            onClick={() => handleSuggest("friendly")}>
+              {suggesting ? "Generating…" : "✨ AI Suggest"}
             </button>
           </div>
 
@@ -298,20 +388,27 @@ function ManualCenter() {
               {charCount}/{MAX_CHARS}
             </span>
             <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => setReplyText("")} style={{
+              <button onClick={() => { setReplyText(""); setCharCount(0); }} style={{
                 padding: "8px 16px", borderRadius: "var(--gv-radius-md)",
                 border: "1px solid var(--gv-color-neutral-200)", background: "transparent",
                 fontSize: 12, fontWeight: 600, color: "var(--gv-color-neutral-600)", cursor: "pointer",
               }}>
                 Clear
               </button>
-              <button style={{
-                padding: "8px 20px", borderRadius: "var(--gv-radius-md)",
-                border: "none", background: "var(--gv-gradient-primary)",
-                fontSize: 12, fontWeight: 700, color: "var(--gv-color-bg-surface)", cursor: "pointer",
-                boxShadow: "0 3px 12px rgba(95,143,139,0.35)",
-              }}>
-                Send Reply
+              <button
+                onClick={handleSend}
+                disabled={sending || !replyText.trim()}
+                style={{
+                  padding: "8px 20px", borderRadius: "var(--gv-radius-md)",
+                  border: "none", background: "var(--gv-gradient-primary)",
+                  fontSize: 12, fontWeight: 700, color: "var(--gv-color-bg-surface)",
+                  cursor: sending || !replyText.trim() ? "not-allowed" : "pointer",
+                  boxShadow: "0 3px 12px rgba(95,143,139,0.35)",
+                  opacity: sending || !replyText.trim() ? 0.6 : 1,
+                  transition: "opacity var(--gv-duration-fast)",
+                }}
+              >
+                {sending ? "Sending…" : "Send Reply"}
               </button>
             </div>
           </div>
