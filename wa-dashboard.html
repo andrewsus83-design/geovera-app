@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GeoVera WA OS — Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0a0a0f;color:#e2e8f0;font-family:'Space Grotesk',system-ui,sans-serif;min-height:100vh}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:#0a0a0f}::-webkit-scrollbar-thumb{background:#1f2937;border-radius:3px}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* HEADER */
+#header{display:flex;align-items:center;justify-content:space-between;padding:12px 24px;border-bottom:1px solid #1a1a2e;background:#0d0d18;position:sticky;top:0;z-index:100}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-icon{color:#5f7a6b;font-size:22px;font-weight:800}
+.logo-text{font-size:18px;font-weight:800;letter-spacing:1px}
+.logo-sub{background:#0f2922;color:#5f7a6b;font-size:10px;font-weight:700;letter-spacing:2px;padding:2px 8px;border-radius:4px}
+.brand-badge{display:flex;align-items:center;gap:8px;padding:4px 12px;background:#111827;border-radius:6px;border:1px solid #1f2937;margin-left:16px}
+.brand-name{font-size:13px;font-weight:600;color:#f3f4f6}
+.brand-tier{background:#0f2922;color:#5f7a6b;font-size:10px;font-weight:700;letter-spacing:1.5px;padding:1px 6px;border-radius:3px}
+.header-right{display:flex;align-items:center;gap:12px}
+.live-dot{width:7px;height:7px;border-radius:50%;background:#10b981;box-shadow:0 0 8px #10b981;animation:pulse 2s infinite}
+.live-text{color:#10b981;font-size:11px;font-weight:700;letter-spacing:2px;font-family:monospace}
+.refresh-btn{background:#1f2937;color:#9ca3af;border:1px solid #374151;border-radius:4px;padding:4px 12px;font-size:11px;cursor:pointer;font-family:inherit}
+.refresh-btn:hover{background:#374151;color:#e2e8f0}
+.refresh-time{color:#4b5563;font-size:11px;font-family:monospace}
+
+/* GEO BAR */
+#geo-bar{display:flex;align-items:center;gap:20px;padding:14px 24px;background:#0d0d18;border-bottom:1px solid #1a1a2e;flex-wrap:wrap}
+.geo-score-wrap{display:flex;flex-direction:column;align-items:center;min-width:70px}
+.geo-score-num{font-size:40px;font-weight:800;line-height:1;font-family:monospace}
+.geo-score-label{color:#4b5563;font-size:9px;letter-spacing:2px;margin-top:2px}
+.geo-trend{font-size:12px;font-weight:700;margin-top:4px;font-family:monospace}
+.geo-pillar{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:54px}
+.geo-pillar-bar{width:100%;height:4px;background:#1f2937;border-radius:2px}
+.geo-pillar-fill{height:100%;border-radius:2px;transition:width .5s}
+.geo-pillar-label{color:#4b5563;font-size:9px;letter-spacing:2px;font-family:monospace}
+.geo-pillar-val{color:#9ca3af;font-size:13px;font-weight:700;font-family:monospace}
+.geo-history{display:flex;align-items:flex-end;gap:3px;height:36px;margin-left:auto}
+.geo-hist-bar{width:10px;height:32px;display:flex;align-items:flex-end}
+.geo-hist-fill{width:100%;border-radius:2px}
+
+/* TABS */
+#tabs{display:flex;padding:0 24px;border-bottom:1px solid #1a1a2e;background:#0d0d18;overflow-x:auto}
+.tab{padding:11px 18px;background:transparent;border:none;color:#6b7280;font-size:12px;font-weight:600;cursor:pointer;letter-spacing:1px;border-bottom:2px solid transparent;white-space:nowrap;font-family:inherit;transition:color .2s}
+.tab:hover{color:#9ca3af}
+.tab.active{color:#5f7a6b;border-bottom-color:#5f7a6b}
+
+/* MAIN */
+#main{padding:24px;animation:fadeIn .3s ease}
+
+/* GRID */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:16px}
+.card{background:#111827;border:1px solid #1f2937;border-radius:10px;padding:18px}
+.card-header{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;letter-spacing:2px;color:#5f7a6b;margin-bottom:14px;text-transform:uppercase}
+.divider{height:1px;background:#1f2937;margin:12px 0}
+
+/* STATS ROW */
+.stats-row{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px}
+.stat{display:flex;flex-direction:column;align-items:center;min-width:50px}
+.stat-val{font-size:30px;font-weight:800;line-height:1;font-family:monospace}
+.stat-label{color:#6b7280;font-size:10px;margin-top:3px;letter-spacing:1px}
+
+/* TASK ROW */
+.task-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #1f2937}
+.task-text{flex:1;color:#9ca3af;font-size:12px;line-height:1.4}
+.task-priority{font-size:10px;font-weight:700;letter-spacing:1px;font-family:monospace}
+
+/* QUEUE ROW */
+.queue-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #1f2937}
+.queue-ref{color:#5f7a6b;font-size:11px;font-family:monospace;font-weight:700}
+.queue-type{flex:1;color:#9ca3af;font-size:12px}
+.queue-status{font-size:10px;font-weight:700;letter-spacing:1px;font-family:monospace}
+
+/* ALERT ROW */
+.alert-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #1f2937}
+.alert-tier{width:24px;height:24px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;flex-shrink:0}
+.alert-info{flex:1}
+.alert-title{color:#e2e8f0;font-size:12px;font-weight:600;display:block}
+.alert-time{color:#6b7280;font-size:10px;font-family:monospace}
+
+/* AGENT */
+.agent-total{font-size:40px;font-weight:800;color:#e2e8f0;font-family:monospace;line-height:1}
+.agent-total-label{font-size:14px;color:#6b7280;font-weight:400}
+.agent-row{display:flex;align-items:center;gap:10px;padding:6px 0}
+.agent-name{color:#9ca3af;font-size:12px;width:72px;font-family:monospace}
+.agent-bar-wrap{flex:1;height:4px;background:#1f2937;border-radius:2px}
+.agent-bar-fill{height:100%;background:#5f7a6b;border-radius:2px;transition:width .5s}
+.agent-count{color:#5f7a6b;font-size:11px;font-family:monospace;min-width:30px;text-align:right}
+
+/* CRON */
+.cron-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #1f2937}
+.cron-name{color:#d1d5db;font-size:12px;font-weight:600;display:block}
+.cron-schedule{color:#6b7280;font-size:10px;font-family:monospace}
+.cron-status{display:flex;align-items:center;gap:6px}
+.cron-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.cron-time{color:#6b7280;font-size:10px;font-family:monospace}
+
+/* LOG */
+.log-row{display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid #1f2937}
+.log-dir{font-weight:800;font-size:14px;width:16px;text-align:center}
+.log-cmd{flex:1;color:#9ca3af;font-size:11px;font-family:monospace}
+.log-time{color:#4b5563;font-size:10px;font-family:monospace}
+
+/* TASK CARD */
+.task-card{background:#111827;border:1px solid #1f2937;border-radius:8px;padding:16px;border-left-width:3px}
+.task-card-header{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.task-card-num{color:#4b5563;font-size:11px;font-family:monospace;min-width:18px}
+.task-card-priority{font-size:10px;font-weight:700;letter-spacing:1px;font-family:monospace}
+.task-card-net{margin-left:auto;font-size:11px;font-family:monospace;font-weight:700}
+.task-card-status{font-size:10px;font-weight:700;letter-spacing:1px;font-family:monospace}
+.task-card-text{color:#d1d5db;font-size:13px;line-height:1.5}
+.task-card-deadline{color:#6b7280;font-size:11px;margin-top:6px}
+
+/* QUEUE CARD */
+.queue-card{background:#111827;border:1px solid #1f2937;border-radius:8px;padding:16px;border-left-width:3px;margin-bottom:12px}
+.queue-card-header{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.queue-card-ref{color:#5f7a6b;font-size:11px;font-family:monospace;font-weight:700}
+.queue-card-type{flex:1;color:#6b7280;font-size:11px}
+.queue-card-status{font-size:10px;font-weight:700;letter-spacing:1px}
+.queue-card-time{color:#4b5563;font-size:10px;font-family:monospace}
+.queue-card-preview{color:#9ca3af;font-size:12px;line-height:1.5;padding-top:8px;border-top:1px solid #1f2937}
+
+/* METRICS */
+.metrics-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:12px}
+.metric-card{background:#111827;border:1px solid #1f2937;border-radius:8px;padding:16px}
+.metric-name{color:#5f7a6b;font-size:9px;letter-spacing:2px;font-family:monospace;margin-bottom:8px}
+.metric-value{color:#e2e8f0;font-size:28px;font-weight:800;font-family:monospace;line-height:1;margin-bottom:4px}
+.metric-period{color:#4b5563;font-size:10px;letter-spacing:1px;margin-bottom:4px}
+.metric-notes{color:#6b7280;font-size:11px;font-style:italic}
+
+/* HINT */
+.hint{color:#5f7a6b;font-size:11px;background:#0f2922;padding:8px 12px;border-radius:6px;border:1px solid #1a4a38;margin-bottom:12px}
+
+/* LIST WRAP */
+.list-wrap{display:flex;flex-direction:column;gap:12px;max-width:900px}
+
+/* LOADING */
+#loading{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:16px}
+.spin{width:36px;height:36px;border:3px solid #1f2937;border-top-color:#5f7a6b;border-radius:50%;animation:spin 1s linear infinite}
+.empty-text{color:#4b5563;font-size:12px;font-style:italic;text-align:center;padding:16px 0}
+
+#footer{padding:10px 24px;border-top:1px solid #1a1a2e;color:#374151;font-size:10px;font-family:monospace;letter-spacing:1px;background:#0d0d18;text-align:center}
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div style="display:flex;align-items:center;gap:4px">
+    <div class="logo">
+      <span class="logo-icon">◈</span>
+      <span class="logo-text">GeoVera</span>
+      <span class="logo-sub">WA OS</span>
+    </div>
+    <div class="brand-badge">
+      <span class="brand-name" id="brand-name">—</span>
+      <span class="brand-tier" id="brand-tier">—</span>
+    </div>
+  </div>
+  <div class="header-right">
+    <span class="refresh-time" id="refresh-time">—</span>
+    <button class="refresh-btn" onclick="loadData()">↻ Refresh</button>
+    <div class="live-dot"></div>
+    <span class="live-text">LIVE</span>
+  </div>
+</div>
+
+<div id="geo-bar">
+  <div class="geo-score-wrap">
+    <span class="geo-score-num" id="geo-score">—</span>
+    <span class="geo-score-label">GEO SCORE</span>
+    <span class="geo-trend" id="geo-trend">—</span>
+  </div>
+  <div class="geo-pillar"><div class="geo-pillar-bar"><div class="geo-pillar-fill" id="p-vis" style="width:0%"></div></div><span class="geo-pillar-label">VIS</span><span class="geo-pillar-val" id="v-vis">0</span></div>
+  <div class="geo-pillar"><div class="geo-pillar-bar"><div class="geo-pillar-fill" id="p-dis" style="width:0%"></div></div><span class="geo-pillar-label">DIS</span><span class="geo-pillar-val" id="v-dis">0</span></div>
+  <div class="geo-pillar"><div class="geo-pillar-bar"><div class="geo-pillar-fill" id="p-aut" style="width:0%"></div></div><span class="geo-pillar-label">AUT</span><span class="geo-pillar-val" id="v-aut">0</span></div>
+  <div class="geo-pillar"><div class="geo-pillar-bar"><div class="geo-pillar-fill" id="p-tru" style="width:0%"></div></div><span class="geo-pillar-label">TRU</span><span class="geo-pillar-val" id="v-tru">0</span></div>
+  <div class="geo-history" id="geo-history"></div>
+</div>
+
+<nav id="tabs">
+  <button class="tab active" onclick="switchTab('overview',this)">⊞ Overview</button>
+  <button class="tab" onclick="switchTab('tasks',this)" id="tab-tasks">✓ Tasks</button>
+  <button class="tab" onclick="switchTab('social',this)" id="tab-social">◈ Social</button>
+  <button class="tab" onclick="switchTab('metrics',this)">$ Metrics</button>
+  <button class="tab" onclick="switchTab('activity',this)">⚡ Activity</button>
+</nav>
+
+<div id="main">
+  <div id="loading"><div class="spin"></div><p style="color:#5f7a6b;font-family:monospace;letter-spacing:3px;font-size:12px">MEMUAT DATA...</p></div>
+</div>
+
+<div id="footer">GeoVera WA OS Dashboard · Auto-refresh 30s · <span id="footer-info">—</span></div>
+
+<script>
+const API = 'https://vozjwptzutolvkvfpknk.supabase.co/functions/v1/wa-dashboard-api';
+const BRAND_ID = '00000000-0000-0000-0000-000000000099';
+let dashData = null;
+let currentTab = 'overview';
+
+const AGENT_ICONS = {ai:'🧠',analytic:'📊',social:'📸',ops:'⚙️',alert:'🔔'};
+const PLAT_ICONS = {instagram:'📸',tiktok:'🎵',linkedin:'💼',twitter:'🐦',facebook:'👥'};
+const STATUS_COLORS = {draft:'#f59e0b',approved:'#10b981',rejected:'#ef4444',published:'#6366f1',scheduled:'#3b82f6'};
+
+function timeAgo(dt) {
+  const m = Math.floor((Date.now() - new Date(dt)) / 60000);
+  if (m < 1) return 'baru saja';
+  if (m < 60) return m + 'm lalu';
+  const h = Math.floor(m/60);
+  if (h < 24) return h + 'j lalu';
+  return Math.floor(h/24) + 'h lalu';
+}
+function fmtVal(v, unit) {
+  if (unit === 'IDR') {
+    if (v >= 1e6) return 'Rp ' + (v/1e6).toFixed(1) + 'jt';
+    if (v >= 1e3) return 'Rp ' + (v/1e3).toFixed(0) + 'rb';
+    return 'Rp ' + v;
+  }
+  if (unit === '%') return v + '%';
+  if (unit === 'count') return v.toLocaleString('id-ID');
+  return v + ' ' + unit;
+}
+function geoColor(s) { return s >= 70 ? '#10b981' : s >= 50 ? '#f59e0b' : '#ef4444'; }
+function esc(s) { return String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+async function loadData() {
+  try {
+    const r = await fetch(API + '?brand_id=' + BRAND_ID);
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error);
+    dashData = d;
+    updateHeader(d);
+    updateGeoBar(d);
+    renderCurrentTab();
+    document.getElementById('refresh-time').textContent = '↻ ' + new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+    document.getElementById('footer-info').textContent = d.brand.name + ' · wa:' + d.brand.wa_number;
+  } catch(e) {
+    document.getElementById('main').innerHTML = '<p style="color:#ef4444;padding:40px;font-family:monospace">Error: ' + esc(e.message) + '</p>';
+  }
+}
+
+function updateHeader(d) {
+  document.getElementById('brand-name').textContent = d.brand.name;
+  document.getElementById('brand-tier').textContent = d.brand.tier.toUpperCase();
+}
+
+function updateGeoBar(d) {
+  const geo = d.geo.latest || {};
+  const score = geo.geo_score || 0;
+  const c = geoColor(score);
+  const trend = d.geo.trend || 0;
+  document.getElementById('geo-score').textContent = score;
+  document.getElementById('geo-score').style.color = c;
+  document.getElementById('geo-trend').textContent = (trend >= 0 ? '▲ ' : '▼ ') + Math.abs(trend).toFixed(1);
+  document.getElementById('geo-trend').style.color = trend >= 0 ? '#10b981' : '#ef4444';
+  [['vis','visibility'],['dis','discovery'],['aut','authority'],['tru','trust']].forEach(([k,key]) => {
+    const v = geo[key] || 0;
+    document.getElementById('p-'+k).style.width = v + '%';
+    document.getElementById('p-'+k).style.background = c;
+    document.getElementById('v-'+k).textContent = v;
+  });
+  const hist = d.geo.history || [];
+  document.getElementById('geo-history').innerHTML = hist.slice(0,6).reverse().map(h => {
+    const s = h.geo_score || 0;
+    const bh = Math.max(4, (s/100)*32);
+    return `<div class="geo-hist-bar"><div class="geo-hist-fill" style="height:${bh}px;background:${geoColor(s)}"></div></div>`;
+  }).join('');
+}
+
+function switchTab(tab, btn) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  renderCurrentTab();
+}
+
+function renderCurrentTab() {
+  if (!dashData) return;
+  const main = document.getElementById('main');
+  main.innerHTML = '';
+  main.style.animation = 'none';
+  setTimeout(() => { main.style.animation = 'fadeIn .3s ease'; }, 10);
+
+  if (currentTab === 'overview') renderOverview(main);
+  else if (currentTab === 'tasks') renderTasks(main);
+  else if (currentTab === 'social') renderSocial(main);
+  else if (currentTab === 'metrics') renderMetrics(main);
+  else if (currentTab === 'activity') renderActivity(main);
+
+  // Update tab labels
+  const d = dashData;
+  document.getElementById('tab-tasks').textContent = '✓ Tasks (' + d.tasks.stats.active + ')';
+  document.getElementById('tab-social').textContent = '◈ Social (' + d.queue.stats.draft + ' draft)';
+}
+
+function statCard(label, value, color) {
+  return `<div class="stat"><span class="stat-val" style="color:${color}">${value}</span><span class="stat-label">${label}</span></div>`;
+}
+
+function renderOverview(main) {
+  const d = dashData;
+  const ts = d.tasks.stats; const qs = d.queue.stats;
+  main.innerHTML = `<div class="grid">
+  <div class="card">
+    <div class="card-header">✓ Task Health</div>
+    <div class="stats-row">
+      ${statCard('Aktif',ts.active,'#f59e0b')}${statCard('Done 7d',ts.done_7d,'#10b981')}${statCard('HIGH',ts.high,'#ef4444')}${statCard('Skip',ts.skipped,'#6b7280')}
+    </div>
+    <div class="divider"></div>
+    ${d.tasks.list.slice(0,3).map(t => `<div class="task-row"><span>${esc(t.persona_icon)}</span><span class="task-text">${esc(String(t.action_text).slice(0,58))}…</span><span class="task-priority" style="color:${t.priority==='HIGH'?'#ef4444':t.priority==='MED'?'#f59e0b':'#6b7280'}">${esc(t.priority)}</span></div>`).join('')}
+  </div>
+  <div class="card">
+    <div class="card-header">◈ Social Queue</div>
+    <div class="stats-row">
+      ${statCard('Draft',qs.draft,'#f59e0b')}${statCard('Approved',qs.approved,'#10b981')}${statCard('Published',qs.published,'#6366f1')}${statCard('Rejected',qs.rejected,'#ef4444')}
+    </div>
+    <div class="divider"></div>
+    ${d.queue.list.slice(0,3).map(q => `<div class="queue-row"><span>${PLAT_ICONS[q.platform]||'📝'}</span><span class="queue-ref">${esc(q.queue_ref)}</span><span class="queue-type">${esc(q.content_type)}</span><span class="queue-status" style="color:${STATUS_COLORS[q.status]||'#9ca3af'}">${esc(q.status).toUpperCase()}</span></div>`).join('')}
+  </div>
+  <div class="card">
+    <div class="card-header">🔔 Recent Alerts</div>
+    ${d.alerts.length===0?'<p class="empty-text">Tidak ada alert</p>':d.alerts.map(a => `<div class="alert-row"><span class="alert-tier" style="background:${a.tier===1?'#ef4444':'#f59e0b'}">T${a.tier}</span><div class="alert-info"><span class="alert-title">${esc(a.title)}</span><span class="alert-time">${timeAgo(a.sent_at)}</span></div></div>`).join('')}
+  </div>
+  <div class="card">
+    <div class="card-header">⚡ AI Activity (7d)</div>
+    <div><span class="agent-total">${d.agent_activity.total}</span><span class="agent-total-label"> interaksi</span></div>
+    <div class="divider"></div>
+    ${Object.entries(d.agent_activity.counts).map(([agent,count]) => {
+      const pct = d.agent_activity.total > 0 ? (count/d.agent_activity.total*100) : 0;
+      return `<div class="agent-row"><span>${AGENT_ICONS[agent]||'🤖'}</span><span class="agent-name">${agent}</span><div class="agent-bar-wrap"><div class="agent-bar-fill" style="width:${pct}%"></div></div><span class="agent-count">${count}</span></div>`;
+    }).join('')}
+  </div>
+  <div class="card">
+    <div class="card-header">⏰ Cron Jobs</div>
+    ${[{n:'proactive_alert',s:'setiap 6 jam'},{n:'weekly_digest',s:'Senin 07:00 WIB'},{n:'memory_summarizer',s:'setiap 2 jam'}].map(job => {
+      const lr = d.cron_log.find(c => c.job_name === job.n);
+      return `<div class="cron-row"><div><span class="cron-name">${job.n.replace(/_/g,' ')}</span><span class="cron-schedule">${job.s}</span></div><div class="cron-status">${lr?`<span class="cron-dot" style="background:${lr.status==='ok'?'#10b981':'#ef4444'}"></span><span class="cron-time">${timeAgo(lr.ran_at)}</span>`:'<span style="color:#4b5563">–</span>'}</div></div>`;
+    }).join('')}
+  </div>
+  <div class="card">
+    <div class="card-header">💬 WA Log</div>
+    ${d.wa_log.slice(0,7).map(l => `<div class="log-row"><span class="log-dir" style="color:${l.direction==='in'?'#3b82f6':'#10b981'}">${l.direction==='in'?'↓':'↑'}</span><span class="log-cmd">${esc(l.command||'—')}</span><span class="log-time">${timeAgo(l.received_at)}</span></div>`).join('')}
+  </div>
+  </div>`;
+}
+
+function renderTasks(main) {
+  const d = dashData; const ts = d.tasks.stats;
+  main.innerHTML = `<div class="list-wrap">
+  <div class="stats-row" style="margin-bottom:16px">
+    ${statCard('Aktif',ts.active,'#f59e0b')}${statCard('Done 7d',ts.done_7d,'#10b981')}${statCard('HIGH',ts.high,'#ef4444')}${statCard('Skipped',ts.skipped,'#6b7280')}
+  </div>
+  ${d.tasks.list.map((t,i) => {
+    const odrip = t.odrip && t.odrip.risk_reward;
+    const net = odrip ? odrip.net : 0;
+    const deadline = t.deadline ? new Date(t.deadline).toLocaleDateString('id-ID',{weekday:'short',day:'numeric',month:'short'}) : null;
+    const bc = t.priority==='HIGH'?'#ef4444':t.priority==='MED'?'#f59e0b':'#374151';
+    return `<div class="task-card" style="border-left-color:${bc}">
+      <div class="task-card-header">
+        <span class="task-card-num">${i+1}</span>
+        <span>${esc(t.persona_icon)}</span>
+        <span class="task-card-priority" style="color:${t.priority==='HIGH'?'#ef4444':'#f59e0b'}">${esc(t.priority)}</span>
+        <span class="task-card-net" style="color:${net>=0?'#10b981':'#ef4444'}">ODRIP ${net>=0?'+':''}${net}</span>
+        <span class="task-card-status" style="color:${t.status==='done'?'#10b981':t.status==='skipped'?'#6b7280':'#f59e0b'}">${esc(t.status).toUpperCase()}</span>
+      </div>
+      <p class="task-card-text">${esc(t.action_text)}</p>
+      ${deadline?`<p class="task-card-deadline">📅 ${deadline}</p>`:''}
+    </div>`;
+  }).join('')}
+  </div>`;
+}
+
+function renderSocial(main) {
+  const d = dashData; const qs = d.queue.stats;
+  main.innerHTML = `<div class="list-wrap">
+  <div class="stats-row" style="margin-bottom:8px">
+    ${statCard('Draft',qs.draft,'#f59e0b')}${statCard('Approved',qs.approved,'#10b981')}${statCard('Published',qs.published,'#6366f1')}${statCard('Rejected',qs.rejected,'#ef4444')}
+  </div>
+  <div class="hint">💬 Kirim <strong>APPROVE</strong>, <strong>REJECT [alasan]</strong>, atau <strong>REVISI [feedback]</strong> via WhatsApp untuk manage konten</div>
+  ${d.queue.list.map(q => {
+    const bc = STATUS_COLORS[q.status] || '#374151';
+    const preview = q.generated ? String(q.generated).slice(0,220) : '';
+    return `<div class="queue-card" style="border-left-color:${bc}">
+      <div class="queue-card-header">
+        <span>${PLAT_ICONS[q.platform]||'📝'} ${esc(q.platform)}</span>
+        <span class="queue-card-ref">${esc(q.queue_ref)}</span>
+        <span class="queue-card-type">${esc(q.content_type)}</span>
+        <span class="queue-card-status" style="color:${bc}">● ${esc(q.status).toUpperCase()}</span>
+        <span class="queue-card-time">${timeAgo(q.created_at)}</span>
+      </div>
+      ${preview?`<p class="queue-card-preview">${esc(preview)}${q.generated&&q.generated.length>220?'…':''}</p>`:''}
+    </div>`;
+  }).join('')}
+  </div>`;
+}
+
+function renderMetrics(main) {
+  const d = dashData;
+  main.innerHTML = `<div class="metrics-grid">
+  ${d.metrics.map(m => `<div class="metric-card">
+    <p class="metric-name">${esc(String(m.metric_name).replace(/_/g,' ')).toUpperCase()}</p>
+    <p class="metric-value">${fmtVal(m.metric_value, m.unit)}</p>
+    <p class="metric-period">${esc(m.period)}</p>
+    ${m.notes?`<p class="metric-notes">${esc(m.notes)}</p>`:''}
+  </div>`).join('')}
+  </div>`;
+}
+
+function renderActivity(main) {
+  const d = dashData;
+  main.innerHTML = `<div class="grid">
+  <div class="card">
+    <div class="card-header">⚡ Agent Usage (7d)</div>
+    <div><span class="agent-total">${d.agent_activity.total}</span><span class="agent-total-label"> interaksi</span></div>
+    <div class="divider"></div>
+    ${Object.entries(d.agent_activity.counts).sort((a,b)=>b[1]-a[1]).map(([agent,count]) => {
+      const pct = d.agent_activity.total > 0 ? (count/d.agent_activity.total*100) : 0;
+      return `<div class="agent-row"><span>${AGENT_ICONS[agent]||'🤖'}</span><span class="agent-name" style="width:90px">${agent}</span><div class="agent-bar-wrap"><div class="agent-bar-fill" style="width:${pct}%"></div></div><span class="agent-count">${count} (${pct.toFixed(0)}%)</span></div>`;
+    }).join('')}
+  </div>
+  <div class="card">
+    <div class="card-header">⏰ Cron History</div>
+    ${d.cron_log.length===0?'<p class="empty-text">Belum ada cron run</p>':d.cron_log.map(c => `<div class="cron-row"><div><span class="cron-name">${esc(c.job_name).replace(/_/g,' ')}</span><span class="cron-schedule">${timeAgo(c.ran_at)}</span></div><span class="cron-dot" style="background:${c.status==='ok'?'#10b981':'#ef4444'}"></span></div>`).join('')}
+  </div>
+  <div class="card">
+    <div class="card-header">💬 WA Log Lengkap</div>
+    ${d.wa_log.map(l => `<div class="log-row"><span class="log-dir" style="color:${l.direction==='in'?'#3b82f6':'#10b981'}">${l.direction==='in'?'↓':'↑'}</span><span class="log-cmd">${esc(l.command||'—')}</span><span class="log-time">${timeAgo(l.received_at)}</span></div>`).join('')}
+  </div>
+  </div>`;
+}
+
+// Init
+loadData();
+setInterval(loadData, 30000);
+</script>
+</body>
+</html>
