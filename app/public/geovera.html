@@ -1,0 +1,2846 @@
+<!DOCTYPE html>
+<html lang="id" prefix="og: https://ogp.me/ns#">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GeoVera — Platform AI Intelligence untuk SEO, GEO & Marketing via WhatsApp</title>
+<meta name="description" content="GeoVera adalah platform AI yang mengelola SEO, GEO (AI Search), Social Search, Marketing, dan Analytics bisnis Anda — semuanya langsung dari WhatsApp. Didukung 20+ integrasi platform dan tim AI C-Level yang bekerja 24/7.">
+<meta name="keywords" content="AI brand intelligence, GEO optimization Indonesia, SEO platform WhatsApp, AI search optimization, marketing automation Indonesia, GEO score, social search optimization, WhatsApp business automation">
+<meta name="robots" content="index, follow">
+<meta name="author" content="GeoVera">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://geovera.xyz">
+<meta property="og:title" content="GeoVera — AI Intelligence Platform via WhatsApp">
+<meta property="og:description" content="Satu platform AI untuk SEO, GEO, Social Search, Marketing, dan Analytics. Semuanya dari WhatsApp. 20+ integrasi. Tim AI C-Level 24/7.">
+<meta property="og:image" content="https://geovera.xyz/og-cover.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@geovera_xyz">
+<link rel="canonical" href="https://geovera.xyz">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:ital,wght@0,200;0,300;0,400;0,500;0,600;0,700;0,800;1,200;1,300;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<!-- FAQ Schema -->
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Apa itu GEO dan kenapa penting untuk bisnis saya?","acceptedAnswer":{"@type":"Answer","text":"GEO (Generative Engine Optimization) adalah strategi mengoptimalkan brand Anda agar sering muncul dan direkomendasikan oleh AI platforms seperti ChatGPT, Perplexity, Gemini, dan Claude. Di era sekarang, jutaan orang mencari produk via AI — bisnis yang tidak teroptimasi akan kehilangan peluang besar. GeoVera adalah platform pertama di Indonesia yang mengukur dan meningkatkan GEO score brand Anda secara sistematis."}},{"@type":"Question","name":"Bagaimana GeoVera bekerja lewat WhatsApp?","acceptedAnswer":{"@type":"Answer","text":"GeoVera terintegrasi dengan WhatsApp Business API. Anda cukup kirim pesan ke nomor GeoVera — seperti 'buat laporan SEO minggu ini' atau 'generate 7 konten Instagram' — dan AI langsung merespons dengan hasil yang siap digunakan. Tidak perlu install app baru."}},{"@type":"Question","name":"Berapa lama setup GeoVera?","acceptedAnswer":{"@type":"Answer","text":"Proses onboarding membutuhkan 15-30 menit. GeoVera otomatis menganalisis website, kompetitor, dan membuat Brand DNA profile. Untuk integrasi platform seperti Google Ads atau Instagram, butuh 5-10 menit per platform."}},{"@type":"Question","name":"Apakah GeoVera cocok untuk UMKM?","acceptedAnswer":{"@type":"Answer","text":"Ya, GeoVera dirancang untuk semua skala bisnis. Untuk UMKM, GeoVera memberikan kapabilitas marketing intelligence sekelas perusahaan besar dengan biaya terjangkau — tanpa perlu mempekerjakan tim terpisah."}}]}
+</script>
+<!-- SoftwareApp Schema -->
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"GeoVera","url":"https://geovera.xyz","applicationCategory":"BusinessApplication","description":"AI Brand Intelligence Platform — SEO, GEO, Social Search, Marketing Automation via WhatsApp","operatingSystem":"WhatsApp","offers":[{"@type":"Offer","name":"Basic","priceCurrency":"USD","price":"399"},{"@type":"Offer","name":"Premium","priceCurrency":"USD","price":"699"},{"@type":"Offer","name":"Partner","priceCurrency":"USD","price":"1099"}],"featureList":["SEO & GEO Optimization","Social Search Monitoring","AI Content Studio","WhatsApp Automation","20+ Platform Integrations","AI C-Level Personas"]}
+</script>
+
+<style>
+/* ════════════════════════════════════════════
+   DESIGN TOKENS — GeoVera System
+════════════════════════════════════════════ */
+:root {
+  /* ── Surfaces (from gv_design_tokens) ─────────────── */
+  --void:#050709;      /* Deepest bg */
+  --base:#090D12;      /* App bg */
+  --s0:#0D1117;        /* Surface 0 */
+  --s1:#111720;        /* Surface 1 — elevated card */
+  --s2:#161D29;        /* Surface 2 — modal, dropdown */
+  --s3:#1C2535;        /* Surface 3 — hover */
+  --s4:#243042;        /* Surface 4 — active */
+
+  /* ── Text ─────────────────────────────────────────── */
+  --t1:#F1F5FB;        /* Primary text */
+  --t2:#7D93B4;        /* Secondary text */
+  --t3:#3D5070;        /* Tertiary / placeholder */
+  --t4:#1E2D42;        /* Ghost text */
+
+  /* ── Brand Green ──────────────────────────────────── */
+  --g4:#4ADE80;        /* Green 400 — light accent */
+  --g5:#22C55E;        /* Green 500 — primary brand */
+  --g6:#16A34A;        /* Green 600 — CTA, mark stroke */
+  --g3:#86EFAC;        /* Green 300 — extra light */
+  --g7:#166534;        /* Green 700 — deep */
+
+  /* ── Pillar Colors ────────────────────────────────── */
+  --vi:#818CF8;        /* Visibility — Indigo */
+  --di:#38BDF8;        /* Discovery — Sky */
+  --au:#FCD34D;        /* Authority — Amber */
+  --tr:#4ADE80;        /* Trust — Green */
+
+  /* ── Semantic ─────────────────────────────────────── */
+  --red:#F87171;
+  --blu:#60A5FA;
+  --pur:#A78BFA;
+  --pnk:#F472B6;
+
+  /* ── Borders (from gv_design_tokens) ─────────────── */
+  --b0:rgba(255,255,255,.05);   /* Border subtle */
+  --b1:rgba(255,255,255,.08);   /* Border default */
+  --b2:rgba(255,255,255,.12);   /* Border strong */
+  --b3:rgba(255,255,255,.18);   /* Border emphasis */
+
+  /* ── Green tints (from gv_design_tokens) ─────────── */
+  --ga8:rgba(22,163,74,.08);    /* canonical: ga8 */
+  --ga15:rgba(22,163,74,.15);   /* canonical: ga15 */
+  --ga25:rgba(22,163,74,.25);   /* canonical: ga25 */
+  /* aliases used across file: */
+  --ga6:var(--ga8);
+  --ga12:var(--ga15);
+  --ga20:var(--ga25);
+  --ga35:rgba(22,163,74,.35);
+
+  /* ── Typography (from gv_design_tokens) ──────────── */
+  --fd:'Manrope',sans-serif;         /* Display — Manrope 800 */
+  --ff:'Inter',sans-serif;           /* Body — Inter */
+  --fm:'JetBrains Mono',monospace;   /* Mono — JetBrains Mono */
+  /* aliases */
+  --ff-head:var(--fd);
+  --ff-body:var(--ff);
+  --ff-mono:var(--fm);
+
+  /* ── Type Scale (exact DB values) ────────────────── */
+  --fs-3xs:9px;    /* Micro — tick marks, dividers */
+  --fs-2xs:12px;   /* Tiny — mono labels, badges */
+  --fs-xs:15px;    /* Extra small — meta, eyebrow */
+  --fs-sm:17px;    /* Small — secondary body */
+  --fs-base:20px;  /* Base body */
+  --fs-md:23px;    /* Medium — large body, small headings */
+  --fs-lg:26px;    /* Large — subheadings, card titles */
+  --fs-xl:29px;    /* XL — section titles */
+  --fs-2xl:32px;   /* 2XL — page headings */
+  --fs-3xl:40px;   /* 3XL — large headings */
+  --fs-4xl:51px;   /* 4XL — display small */
+  --fs-5xl:63px;   /* 5XL — display / hero scores */
+  --fs-6xl:79px;   /* 6XL — display large */
+  --fs-hero:85px;  /* Hero — GEO score display */
+
+  /* ── Radii (from gv_design_tokens) ───────────────── */
+  --r2:4px;        /* XS — badges, chips */
+  --r4:6px;        /* SM — buttons, inputs */
+  --r5:10px;       /* MD — cards */
+  --r6:14px;       /* LG — panels, modals */
+  --r8:20px;       /* XL — large cards */
+  --full:9999px;   /* Full — pills, avatars */
+  /* extra (not in DB, kept for compatibility) */
+  --r3:4px;
+  --r10:28px;
+
+  /* ── Spacing (from gv_design_tokens) ─────────────── */
+  --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px;
+  --space-5:20px; --space-6:24px; --space-8:32px; --space-10:40px;
+  --space-12:48px; --space-16:64px; --space-20:80px;
+
+  /* ── Shadows ──────────────────────────────────────── */
+  --sh-green:0 0 40px rgba(22,163,74,.2),0 0 80px rgba(22,163,74,.08);
+  --sh-card:0 1px 3px rgba(0,0,0,.4),0 4px 24px rgba(0,0,0,.2);
+}
+
+/* ════════════════════════════════════════════
+   ICON CSS VARIABLES (adaptive monochrome)
+   Dark  : green + white
+   Light : green + black/gray
+════════════════════════════════════════════ */
+:root{
+  --ic-bg:#111720;    /* icon inner background */
+  --ic-g:#22C55E;     /* green — main accent */
+  --ic-g2:#16A34A;    /* green — secondary/dim */
+  --ic-fg:#F1F5FB;    /* foreground (white) */
+  --ic-sf:#1C2535;    /* surface subtle */
+  --ic-mu:#3D5070;    /* muted */
+}
+
+/* ════════════════════════════════════════════
+   LIGHT MODE OVERRIDES
+════════════════════════════════════════════ */
+body.light-mode{
+  --void:#FFFFFF;--base:#FFFFFF;--s0:#FFFFFF;--s1:#F8F8F8;
+  --s2:#F0F0F0;--s3:#E0E0E0;--s4:#B0B0B0;
+  --t1:#0F172A;--t2:#334155;--t3:#64748B;--t4:#94A3B8;
+  --b0:rgba(0,0,0,.04);--b1:rgba(0,0,0,.07);
+  --b2:rgba(0,0,0,.11);--b3:rgba(0,0,0,.16);
+  color:var(--t1);
+  --ic-bg:#E8EDF4;--ic-g:#16A34A;--ic-g2:#166534;
+  --ic-fg:#0F172A;--ic-sf:#CBD5E1;--ic-mu:#94A3B8;
+  background:#FFFFFF;
+  background-attachment:fixed;
+}
+body.light-mode nav{background:#FFFFFF!important;border-bottom:none;}
+body.light-mode .nav.solid{background:rgba(255,255,255,.98)!important;backdrop-filter:blur(12px);border-bottom:none;}
+body.light-mode .card{background:#FFFFFF;border-color:rgba(0,0,0,.09);}
+body.light-mode .feat-card{background:#FFFFFF;border-color:rgba(0,0,0,.08);}
+body.light-mode .persona-card{background:#FFFFFF;border-color:rgba(0,0,0,.08);}
+body.light-mode .how-card{background:#FFFFFF;border-color:rgba(0,0,0,.08);}
+body.light-mode .benefit{background:#FFFFFF;border-color:rgba(0,0,0,.08);}
+body.light-mode .faq-item{background:#FFFFFF;border-color:rgba(0,0,0,.08);}
+body.light-mode .blog-card{background:#FFFFFF;border-color:rgba(0,0,0,.08);}
+
+body.light-mode section{background:transparent!important;color:var(--t1);}
+body.light-mode section::before{background:none!important;}
+body.light-mode section:nth-child(even)::before{background:none!important;}
+body.light-mode section:nth-child(odd)::before{background:none!important;}
+body.light-mode .personas-bg,
+body.light-mode .faq-bg,
+body.light-mode .contact-bg,
+body.light-mode .int-sec{background:transparent!important;}
+body.light-mode .hero{background:#FFFFFF!important;}
+body.light-mode .hero::before,
+body.light-mode .hero::after{display:none!important;}
+body.light-mode .hero-tex{display:none;}
+body.light-mode .hero-glow{display:none;}
+body.light-mode .ph-halo{display:none;}
+body.light-mode .ph-stage::before{display:none;}
+body.light-mode .hero-grid-bg{display:none;}
+/* Sparkles — make them use dark visible colors in light mode */
+body.light-mode .sp-a{color:#16A34A;}
+body.light-mode .sp-b{color:#0EA5E9;}
+body.light-mode .sp-c{color:#16A34A;}
+body.light-mode .sp-d{color:#CA8A04;}
+body.light-mode .sp-e{color:#7C3AED;}
+body.light-mode .sp-f{color:#16A34A;}
+body.light-mode .sp-g{color:#0EA5E9;}
+body.light-mode .sp-h{color:#CA8A04;}
+/* Phone glow — remove dark shadow in light mode */
+body.light-mode .ph{
+  filter:drop-shadow(0 12px 32px rgba(0,0,0,.15)) drop-shadow(0 0 24px rgba(22,163,74,.12));
+}
+
+body.light-mode section[style*="--s0"]{background:var(--s0)!important;}
+body.light-mode .hero-grid-bg{opacity:.03;}
+body.light-mode .wa-card,
+body.light-mode .int-card,
+body.light-mode .feature-card,
+body.light-mode .step-card,
+body.light-mode .benefit,
+body.light-mode .blog-card,
+body.light-mode .faq-item,
+body.light-mode .persona-card,
+body.light-mode .problem-item,
+body.light-mode .problem-solution{
+  background:var(--s1);border-color:var(--b1);
+  box-shadow:0 1px 4px rgba(0,0,0,.06);
+}
+body.light-mode .int-card{background:#FFFFFF;border-color:rgba(0,0,0,.09);}
+body.light-mode .int-card:hover{background:#F5F5F5;}
+body.light-mode .cta-box{background:var(--s0);border-color:var(--b2);}
+body.light-mode footer{background:transparent;border-top:1px solid rgba(0,0,0,.06);}
+body.light-mode .btn-ghost{color:var(--t2);border-color:var(--b2);}
+body.light-mode .btn-ghost:hover{background:var(--s2);color:var(--t1);}
+body.light-mode .wa-msg-ai{background:var(--s2);}
+body.light-mode .geo-score-badge{
+  background:#FFFFFF;
+  border:1px solid rgba(0,0,0,.08);
+  box-shadow:none;
+}
+body.light-mode .geo-score-label{ color:#64748B; }
+body.light-mode .geo-score-num{ color:#0F172A; }
+/* Light mode — everything transparent, body carries the rhythm */
+body.light-mode .trust{
+  background:linear-gradient(to bottom,
+    rgba(255,255,255,0) 0%,
+    rgba(226,235,248,.5) 20%,
+    rgba(226,235,248,.5) 80%,
+    rgba(255,255,255,0) 100%
+  );
+  border:none;
+}
+body.light-mode section:nth-child(even){background:transparent;}
+body.light-mode section:nth-child(odd){background:transparent;}
+body.light-mode .personas-bg{background:transparent!important;}
+body.light-mode .faq-bg{background:transparent!important;}
+body.light-mode .int-sec{background:transparent!important;}
+body.light-mode .contact-bg{background:transparent!important;}
+body.light-mode footer{background:transparent!important;}
+
+body.light-mode .hero-grid-line{stroke:rgba(0,0,0,.06);}
+
+/* ── FLOATING THEME TOGGLE (left-center) ──────── */
+#theme-toggle{
+  position:fixed;left:16px;top:50%;transform:translateY(-50%);
+  z-index:9999;
+  display:flex;flex-direction:column;align-items:center;gap:5px;
+  background:var(--s2);
+  border:1px solid var(--b2);
+  border-radius:var(--full);
+  padding:9px 7px;
+  cursor:pointer;
+  box-shadow:0 4px 24px rgba(0,0,0,.3);
+  transition:all .25s;
+  user-select:none;
+  -webkit-tap-highlight-color:transparent;
+}
+#theme-toggle:hover{
+  box-shadow:0 6px 32px rgba(0,0,0,.4);
+  transform:translateY(-50%) scale(1.06);
+}
+.tt-icon{
+  width:23px;height:23px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:12px;line-height:1;
+  transition:all .2s;
+}
+.tt-sun{background:rgba(251,191,36,.15);color:#FBBF24;}
+.tt-moon{background:rgba(129,140,248,.15);color:#818CF8;}
+/* pill track */
+.tt-pill{
+  width:15px;height:30px;
+  background:var(--s3);border:1px solid var(--b2);border-radius:var(--full);
+  position:relative;
+}
+/* sliding dot */
+.tt-dot{
+  position:absolute;left:50%;top:2px;
+  transform:translateX(-50%);
+  width:11px;height:11px;border-radius:50%;
+  background:var(--g5);
+  transition:top .3s cubic-bezier(.34,1.56,.64,1),background .3s;
+}
+body.light-mode .tt-dot{top:calc(100% - 13px);background:#FBBF24;}
+body.light-mode #theme-toggle{
+  background:var(--s0);border-color:var(--b2);
+  box-shadow:0 4px 20px rgba(0,0,0,.12);
+}
+body.light-mode #theme-toggle:hover{box-shadow:0 6px 28px rgba(0,0,0,.18);}
+/* label */
+.tt-label{
+  font-family:var(--fm);font-size:7px;letter-spacing:.08em; /* 8px×0.8=6.4 */
+  text-transform:uppercase;color:var(--t3);
+  writing-mode:vertical-rl;text-orientation:mixed;
+}
+@media(max-width:640px){#theme-toggle{left:8px;padding:8px 6px;}}
+
+/* ════════════════════════════════════════════
+   RESET & BASE
+════════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%;}
+body{
+  /* Natural gradient river — sections breathe, no hard blocks */
+  background:
+    linear-gradient(to bottom,
+      #040608   0%,    /* void — hero top */
+      #060A0F   5%,
+      #090D12   11%,   /* s0 — trust bar */
+      #0C1018   17%,
+      #0F1420   24%,   /* s1 — problem */
+      #111720   30%,
+      #0F1420   37%,
+      #0D1117   43%,   /* s0 — personas */
+      #0A0E15   49%,
+      #0D1117   55%,   /* between */
+      #111820   61%,   /* s1 — benefits */
+      #0F1520   67%,
+      #0C1018   73%,   /* s0 — faq */
+      #090D12   79%,
+      #070A10   85%,   /* blog */
+      #050709   91%,
+      #030507  100%    /* void — footer */
+    );
+  background-attachment:fixed;
+  color:var(--t1);
+  font-family:var(--ff);
+  font-size:var(--fs-sm);
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  overflow-x:hidden;
+}
+a{color:inherit;text-decoration:none;}
+img,svg{max-width:100%;vertical-align:middle;}
+button{cursor:pointer;border:none;background:none;font-family:inherit;}
+input,textarea,select{font-family:inherit;}
+
+/* ════════════════════════════════════════════
+   TYPOGRAPHY SYSTEM
+════════════════════════════════════════════ */
+.eyebrow{
+  font-family:var(--fm);
+  font-size:var(--fs-2xs);
+  letter-spacing:.22em;
+  text-transform:uppercase;
+  color:var(--g5);
+  display:block;
+}
+.display{
+  font-family:var(--fd);
+  font-weight:800;
+  font-size:var(--fs-hero);
+  letter-spacing:-.035em;
+  line-height:1.02;
+}
+.h1{font-family:var(--fd);font-weight:800;font-size:var(--fs-5xl);letter-spacing:-.03em;line-height:1.05;}
+.h2{font-family:var(--fd);font-weight:800;font-size:var(--fs-4xl);letter-spacing:-.03em;line-height:1.08;}
+.h3{font-family:var(--fd);font-weight:700;font-size:var(--fs-3xl);letter-spacing:-.02em;line-height:1.15;}
+.h4{font-family:var(--fd);font-weight:700;font-size:var(--fs-xl);letter-spacing:-.015em;line-height:1.25;}
+.h5{font-family:var(--fd);font-weight:700;font-size:var(--fs-lg);letter-spacing:-.01em;}
+.lead{font-family:var(--ff);font-size:var(--fs-md);line-height:1.75;color:var(--t2);}
+.body{font-family:var(--ff);font-size:var(--fs-sm);line-height:1.75;color:var(--t2);}
+.caption{font-family:var(--ff);font-size:var(--fs-xs);color:var(--t3);line-height:1.5;}
+.mono{font-family:var(--fm);}
+.serif{font-family:Georgia,serif;font-style:italic;}
+.geo{color:var(--g5);}
+.grad{
+  background:linear-gradient(135deg,var(--g3) 0%,var(--g5) 50%,#0ea5e9 100%);
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.grad-green{
+  background:linear-gradient(135deg,var(--g3),var(--g6));
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+
+/* ════════════════════════════════════════════
+   LAYOUT — FULL WIDTH BLEED
+════════════════════════════════════════════ */
+/* Fluid edge padding — no max-width cap */
+.wrap{
+  width:100%;
+  padding:0 clamp(20px, 5vw, 80px);
+}
+/* Narrow reading column for FAQ / long-form */
+.wrap-sm{
+  width:100%;
+  max-width:800px;
+  margin:0 auto;
+  padding:0 clamp(20px, 5vw, 80px);
+}
+/* Medium column for section heads */
+.wrap-md{
+  width:100%;
+  max-width:1040px;
+  margin:0 auto;
+  padding:0 clamp(20px, 5vw, 80px);
+}
+section{padding:clamp(72px,8vw,120px) 0;}
+
+/* ── Section rhythm overlays — subtle, not blocking ── */
+section{position:relative;}
+section::before{
+  content:'';
+  position:absolute;inset:0;
+  pointer-events:none;
+  z-index:0;
+}
+section > *{position:relative;z-index:1;}
+
+/* Alternate section tints — dark mode only */
+body:not(.light-mode) section:nth-child(even)::before{
+  background:linear-gradient(to bottom,
+    rgba(17,23,32,.0) 0%,
+    rgba(17,23,32,.35) 30%,
+    rgba(17,23,32,.35) 70%,
+    rgba(17,23,32,.0) 100%
+  );
+}
+body:not(.light-mode) section:nth-child(odd)::before{
+  background:linear-gradient(to bottom,
+    rgba(9,13,18,.0) 0%,
+    rgba(9,13,18,.15) 30%,
+    rgba(9,13,18,.15) 70%,
+    rgba(9,13,18,.0) 100%
+  );
+}
+
+.sec-head{margin-bottom:clamp(48px,6vw,80px);}
+.sec-head.center{text-align:center;}
+.sec-head .eyebrow{margin-bottom:12px;}
+.sec-head .h2{margin-bottom:20px;}
+.sec-head .lead{max-width:640px;}
+.sec-head.center .lead{margin:0 auto;}
+
+/* ════════════════════════════════════════════
+   COMPONENTS: BUTTONS
+════════════════════════════════════════════ */
+.btn{
+  display:inline-flex;align-items:center;gap:9px;
+  padding:12px 24px;border-radius:var(--r5);
+  font-family:var(--fd);font-size:var(--fs-sm);font-weight:700;
+  letter-spacing:-.01em;transition:all .2s;white-space:nowrap;
+}
+.btn-primary{
+  background:var(--g6);color:#fff;
+  box-shadow:0 0 0 1px rgba(22,163,74,.5) inset;
+}
+.btn-primary:hover{background:var(--g5);transform:translateY(-2px);box-shadow:var(--sh-green);}
+.btn-ghost{
+  background:var(--b1);color:var(--t1);
+  border:1px solid var(--b2);
+}
+.btn-ghost:hover{background:var(--b2);border-color:var(--b3);transform:translateY(-1px);}
+.btn-wa{
+  background:linear-gradient(135deg,#25D366 0%,#128C7E 100%);
+  color:#fff;
+  box-shadow:0 4px 20px rgba(37,211,102,.2);
+}
+.btn-wa:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(37,211,102,.3);}
+.btn-lg{padding:16px 36px;font-size:var(--fs-base);border-radius:var(--r6);}
+.btn-sm{padding:8px 18px;font-size:var(--fs-xs);}
+.btn-outline{background:transparent;color:var(--g5);border:1px solid var(--ga35);}
+.btn-outline:hover{background:var(--ga12);}
+.icon-btn{width:36px;height:36px;padding:0;border-radius:var(--r4);background:var(--b1);border:1px solid var(--b1);display:inline-flex;align-items:center;justify-content:center;color:var(--t2);}
+
+/* ════════════════════════════════════════════
+   COMPONENTS: BADGE / PILL
+════════════════════════════════════════════ */
+.badge{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:5px 14px;border-radius:var(--full);
+  font-family:var(--fm);font-size:var(--fs-2xs);letter-spacing:.12em;
+  background:var(--ga6);border:1px solid var(--ga20);color:var(--g4);
+}
+.badge-dot{width:5px;height:5px;border-radius:50%;background:var(--g5);box-shadow:0 0 8px var(--g5);}
+.tag{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:3px 10px;border-radius:var(--full);
+  font-family:var(--fm);font-size:var(--fs-3xs);letter-spacing:.08em;font-weight:500;
+  background:var(--b0);border:1px solid var(--b1);color:var(--t3);
+}
+.tag.green{background:var(--ga6);border-color:var(--ga20);color:var(--g5);}
+.tag.blue{background:rgba(56,189,248,.08);border-color:rgba(56,189,248,.2);color:var(--di);}
+.tag.amber{background:rgba(252,211,77,.08);border-color:rgba(252,211,77,.2);color:var(--au);}
+.tag.pur{background:rgba(167,139,250,.08);border-color:rgba(167,139,250,.2);color:var(--pur);}
+
+/* ════════════════════════════════════════════
+   COMPONENTS: CARDS
+════════════════════════════════════════════ */
+.card{
+  background:var(--s1);border:1px solid var(--b1);
+  border-radius:var(--r6);padding:28px;
+  box-shadow:var(--sh-card);transition:all .25s;
+}
+.card:hover{border-color:var(--ga20);background:var(--s2);transform:translateY(-3px);box-shadow:0 8px 40px rgba(0,0,0,.3);}
+.card-icon{display:block;width:64px;height:64px;margin-bottom:20px;flex-shrink:0;}
+.card-icon-sm{display:block;width:48px;height:48px;margin-bottom:16px;flex-shrink:0;}
+
+/* ════════════════════════════════════════════
+   NAVBAR
+════════════════════════════════════════════ */
+.nav{
+  position:fixed;top:0;left:0;right:0;z-index:200;
+  transition:background .3s,border-color .3s,backdrop-filter .3s;
+}
+.nav.solid{
+  background:rgba(9,13,18,.92);
+  backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--b1);
+}
+.nav-inner{
+  display:flex;align-items:center;justify-content:space-between;
+  height:68px;
+  /* 90% width pushed to the right — leaves space for the left toggle */
+  width:90%;margin-left:auto;margin-right:0;
+  padding:0 clamp(20px,4vw,60px) 0 clamp(12px,2vw,24px);
+}
+.nav-logo{display:flex;align-items:center;gap:9px;}
+.nav-mark{width:30px;height:30px;}
+.nav-wm{font-family:var(--fd);font-weight:800;font-size:var(--fs-md);letter-spacing:-.02em;}
+.nav-wm em{font-style:normal;color:var(--g5);}
+/* Right group: links + CTA buttons together */
+.nav-right{display:flex;align-items:center;gap:0;}
+.nav-links{display:flex;align-items:center;margin-right:8px;}
+.nav-link{
+  padding:8px 14px;font-size:var(--fs-sm);font-weight:600;
+  color:var(--t3);border-radius:var(--r4);
+  transition:color .15s,background .15s;
+  letter-spacing:-.01em;
+}
+.nav-link:hover{color:var(--t1);background:var(--b0);}
+.nav-link.active{color:var(--t1);}
+.nav-actions{display:flex;align-items:center;gap:8px;}
+.ham{
+  display:none;width:38px;height:38px;border-radius:var(--r4);
+  background:var(--b1);border:1px solid var(--b1);
+  align-items:center;justify-content:center;color:var(--t1);
+}
+
+/* ════════════════════════════════════════════
+   SECTION: HERO
+════════════════════════════════════════════ */
+.hero{
+  position:relative;
+  min-height:100svh;
+  display:flex;align-items:flex-start;
+  padding:48px 0 56px;
+  overflow:hidden;
+}
+
+/* Grid texture — full bleed */
+.hero-tex{
+  position:absolute;inset:0;
+  background-image:
+    linear-gradient(var(--b0) 1px,transparent 1px),
+    linear-gradient(90deg,var(--b0) 1px,transparent 1px);
+  background-size:52px 52px;
+  mask-image:radial-gradient(ellipse 100% 90% at 60% 50%,black 30%,transparent 80%);
+}
+
+/* Glow — shifted right toward card */
+.hero-glow{
+  position:absolute;top:0;right:10%;
+  width:700px;height:700px;pointer-events:none;
+  background:radial-gradient(ellipse at center,rgba(22,163,74,.10) 0%,rgba(22,163,74,.03) 45%,transparent 70%);
+}
+
+/* Two-column: text takes 63%, card takes 37% — aligned to top */
+.hero-inner{
+  position:relative;z-index:1;
+  display:grid;
+  grid-template-columns:63fr 37fr;
+  gap:clamp(24px,3vw,48px);
+  align-items:center;
+}
+
+/* ── Text column ── */
+.hero-text{ max-width:100%; text-align:center; }  /* centered */
+.hero-text .badge{ margin-bottom:20px; display:inline-flex; }
+
+.hero-title{
+  font-family:var(--fd);
+  font-weight:800;
+  font-size:clamp(36px,4.8vw,66px);
+  letter-spacing:-.04em;
+  line-height:1.0;
+  margin-bottom:20px;
+}
+/* Serif line: Playfair Display italic — high-contrast editorial serif (à la Claude) */
+.hero-title .serif-line{
+  font-family:'Playfair Display', Georgia, serif;
+  font-style:italic;
+  font-weight:400;
+  display:block;
+  letter-spacing:-.01em;
+  line-height:1.05;
+  color:var(--t1);
+}
+
+.hero-sub{
+  font-family:var(--ff);
+  font-size:var(--fs-sm);
+  line-height:1.75;
+  color:var(--t2);
+  margin-bottom:16px;
+  max-width:400px;
+  margin-left:auto;margin-right:auto;  /* center under title */
+  text-align:center;
+}
+.hero-promise{
+  display:flex;flex-direction:column;gap:6px;
+  margin-bottom:32px;
+  align-items:center;  /* center the bullet rows */
+}
+.hero-promise-item{
+  display:flex;align-items:center;gap:10px;
+  font-family:var(--ff);font-size:var(--fs-sm);
+  color:var(--t2);font-weight:500;
+}
+.hero-promise-item svg{ color:var(--g5);flex-shrink:0; }
+.hero-ctas{ display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;justify-content:center; }
+
+.hero-logos{ border-top:none;padding-top:0;text-align:center; }
+.hero-logos-label{
+  font-family:var(--fm);font-size:var(--fs-3xs);
+  letter-spacing:.18em;text-transform:uppercase;
+  color:var(--t3);margin-bottom:12px;
+}
+.logo-row{ display:flex;gap:14px;flex-wrap:wrap;opacity:1;justify-content:center; }
+.logo-chip{
+  font-family:var(--fd);font-weight:700;
+  font-size:var(--fs-sm);color:var(--t2);
+  letter-spacing:-.01em;
+}
+body.light-mode .hero-logos-label{ color:var(--t3); }
+body.light-mode .logo-chip{ color:#3D5070; }
+
+/* ── WA card column ── */
+.hero-wa{
+  position:relative;
+  display:flex;flex-direction:column;
+  align-items:center;
+  gap:16px;
+  padding-top:24px;
+}
+
+/* GEO Score badge — sits above card, far right */
+.geo-score-badge{
+  display:flex;align-items:center;gap:16px;
+  background:var(--s1);border:1px solid var(--b2);
+  border-radius:var(--r5);padding:10px 16px;
+  box-shadow:var(--sh-card);
+  animation:float 4s ease-in-out infinite;
+  align-self:flex-end;
+}
+.geo-score-label{
+  font-family:var(--fm);font-size:var(--fs-3xs);
+  letter-spacing:.2em;text-transform:uppercase;color:#FFFFFF;
+  margin-bottom:2px;
+}
+.geo-score-num{
+  font-family:var(--fd);font-weight:800;
+  font-size:var(--fs-2xl);color:#FFFFFF;line-height:1;
+}
+.geo-score-delta{
+  font-family:var(--ff);font-size:var(--fs-xs);
+  font-weight:700;color:var(--g4);margin-left:4px;
+}
+
+.wa-card{
+  background:var(--s1);border:1px solid var(--b1);
+  border-radius:var(--r8);overflow:hidden;
+  box-shadow:0 20px 60px rgba(0,0,0,.5),var(--sh-green);
+  width:100%;max-width:100%;
+}
+.wa-topbar{
+  display:flex;align-items:center;gap:12px;
+  padding:12px 16px;background:var(--s0);
+  border-bottom:1px solid var(--b1);
+}
+.wa-avatar-ring{
+  width:36px;height:36px;border-radius:50%;
+  background:linear-gradient(135deg,var(--g6),var(--g4));
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+}
+.wa-info .name{ font-family:var(--fd);font-weight:700;font-size:var(--fs-sm); }
+.wa-info .status{ font-family:var(--fm);font-size:var(--fs-3xs);color:var(--g5);letter-spacing:.06em; }
+.wa-body{ padding:14px;display:flex;flex-direction:column;gap:9px; }
+.msg{
+  padding:9px 13px;border-radius:12px;
+  font-family:var(--ff);font-size:var(--fs-xs);
+  line-height:1.55;max-width:90%;
+}
+.msg.user{
+  background:var(--ga15);border:1px solid var(--ga25);
+  align-self:flex-end;border-radius:12px 12px 3px 12px;
+}
+.msg.ai{
+  background:var(--s3);border:1px solid var(--b1);
+  align-self:flex-start;border-radius:12px 12px 12px 3px;
+}
+.msg.ai strong{
+  font-family:var(--fm);font-size:var(--fs-3xs);
+  letter-spacing:.1em;color:var(--g4);display:block;margin-bottom:4px;
+}
+.msg-metric{ display:flex;gap:7px;margin-top:8px;flex-wrap:wrap; }
+.m-pill{
+  padding:3px 8px;border-radius:var(--full);
+  font-family:var(--fm);font-size:var(--fs-3xs);font-weight:600;
+}
+.m-green{ background:rgba(34,197,94,.12);color:var(--g4);border:1px solid rgba(34,197,94,.2); }
+.m-blue{ background:rgba(96,165,250,.1);color:var(--blu);border:1px solid rgba(96,165,250,.2); }
+.m-amber{ background:rgba(252,211,77,.1);color:var(--au);border:1px solid rgba(252,211,77,.2); }
+
+.wa-typing{
+  display:flex;align-items:center;gap:4px;
+  padding:9px 13px;background:var(--s3);border:1px solid var(--b1);
+  border-radius:12px;align-self:flex-start;width:fit-content;
+}
+.t-dot{ width:5px;height:5px;border-radius:50%;background:var(--t3);animation:tdot 1.2s infinite; }
+.t-dot:nth-child(2){ animation-delay:.2s; }
+.t-dot:nth-child(3){ animation-delay:.4s; }
+@keyframes tdot{ 0%,60%,100%{transform:translateY(0);opacity:.4;} 30%{transform:translateY(-5px);opacity:1;} }
+
+/* Platforms connected chip — below card */
+.hero-platforms{
+  display:flex;align-items:center;gap:7px;
+  font-family:var(--fm);font-size:var(--fs-3xs);
+  color:var(--t3);letter-spacing:.06em;
+  animation:float 5s ease-in-out infinite .8s;
+}
+.hero-platforms-dot{ width:6px;height:6px;border-radius:50%;background:var(--g5);animation:pulse 2s infinite; }
+@keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:.4;} }
+@keyframes float{ 0%,100%{transform:translateY(0);} 50%{transform:translateY(-7px);} }
+
+/* ════════════════════════════════════════════
+   SECTION: TRUST BAR
+════════════════════════════════════════════ */
+.trust{
+  background:var(--s0);
+  border-top:none;border-bottom:none;
+  padding:28px 0;
+}
+.trust-row{display:flex;justify-content:center;align-items:center;gap:40px;flex-wrap:wrap;}
+.trust-item{display:flex;align-items:center;gap:9px;font-size:var(--fs-sm);font-weight:600;color:var(--t2);}
+.trust-item svg{color:var(--g5);}
+
+/* ════════════════════════════════════════════
+   SECTION: PROBLEM
+════════════════════════════════════════════ */
+.problem-grid{display:grid;grid-template-columns:1fr 1fr;gap:clamp(32px,4vw,60px);align-items:center;}
+.chaos-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.chaos-pill{
+  background:var(--s1);border:1px solid var(--b1);border-radius:var(--r4);
+  padding:10px 12px;text-align:center;font-size:var(--fs-xs);font-weight:600;
+  color:var(--t3);transition:all .2s;
+}
+.chaos-pill.bad{border-color:rgba(248,113,113,.2);background:rgba(248,113,113,.04);}
+.chaos-vs{
+  text-align:center;padding:32px 0;
+  font-family:var(--fd);font-weight:800;font-size:var(--fs-3xl);
+  color:var(--t4);
+}
+.solution-preview{
+  background:var(--s1);border:1px solid var(--b1);border-radius:var(--r8);
+  overflow:hidden;
+}
+.sol-header{background:var(--s0);padding:14px 20px;border-bottom:1px solid var(--b1);display:flex;align-items:center;gap:10px;}
+.sol-dots{display:flex;gap:5px;}
+.sol-dot{width:10px;height:10px;border-radius:50%;}
+.sol-body{padding:16px 20px;display:flex;flex-direction:column;gap:8px;}
+.sol-cmd{
+  display:flex;align-items:flex-start;gap:8px;
+  background:var(--ga6);border:1px solid var(--ga12);
+  border-radius:var(--r4);padding:9px 12px;
+  font-size:var(--fs-xs);
+}
+.sol-cmd-icon{font-size:14px;flex-shrink:0;}
+.sol-result{display:flex;gap:6px;flex-wrap:wrap;padding:4px 0;}
+.sol-tag{padding:4px 10px;border-radius:var(--full);font-family:var(--fm);font-size:var(--fs-3xs);font-weight:600;}
+
+/* ════════════════════════════════════════════
+   SECTION: FEATURES
+════════════════════════════════════════════ */
+/* Features — 3 col base, fills width */
+.features-grid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:clamp(12px,1.5vw,20px);
+}
+/* Personas — 4 col base */
+.personas-grid{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:clamp(10px,1.2vw,16px);
+}
+/* Integrations — see SECTION: INTEGRATIONS below */
+/* Benefits — 2 col base */
+.benefits-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:clamp(10px,1.2vw,16px);
+}
+/* Blog — 3 col base */
+.blog-grid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:clamp(14px,1.5vw,22px);
+}.feat-card{
+  background:var(--s1);border:1px solid var(--b1);border-radius:var(--r6);
+  padding:28px;transition:all .25s;position:relative;overflow:hidden;
+}
+.feat-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,var(--g6),transparent);
+  opacity:0;transition:opacity .3s;
+}
+.feat-card:hover{border-color:var(--ga20);background:var(--s2);transform:translateY(-3px);}
+.feat-card:hover::before{opacity:1;}
+.feat-card .h5{margin-bottom:10px;}
+.feat-card .body{font-size:var(--fs-xs);}
+.feat-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:16px;}
+
+/* ════════════════════════════════════════════
+   SECTION: PERSONAS
+════════════════════════════════════════════ */
+.personas-bg{background:transparent;}
+.persona-card{
+  background:var(--s1);border:1px solid var(--b1);border-radius:var(--r6);
+  padding:22px 18px;text-align:center;transition:all .25s;
+}
+.persona-card:hover{border-color:var(--ga20);transform:translateY(-2px);}
+.persona-card .role{font-family:var(--fm);font-size:var(--fs-3xs);letter-spacing:.15em;text-transform:uppercase;color:var(--g5);margin-bottom:6px;}
+.persona-card .pname{font-family:var(--fd);font-weight:800;font-size:var(--fs-md);margin-bottom:8px;}
+.persona-card .pdesc{font-size:var(--fs-xs);color:var(--t2);line-height:1.5;}
+.persona-icon-wrap{width:70px;height:70px;margin:0 auto 14px;display:block;flex-shrink:0;}
+.persona-icon-wrap svg{display:block;width:70px;height:70px;}
+.persona-badges{display:flex;justify-content:center;flex-wrap:wrap;gap:4px;margin-top:10px;}
+
+/* ════════════════════════════════════════════
+   SECTION: HOW IT WORKS
+════════════════════════════════════════════ */
+.steps-wrap{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;}
+.step{
+  background:var(--s1);border:1px solid var(--b1);border-radius:var(--r6);
+  padding:28px 22px;text-align:center;
+  transition:border-color .2s, transform .2s;
+  position:relative;overflow:hidden;
+}
+.step:hover{border-color:var(--ga20);transform:translateY(-2px);}
+.step::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,var(--g6),transparent);
+  opacity:0;transition:opacity .3s;
+}
+.step:hover::before{opacity:1;}
+/* Step number — small pill top-left corner */
+.step-num{
+  position:absolute;top:14px;left:16px;
+  width:26px;height:26px;border-radius:50%;
+  background:var(--ga20);border:1px solid var(--ga35);
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--fm);font-weight:700;font-size:var(--fs-xs);
+  color:var(--g5);
+}
+/* Icon centered, no extra margin fighting with number */
+.step-icon-wrap{width:72px;height:72px;margin:0 auto 18px;display:block;}
+.step-icon-wrap svg{display:block;width:72px;height:72px;}
+.step .h5{margin-bottom:8px;font-size:var(--fs-base);}
+/* Responsive: 2-col on tablet */
+@media(max-width:960px){.steps-wrap{grid-template-columns:1fr 1fr;}}
+@media(max-width:640px){.steps-wrap{grid-template-columns:1fr;}}
+
+/* ════════════════════════════════════════════
+   SECTION: INTEGRATIONS
+════════════════════════════════════════════ */
+/* Outer wrapper stacks category blocks vertically */
+.int-grid{
+  display:flex;
+  flex-direction:column;
+  gap:0;
+  align-items:center;   /* centres every child block */
+}
+/* One block per category */
+.int-category-block{
+  width:100%;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+}
+/* Category label — sits above its row, full width of parent */
+.int-category-label{
+  font-family:var(--fm);font-size:var(--fs-2xs);letter-spacing:.15em;
+  text-transform:uppercase;color:var(--t3);
+  padding:16px 0 10px;
+  width:100%;
+  text-align:center;
+  border-top:none;
+  margin-top:8px;
+}
+.int-category-block:first-child .int-category-label{margin-top:0;}
+/* The 5-card row — always centered, shrinks to content */
+.int-row{
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:center;
+  gap:clamp(8px,1vw,14px);
+  margin-bottom:0;
+}
+.int-card{
+  background:var(--s1);border:1px solid var(--b1);border-radius:var(--r5);
+  padding:18px 12px;
+  width:clamp(120px,14vw,190px);
+  text-align:center;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  transition:all .15s;
+}
+.int-card:hover{border-color:var(--b2);background:var(--s2);}
+.int-emoji{font-size:28px;display:block;margin:0 auto 6px;line-height:1;}
+.int-logo{width:32px;height:32px;display:block;margin:0 auto 8px;flex-shrink:0;}
+.int-name{font-size:var(--fs-xs);font-weight:700;color:var(--t2);text-align:center;}
+.int-cat{font-family:var(--fm);font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--t4);margin-top:2px;text-align:center;}
+
+
+/* Int section — part of gradient flow */
+.int-sec{ background:transparent; }
+
+/* ════════════════════════════════════════════
+   SECTION: BENEFITS
+════════════════════════════════════════════ */
+.benefit{
+  display:flex;gap:20px;align-items:flex-start;
+  background:var(--s1);border:1px solid var(--b1);border-radius:var(--r5);
+  padding:24px;transition:all .2s;
+}
+.benefit:hover{border-color:var(--ga20);}
+.benefit-icon{display:block;width:64px;height:64px;flex-shrink:0;}   /* 44→64 */
+.benefit-body .h5{font-size:var(--fs-base);margin-bottom:5px;}
+
+/* ════════════════════════════════════════════
+   SECTION: FAQ
+════════════════════════════════════════════ */
+.faq-bg{background:transparent;}
+.faqs{display:flex;flex-direction:column;gap:6px;}
+.faq-item{background:var(--s1);border:1px solid var(--b1);border-radius:var(--r5);overflow:hidden;}
+.faq-q{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:18px 22px;cursor:pointer;gap:16px;
+  font-weight:700;font-size:var(--fs-base);letter-spacing:-.01em;
+  transition:background .15s;
+}
+.faq-q:hover{background:var(--b0);}
+.faq-q .icon{flex-shrink:0;color:var(--t3);transition:transform .25s,color .15s;}
+.faq-item.open .faq-q .icon{transform:rotate(45deg);color:var(--g5);}
+.faq-a{
+  max-height:0;overflow:hidden;
+  padding:0 22px;
+  font-size:var(--fs-sm);color:var(--t2);line-height:1.75;
+  transition:max-height .3s ease,padding .3s ease;
+}
+.faq-item.open .faq-a{max-height:400px;padding:0 22px 18px;}
+
+/* ════════════════════════════════════════════
+   SECTION: BLOG
+════════════════════════════════════════════ */
+.blog-card{
+  background:var(--s1);border:1px solid var(--b1);border-radius:var(--r6);
+  overflow:hidden;transition:all .25s;
+}
+.blog-card:hover{border-color:var(--ga20);transform:translateY(-3px);}
+.blog-thumb{height:180px;display:flex;align-items:center;justify-content:center;background:var(--s2);}
+.blog-body{padding:22px;}
+.blog-body .eyebrow{margin-bottom:8px;}
+.blog-title{font-family:var(--fd);font-weight:700;font-size:var(--fs-md);letter-spacing:-.02em;line-height:1.3;margin-bottom:10px;}
+.blog-excerpt{font-size:var(--fs-xs);color:var(--t2);line-height:1.6;margin-bottom:14px;}
+.read-more{font-size:var(--fs-xs);font-weight:700;color:var(--g5);display:flex;align-items:center;gap:5px;}
+.read-more:hover{color:var(--g4);}
+
+/* ════════════════════════════════════════════
+   SECTION: CONTACT
+════════════════════════════════════════════ */
+.contact-bg{background:transparent;}
+.contact-grid{display:grid;grid-template-columns:1fr 1.2fr;gap:clamp(28px,4vw,56px);}
+.contact-info{display:flex;flex-direction:column;gap:16px;}
+.contact-method{
+  display:flex;align-items:center;gap:14px;
+  background:var(--s1);border:1px solid var(--b1);border-radius:var(--r5);
+  padding:16px 18px;transition:all .15s;
+}
+.contact-method:hover{border-color:var(--b2);}
+.cm-icon{width:40px;height:40px;border-radius:var(--r4);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.cm-label{font-family:var(--fm);font-size:var(--fs-3xs);letter-spacing:.12em;text-transform:uppercase;color:var(--t3);margin-bottom:2px;}
+.cm-value{font-family:var(--ff);font-weight:700;font-size:var(--fs-sm);}
+.response-box{background:var(--ga8);border:1px solid var(--ga25);border-radius:var(--r5);padding:var(--space-4) 18px;}
+.response-box .label{font-family:var(--fm);font-size:var(--fs-3xs);letter-spacing:.15em;text-transform:uppercase;color:var(--g5);margin-bottom:5px;}
+.response-box .value{font-family:var(--ff);font-weight:700;font-size:var(--fs-sm);}
+.contact-form{background:var(--s1);border:1px solid var(--b1);border-radius:var(--r6);padding:28px;}
+.form-group{margin-bottom:14px;}
+.form-label{font-size:var(--fs-xs);color:var(--t2);display:block;margin-bottom:6px;font-weight:600;}
+.form-input{
+  width:100%;background:var(--s2);border:1px solid var(--b1);
+  border-radius:var(--r4);padding:11px 14px;
+  color:var(--t1);font-size:var(--fs-sm);font-family:var(--ff);
+  outline:none;transition:border-color .15s;
+}
+.form-input:focus{border-color:var(--ga35);}
+.form-input::placeholder{color:var(--t4);}
+textarea.form-input{resize:vertical;min-height:100px;}
+
+/* ════════════════════════════════════════════
+   SECTION: CTA FINAL
+════════════════════════════════════════════ */
+.cta-box{
+  background:var(--s0);border:1px solid var(--b1);border-radius:var(--r10);
+  padding:80px 48px;text-align:center;position:relative;overflow:hidden;
+}
+.cta-box::before{
+  content:'';position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  width:600px;height:400px;
+  background:radial-gradient(ellipse,rgba(22,163,74,.1) 0%,transparent 70%);
+  pointer-events:none;
+}
+.cta-box .h2{margin-bottom:16px;position:relative;}
+.cta-box .lead{max-width:540px;margin:0 auto 36px;position:relative;}
+.cta-btns{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;position:relative;}
+.cta-note{font-family:var(--fm);font-size:var(--fs-2xs);letter-spacing:.12em;text-transform:uppercase;color:var(--t4);margin-top:var(--space-4);}
+
+/* ════════════════════════════════════════════
+   FOOTER
+════════════════════════════════════════════ */
+footer{
+  background:transparent;
+  border-top:none;
+  padding:72px 0 40px;
+  position:relative;
+}
+footer::before{
+  display:none;
+}
+.foot-grid{
+  display:grid;
+  grid-template-columns:2.5fr 1fr 1fr 1fr;
+  gap:var(--space-16);
+  margin-bottom:56px;
+}
+.foot-brand p{
+  font-family:var(--ff);font-size:var(--fs-sm);color:var(--t3);
+  margin-top:var(--space-4);line-height:1.75;max-width:300px;
+}
+.foot-col h6,
+.foot-grid > div > h6{
+  font-family:var(--fd);font-weight:700;font-size:var(--fs-base);
+  color:var(--t1);letter-spacing:-.01em;margin-bottom:var(--space-6);
+}
+.foot-links{display:flex;flex-direction:column;gap:var(--space-4);}
+.foot-link{
+  font-family:var(--ff);font-size:var(--fs-sm);
+  color:var(--t3);transition:color .15s;line-height:1.6;
+}
+.foot-link:hover{color:var(--g5);}
+.foot-bottom{
+  display:flex;justify-content:space-between;align-items:center;
+  padding-top:var(--space-8);
+  border-top:none;
+}
+.foot-copy{
+  font-family:var(--fm);font-size:var(--fs-xs);
+  letter-spacing:.06em;color:var(--t3);
+}
+
+/* ════════════════════════════════════════════
+   ANIMATIONS
+════════════════════════════════════════════ */
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .65s ease,transform .65s ease;}
+.reveal.visible{opacity:1;transform:none;}
+.reveal-1{transition-delay:.08s;}
+.reveal-2{transition-delay:.16s;}
+.reveal-3{transition-delay:.24s;}
+.reveal-4{transition-delay:.32s;}
+
+/* Scroll progress */
+.scroll-prog{position:fixed;top:0;left:0;height:2px;background:var(--g5);z-index:300;width:0%;transition:width .1s;}
+
+/* ════════════════════════════════════════════
+   MOBILE NAV OVERLAY
+════════════════════════════════════════════ */
+.mob-nav{
+  display:none;position:fixed;inset:0;z-index:150;
+  background:rgba(5,7,9,.97);backdrop-filter:blur(16px);
+  flex-direction:column;align-items:center;justify-content:center;
+  gap:8px;
+}
+.mob-nav.open{display:flex;}
+.mob-link{font-family:var(--fd);font-weight:700;font-size:var(--fs-3xl);color:var(--t2);padding:8px 20px;border-radius:var(--r5);transition:color .15s;}
+.mob-link:hover{color:var(--g5);}
+
+/* ════════════════════════════════════════════
+   RESPONSIVE — FULL WIDTH BLEED
+════════════════════════════════════════════ */
+/* Extra wide — let grids breathe further */
+@media(min-width:1400px){
+  .features-grid{grid-template-columns:repeat(3,1fr);}
+  .personas-grid{grid-template-columns:repeat(4,1fr);}
+  .int-grid{grid-template-columns:repeat(6,minmax(140px,180px));width:fit-content;margin:0 auto;}
+  .blog-grid{grid-template-columns:repeat(3,1fr);}
+}
+@media(max-width:1100px){
+  .personas-grid{grid-template-columns:repeat(4,1fr);}
+}
+@media(max-width:960px){
+  .hero-inner{grid-template-columns:1fr;gap:48px;}
+  .hero-wa{display:none;}
+  .hero-text{max-width:100%;}
+  .features-grid{grid-template-columns:1fr 1fr;}
+  .personas-grid{grid-template-columns:1fr 1fr 1fr;}
+  .int-row{gap:8px;}
+  .benefits-grid{grid-template-columns:1fr;}
+  .blog-grid{grid-template-columns:1fr 1fr;}
+  .contact-grid{grid-template-columns:1fr;}
+  .foot-grid{grid-template-columns:1fr 1fr;}
+  .problem-grid{grid-template-columns:1fr;}
+}
+@media(max-width:640px){
+  section{padding:64px 0;}
+  .features-grid{grid-template-columns:1fr;}
+  .personas-grid{grid-template-columns:1fr 1fr;}
+  .int-card{width:clamp(90px,26vw,140px);padding:14px 8px;}
+  .blog-grid{grid-template-columns:1fr;}
+  .foot-grid{grid-template-columns:1fr;}
+  .foot-bottom{flex-direction:column;gap:10px;text-align:center;}
+  .nav-links,.nav-right .nav-links{display:none;}
+  .ham{display:flex;}
+  .hero-ctas{flex-direction:column;align-items:center;}
+  .cta-box{padding:48px clamp(20px,5vw,48px);}
+  .trust-row{gap:20px;}
+}
+/* ── Integration logo theme colors ──────── */
+.int-logo{ color: #E8E8E8; }            /* default (dark mode) */
+body.light-mode .int-logo{ color: #1C1C1E; }  /* light mode */
+/* HERO */
+.blog-hero{padding:72px 0 16px;text-align:center;position:relative;}
+.blog-hero::before{content:'';position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse 80% 60% at 50% 30%,rgba(22,163,74,.07) 0%,transparent 70%);}
+.blog-hero .badge{margin-bottom:20px;}
+.blog-hero-title{font-family:var(--fd);font-weight:800;font-size:clamp(28px,3.6vw,52px);letter-spacing:-.04em;line-height:1.0;margin-bottom:20px;white-space:nowrap;}
+.grad{background:linear-gradient(135deg,var(--g3) 0%,var(--g5) 50%,#0ea5e9 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.blog-hero-sub{font-size:var(--fs-base);color:var(--t2);max-width:560px;margin:0 auto 16px;line-height:1.7;}
+.blog-hero-stats{display:flex;justify-content:center;gap:40px;flex-wrap:wrap;margin-bottom:0;}
+.blog-stat-num{font-family:var(--fd);font-size:var(--fs-2xl);font-weight:800;color:var(--g4);}
+.blog-stat-label{font-size:var(--fs-xs);color:var(--t3);letter-spacing:.06em;text-transform:uppercase;}
+/* FILTER */
+.filter-wrap{
+  position:fixed;
+  bottom:24px;
+  left:50%;
+  transform:translateX(-50%);
+  z-index:300;
+  padding:6px 8px;
+  background:rgba(9,13,18,.82);
+  backdrop-filter:blur(20px);
+  -webkit-backdrop-filter:blur(20px);
+  border:1px solid var(--b2);
+  border-radius:var(--full);
+  box-shadow:0 8px 40px rgba(0,0,0,.5),0 2px 8px rgba(0,0,0,.3);
+  max-width:calc(100vw - 80px);
+}
+body.light-mode .filter-wrap{
+  background:rgba(255,255,255,.88);
+  border-color:rgba(0,0,0,.1);
+  box-shadow:0 8px 40px rgba(0,0,0,.15),0 2px 8px rgba(0,0,0,.08);
+}
+.filter-inner{
+  display:flex;align-items:center;gap:4px;
+  overflow-x:auto;scrollbar-width:none;
+}
+.filter-inner::-webkit-scrollbar{display:none;}
+.cat-pill{
+  flex-shrink:0;
+  padding:7px 16px;
+  border-radius:var(--full);
+  font-family:var(--fm);font-size:var(--fs-2xs);font-weight:600;
+  letter-spacing:.08em;text-transform:uppercase;
+  background:transparent;border:none;color:var(--t3);
+  cursor:pointer;transition:all .18s;white-space:nowrap;
+}
+.cat-pill:hover{background:var(--b1);color:var(--t1);}
+.cat-pill.active{
+  background:var(--g6);
+  color:#fff;
+  box-shadow:0 2px 12px rgba(22,163,74,.35);
+}
+body.light-mode .cat-pill{color:var(--t3);}
+body.light-mode .cat-pill:hover{background:rgba(0,0,0,.06);color:var(--t1);}
+body.light-mode .cat-pill.active{background:var(--g6);color:#fff;}
+/* MASONRY */
+.masonry-section{padding:20px 0 120px;}
+.masonry{columns:4;column-gap:22px;width:100%;max-width:1340px;margin:0 auto;padding:0 clamp(20px,4vw,60px);}
+@media(max-width:1100px){.masonry{columns:3;}}
+@media(max-width:720px){.masonry{columns:2;}}
+@media(max-width:420px){.masonry{columns:1;}}
+.masonry-item{break-inside:avoid;margin-bottom:22px;display:block;}
+/* ── ARTICLE CARD: 2/3 image · 1/3 text ── */
+.art-card{
+  background:var(--s1);
+  border:1px solid var(--b1);
+  border-radius:var(--r6);
+  overflow:hidden;
+  cursor:pointer;
+  transition:all .25s;
+  box-shadow:var(--sh-card);
+  display:flex;
+  flex-direction:column;
+}
+.art-card:hover{
+  border-color:var(--ga20);
+  background:var(--s2);
+  transform:translateY(-4px);
+  box-shadow:0 16px 56px rgba(0,0,0,.4);
+}
+/* Cover = 2/3 of card: aspect-ratio 4/3 fills ~66% of total height */
+.art-cover{
+  width:100%;
+  aspect-ratio:3/4;
+  flex-shrink:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  position:relative;
+  overflow:hidden;
+}
+.art-cover-overlay{
+  position:absolute;inset:0;
+  background:linear-gradient(
+    to bottom,
+    transparent 35%,
+    rgba(9,13,18,.55) 75%,
+    rgba(9,13,18,.85) 100%
+  );
+}
+/* Cover label: only title floats on bottom of image */
+.art-cover-label{
+  position:absolute;
+  bottom:0;left:0;right:0;
+  padding:var(--space-4) var(--space-5) var(--space-4);
+  z-index:2;
+}
+/* Category pill: floating bottom-left of cover */
+.art-cat-pill{
+  position:absolute;
+  top:var(--space-3);
+  left:var(--space-3);
+  z-index:3;
+  display:inline-flex;
+  align-items:center;
+  padding:4px 12px;
+  border-radius:var(--full);
+  font-family:var(--fm);
+  font-size:var(--fs-3xs);
+  letter-spacing:.12em;
+  font-weight:700;
+  text-transform:uppercase;
+  background:rgba(9,13,18,.72);
+  backdrop-filter:blur(8px);
+  border:1px solid rgba(255,255,255,.12);
+  color:#fff;
+  line-height:1.4;
+}
+.art-title{
+  font-family:var(--fd);
+  font-weight:800;
+  font-size:var(--fs-base);
+  line-height:1.2;
+  letter-spacing:-.02em;
+  color:#F1F5FB; /* always light — on dark cover */
+  display:-webkit-box;
+  -webkit-line-clamp:3;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+}
+/* Emoji icon — centered in upper 60% of cover */
+.art-emoji{
+  position:absolute;
+  top:30%;
+  left:50%;
+  transform:translate(-50%,-50%);
+  font-size:clamp(36px,6vw,56px);
+  z-index:1;
+  filter:drop-shadow(0 2px 12px rgba(0,0,0,.4));
+  pointer-events:none;
+}
+/* Body = 1/3 of card: compact meta strip */
+.art-body{
+  padding:var(--space-4) var(--space-5) var(--space-5);
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+  gap:var(--space-2);
+}
+.art-excerpt{
+  font-size:var(--fs-xs);
+  color:var(--t2);
+  line-height:1.6;
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+}
+.art-meta{
+  display:flex;
+  align-items:center;
+  gap:var(--space-2);
+  flex-wrap:wrap;
+  font-family:var(--fm);
+  font-size:var(--fs-3xs);
+  letter-spacing:.06em;
+  color:var(--t3);
+}
+.art-meta-dot{width:3px;height:3px;border-radius:50%;background:var(--t4);}
+.art-tag{
+  font-family:var(--fm);
+  font-size:var(--fs-3xs);
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  padding:var(--space-1) var(--space-2);
+  border-radius:var(--r2);
+  background:var(--b0);
+  border:1px solid var(--b1);
+  color:var(--t3);
+}
+.art-read-arrow{
+  margin-left:auto;flex-shrink:0;
+  color:var(--g6);
+  transition:transform .2s;
+}
+.art-card:hover .art-read-arrow{transform:translateX(3px);}
+/* QUOTE */
+.quote-card{background:var(--ga6);border:1px solid var(--ga20);border-radius:var(--r6);padding:28px 24px;break-inside:avoid;margin-bottom:22px;position:relative;overflow:hidden;}
+.quote-card::before{content:'"';position:absolute;top:-10px;left:12px;font-family:Georgia,serif;font-size:120px;line-height:1;color:var(--ga20);pointer-events:none;}
+.quote-text{font-family:'Playfair Display',Georgia,serif;font-style:italic;font-size:var(--fs-base);line-height:1.6;color:var(--g3);position:relative;z-index:1;margin-bottom:16px;}
+.quote-attr{font-family:var(--fm);font-size:var(--fs-2xs);letter-spacing:.1em;text-transform:uppercase;color:var(--g6);font-weight:600;}
+/* CTA */
+.cta-inline{background:linear-gradient(135deg,var(--s2),var(--s1));border:1px solid var(--ga20);border-radius:var(--r6);padding:28px 24px;break-inside:avoid;margin-bottom:22px;text-align:center;}
+.cta-eyebrow{font-family:var(--fm);font-size:var(--fs-2xs);letter-spacing:.12em;text-transform:uppercase;color:var(--g5);margin-bottom:10px;display:block;}
+.cta-title{font-family:var(--fd);font-weight:800;font-size:var(--fs-lg);letter-spacing:-.025em;line-height:1.2;margin-bottom:12px;color:var(--t1);}
+.cta-sub{font-size:var(--fs-xs);color:var(--t2);margin-bottom:20px;line-height:1.6;}
+.cta-geo-badge{display:inline-flex;flex-direction:column;align-items:center;background:var(--s3);border:1px solid var(--b2);border-radius:var(--r5);padding:10px 16px;margin-bottom:20px;}
+.cta-geo-num{font-family:var(--fd);font-size:var(--fs-3xl);font-weight:800;color:var(--g4);line-height:1;}
+.cta-geo-label{font-family:var(--fm);font-size:var(--fs-3xs);letter-spacing:.1em;color:var(--t3);text-transform:uppercase;}
+/* SPINNER */
+.load-sentinel{height:60px;display:flex;align-items:center;justify-content:center;}
+.spinner{width:24px;height:24px;border:2px solid var(--b2);border-top-color:var(--g5);border-radius:50%;animation:spin .7s linear infinite;display:none;}
+.spinner.active{display:block;}
+@keyframes spin{to{transform:rotate(360deg);}}
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.75);backdrop-filter:blur(8px);opacity:0;pointer-events:none;transition:opacity .3s;display:flex;align-items:flex-end;justify-content:center;}
+.modal-overlay.open{opacity:1;pointer-events:all;}
+.modal-body{background:var(--s0);border-radius:24px 24px 0 0;width:100%;max-width:760px;max-height:92vh;overflow-y:auto;transform:translateY(100%);transition:transform .35s cubic-bezier(.16,1,.3,1);position:relative;scrollbar-width:thin;scrollbar-color:var(--b2) transparent;}
+.modal-overlay.open .modal-body{transform:translateY(0);}
+.modal-cover{height:240px;display:flex;align-items:center;justify-content:center;font-size:72px;border-radius:24px 24px 0 0;position:relative;}
+.modal-close{position:absolute;top:16px;right:16px;width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,.5);border:none;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;}
+.modal-content{padding:32px 36px 48px;}
+.modal-cat{font-family:var(--fm);font-size:var(--fs-2xs);letter-spacing:.12em;text-transform:uppercase;font-weight:600;margin-bottom:12px;display:block;}
+.modal-title{font-family:var(--fd);font-weight:800;font-size:clamp(24px,3vw,36px);letter-spacing:-.03em;line-height:1.15;margin-bottom:16px;color:var(--t1);}
+.modal-meta{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-family:var(--fm);font-size:var(--fs-2xs);letter-spacing:.06em;color:var(--t3);margin-bottom:28px;padding-bottom:24px;border-bottom:1px solid var(--b1);}
+.modal-meta-dot{width:3px;height:3px;border-radius:50%;background:var(--b2);}
+.art-content{line-height:1.8;color:var(--t2);}
+.art-content p{margin-bottom:20px;font-size:var(--fs-base);}
+.art-content h2{font-family:var(--fd);font-weight:800;font-size:var(--fs-xl);letter-spacing:-.025em;color:var(--t1);margin:32px 0 16px;}
+.art-content h3{font-family:var(--fd);font-weight:700;font-size:var(--fs-lg);color:var(--t1);margin:24px 0 12px;}
+.art-content ul,.art-content ol{padding-left:24px;margin-bottom:20px;}
+.art-content li{margin-bottom:10px;font-size:var(--fs-base);}
+.art-content strong{color:var(--t1);font-weight:700;}
+.art-content .pull-quote{border-left:3px solid var(--g6);padding:16px 20px;margin:28px 0;background:var(--ga6);border-radius:0 var(--r5) var(--r5) 0;font-family:'Playfair Display',Georgia,serif;font-style:italic;font-size:var(--fs-md);color:var(--g3);line-height:1.6;}
+.art-content .highlight{background:var(--ga8);border:1px solid var(--ga20);border-radius:var(--r4);padding:16px 20px;margin:24px 0;}
+.art-content .highlight strong{color:var(--g4);}
+.reading-prog{position:sticky;top:0;height:3px;background:var(--b1);z-index:10;}
+.reading-prog-bar{height:100%;width:0%;background:linear-gradient(90deg,var(--g6),var(--g4));border-radius:var(--full);transition:width .1s;}
+/* FOOTER */
+footer{border-top:1px solid var(--b1);padding:72px 0 40px;}
+.foot-grid{display:grid;grid-template-columns:2.5fr 1fr 1fr 1fr;gap:var(--space-16);margin-bottom:56px;}
+@media(max-width:720px){.foot-grid{grid-template-columns:1fr 1fr;gap:32px;}}
+@media(max-width:420px){.foot-grid{grid-template-columns:1fr;}}
+.foot-brand p{font-size:var(--fs-sm);color:var(--t2);margin-top:16px;max-width:300px;line-height:1.65;}
+footer h6{font-family:var(--fd);font-weight:700;font-size:var(--fs-base);margin-bottom:var(--space-6);color:var(--t1);}
+.foot-links{display:flex;flex-direction:column;gap:var(--space-4);}
+.foot-link{font-size:var(--fs-sm);color:var(--t3);transition:color .15s;}
+.foot-link:hover{color:var(--t1);}
+.foot-bottom{display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+.foot-copy{font-size:var(--fs-xs);color:var(--t3);}
+.reveal{opacity:0;transform:translateY(24px);transition:opacity .5s,transform .5s;}
+.reveal.visible{opacity:1;transform:none;}
+@media(max-width:640px){.blog-hero{padding:110px 0 40px;}.modal-content{padding:24px 20px 40px;}.modal-cover{height:160px;font-size:52px;}}
+
+</style>
+
+<!-- Schema.org: Organization -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "@id": "https://geovera.ai/#organization",
+  "name": "GeoVera",
+  "url": "https://geovera.ai",
+  "logo": {
+    "@type": "ImageObject",
+    "url": "https://geovera.ai/logo.png",
+    "width": 200,
+    "height": 200
+  },
+  "description": "Platform AI Brand Intelligence untuk pasar Indonesia. Memantau dan mengoptimalkan visibilitas brand di ChatGPT, Perplexity, Claude, Gemini, dan Bing Chat melalui framework GEO Score.",
+  "foundingDate": "2024",
+  "areaServed": {
+    "@type": "Country",
+    "name": "Indonesia"
+  },
+  "knowsAbout": [
+    "Generative Engine Optimization",
+    "AI Brand Visibility",
+    "Brand Intelligence",
+    "GEO Score",
+    "AI Search Optimization",
+    "Brand DNA",
+    "Content Strategy Indonesia"
+  ],
+  "sameAs": [
+    "https://www.linkedin.com/company/geovera-ai",
+    "https://twitter.com/geovera_ai",
+    "https://www.instagram.com/geovera.ai"
+  ]
+}
+</script>
+
+<!-- Schema.org: WebSite with SearchAction -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "@id": "https://geovera.ai/#website",
+  "url": "https://geovera.ai",
+  "name": "GeoVera AI Brand Intelligence",
+  "description": "Platform AI Brand Intelligence untuk brand Indonesia — mengukur dan meningkatkan visibilitas di seluruh AI platforms melalui GEO Score.",
+  "publisher": { "@id": "https://geovera.ai/#organization" },
+  "inLanguage": "id-ID",
+  "potentialAction": {
+    "@type": "SearchAction",
+    "target": {
+      "@type": "EntryPoint",
+      "urlTemplate": "https://geovera.ai/blog?q={search_term_string}"
+    },
+    "query-input": "required name=search_term_string"
+  }
+}
+</script>
+
+<!-- Schema.org: Blog (CollectionPage) -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Blog",
+  "@id": "https://geovera.ai/blog#blog",
+  "name": "GeoVera Insights",
+  "description": "Artikel, strategi, dan insight mendalam tentang GEO, Brand Visibility di AI platforms, dan cara brand Indonesia mendominasi AI search.",
+  "url": "https://geovera.ai/blog",
+  "publisher": { "@id": "https://geovera.ai/#organization" },
+  "inLanguage": "id-ID",
+  "about": [
+    { "@type": "Thing", "name": "Generative Engine Optimization" },
+    { "@type": "Thing", "name": "AI Brand Visibility" },
+    { "@type": "Thing", "name": "Brand Intelligence Indonesia" },
+    { "@type": "Thing", "name": "GEO Score" }
+  ],
+  "blogPost": [
+    {
+      "@type": "BlogPosting",
+      "@id": "https://geovera.ai/blog/geo-vs-seo",
+      "headline": "GEO vs SEO: Pergeseran Menuju AI-Powered Discovery",
+      "description": "Memahami perbedaan fundamental antara SEO tradisional dan Generative Engine Optimization — mengapa brand Indonesia harus mulai mengoptimalkan untuk AI search sekarang.",
+      "url": "https://geovera.ai/blog/geo-vs-seo",
+      "datePublished": "2026-02-15",
+      "dateModified": "2026-03-01",
+      "author": { "@type": "Person", "name": "Rafi Ananda", "url": "https://geovera.ai/team/rafi" },
+      "publisher": { "@id": "https://geovera.ai/#organization" },
+      "keywords": ["GEO", "SEO", "AI Search", "Generative Engine Optimization"],
+      "articleSection": "GEO Optimization",
+      "timeRequired": "PT7M",
+      "inLanguage": "id-ID"
+    },
+    {
+      "@type": "BlogPosting",
+      "@id": "https://geovera.ai/blog/brand-tidak-muncul-chatgpt",
+      "headline": "Kenapa Brand Anda Tidak Muncul di ChatGPT?",
+      "description": "Analisis mendalam mengapa sebagian besar brand Indonesia invisible di ChatGPT dan AI platforms lainnya — dan langkah konkret untuk memperbaikinya.",
+      "url": "https://geovera.ai/blog/brand-tidak-muncul-chatgpt",
+      "datePublished": "2026-02-20",
+      "dateModified": "2026-03-05",
+      "author": { "@type": "Person", "name": "Dinda Kartika", "url": "https://geovera.ai/team/dinda" },
+      "publisher": { "@id": "https://geovera.ai/#organization" },
+      "keywords": ["ChatGPT", "AI Visibility", "Brand Indonesia", "AI Platforms"],
+      "articleSection": "AI Platforms",
+      "timeRequired": "PT5M",
+      "inLanguage": "id-ID"
+    },
+    {
+      "@type": "BlogPosting",
+      "@id": "https://geovera.ai/blog/brand-dna",
+      "headline": "Brand DNA: Pondasi Semua Strategi AI Visibility",
+      "description": "Brand DNA adalah representasi terstruktur identitas brand yang dibaca dan diverifikasi oleh AI. Pelajari cara membangun Brand DNA yang kuat untuk AI search.",
+      "url": "https://geovera.ai/blog/brand-dna",
+      "datePublished": "2026-02-25",
+      "dateModified": "2026-03-08",
+      "author": { "@type": "Person", "name": "Rafi Ananda", "url": "https://geovera.ai/team/rafi" },
+      "publisher": { "@id": "https://geovera.ai/#organization" },
+      "keywords": ["Brand DNA", "AI Visibility", "Brand Strategy", "Content Strategy"],
+      "articleSection": "Brand Strategy",
+      "timeRequired": "PT8M",
+      "inLanguage": "id-ID"
+    },
+    {
+      "@type": "BlogPosting",
+      "@id": "https://geovera.ai/blog/4-pillar-framework",
+      "headline": "4 Pillar Framework: Visibility, Discovery, Authority, Trust",
+      "description": "Framework lengkap GeoVera dalam mengukur AI brand presence melalui empat pilar: Visibility, Discovery, Authority, dan Trust — dengan metodologi dan metrik konkret.",
+      "url": "https://geovera.ai/blog/4-pillar-framework",
+      "datePublished": "2026-03-01",
+      "author": { "@type": "Person", "name": "GeoVera Intelligence Team" },
+      "publisher": { "@id": "https://geovera.ai/#organization" },
+      "keywords": ["GEO Score", "Visibility", "Discovery", "Authority", "Trust", "Brand Intelligence"],
+      "articleSection": "GEO Optimization",
+      "timeRequired": "PT10M",
+      "inLanguage": "id-ID"
+    },
+    {
+      "@type": "BlogPosting",
+      "@id": "https://geovera.ai/blog/content-dikutip-ai",
+      "headline": "Content yang Dikutip AI: Panduan Praktis",
+      "description": "Panduan teknis membuat konten yang aktif dikutip oleh ChatGPT, Perplexity, dan AI platforms lain — struktur, format, dan sinyal authority yang dioptimalkan untuk LLMs.",
+      "url": "https://geovera.ai/blog/content-dikutip-ai",
+      "datePublished": "2026-03-05",
+      "author": { "@type": "Person", "name": "Dinda Kartika", "url": "https://geovera.ai/team/dinda" },
+      "publisher": { "@id": "https://geovera.ai/#organization" },
+      "keywords": ["Content Strategy", "AI Citations", "LLM Optimization", "GEO Content"],
+      "articleSection": "Content",
+      "timeRequired": "PT9M",
+      "inLanguage": "id-ID"
+    },
+    {
+      "@type": "BlogPosting",
+      "@id": "https://geovera.ai/blog/geo-score-explained",
+      "headline": "GEO Score: Apa Arti Angkanya Sebenarnya",
+      "description": "Breakdown lengkap metodologi GEO Score — bagaimana 0-100 dihitung, apa yang membedakan brand dengan score A+ vs F, dan benchmark industri untuk pasar Indonesia.",
+      "url": "https://geovera.ai/blog/geo-score-explained",
+      "datePublished": "2026-03-10",
+      "author": { "@type": "Person", "name": "Rafi Ananda", "url": "https://geovera.ai/team/rafi" },
+      "publisher": { "@id": "https://geovera.ai/#organization" },
+      "keywords": ["GEO Score", "Brand Intelligence", "AI Visibility Metrics", "GeoVera"],
+      "articleSection": "GEO Optimization",
+      "timeRequired": "PT5M",
+      "inLanguage": "id-ID"
+    }
+  ]
+}
+</script>
+
+<!-- Schema.org: BreadcrumbList -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "GeoVera",
+      "item": "https://geovera.ai"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Blog",
+      "item": "https://geovera.ai/blog"
+    }
+  ]
+}
+</script>
+
+<!-- Schema.org: FAQPage (high-value AI citation target) -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Apa itu GEO (Generative Engine Optimization)?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "GEO atau Generative Engine Optimization adalah praktik mengoptimalkan konten dan kehadiran digital brand agar muncul dan dikutip oleh AI platforms seperti ChatGPT, Perplexity, Claude, dan Gemini — berbeda dari SEO tradisional yang fokus pada mesin pencari konvensional."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Apa itu GEO Score?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "GEO Score adalah metrik proprietary GeoVera (skala 0-100) yang mengukur seberapa kuat kehadiran brand di AI search platforms. Dihitung dari 4 pilar: Visibility (seberapa mudah ditemukan AI), Discovery (bagaimana audiens baru menemukan brand), Authority (seberapa dipercaya), dan Trust (konsistensi reputasi)."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Kenapa brand Indonesia perlu mengoptimalkan untuk AI search?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Lebih dari 40% pencarian informasi produk dan layanan di Indonesia kini dimulai dari AI platforms seperti ChatGPT dan Perplexity. Brand yang tidak teroptimasi untuk AI search kehilangan visibility di channel yang tumbuh paling cepat. GEO Score 0 hari ini berpotensi menjadi masalah bisnis serius dalam 12-18 bulan ke depan."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Apa perbedaan GEO dan SEO?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "SEO mengoptimalkan untuk algoritma mesin pencari (Google, Bing) yang menampilkan daftar link. GEO mengoptimalkan untuk model bahasa AI (ChatGPT, Perplexity, Claude) yang mensintesis jawaban langsung dan menyebut brand sebagai referensi. Keduanya penting, tapi metode, sinyal, dan metrik keberhasilannya berbeda."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Apa itu Brand DNA dalam konteks AI visibility?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Brand DNA adalah dokumen terstruktur yang mendefinisikan identitas brand secara konsisten — nilai, positioning, produk, audiens, dan differentiator — dalam format yang dapat dibaca dan diverifikasi AI. Brand DNA yang kuat meningkatkan kemungkinan AI mengutip brand secara akurat dan positif dalam rekomendasi."
+      }
+    }
+  ]
+}
+</script>
+</head>
+<body>
+<div id="sp"></div>
+
+<div class="mob-nav" id="mobNav" role="dialog" aria-modal="true" aria-label="Mobile navigation">
+  <button style="position:absolute;top:20px;right:20px;" class="icon-btn" id="mobClose" aria-label="Close menu">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+  </button>
+  <a href="#" class="mob-link" onclick="showPage('home');return false;">Home</a>
+  <a href="#layanan" class="mob-link" onclick="showHome('layanan');return false;">Our Service</a>
+  <a href="#faq" class="mob-link" onclick="showHome('faq');return false;">FAQ</a>
+  <a href="#blog" class="mob-link" onclick="showPage('blog');return false;">Blog</a>
+  <a href="#kontak" class="mob-link" onclick="showHome('kontak');return false;">Contact Us</a>
+  <div style="display:flex;gap:12px;margin-top:24px;flex-wrap:wrap;justify-content:center;">
+    <a href="/login" class="btn btn-ghost btn-lg mob-link" style="font-size:var(--fs-base);">Log In</a>
+    <a href="https://wa.me/your-number" class="btn btn-primary btn-lg mob-link" target="_blank" rel="noopener" style="font-size:var(--fs-base);">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 1.89.524 3.657 1.435 5.163L2 22l4.949-1.386A9.953 9.953 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm5.05 14.4c-.21.59-1.04 1.08-1.73 1.22-.46.09-1.06.16-3.08-.66-2.58-1.05-4.24-3.64-4.37-3.81-.12-.17-1.02-1.36-1.02-2.59 0-1.23.64-1.83.87-2.08.22-.25.49-.31.65-.31h.47c.15 0 .36-.06.56.43l.72 1.9c.06.16.03.34-.07.48l-.31.4c-.1.13-.21.27-.09.53.46.93 1.16 1.72 1.92 2.32.83.66 1.71 1.04 1.94 1.15.23.11.37.09.5-.05l.66-.78c.17-.2.42-.25.65-.14l1.87.88c.22.1.37.15.42.24.06.12.06.68-.15 1.27z"/></svg>
+      Start Free
+    </a>
+  </div>
+  <div style="margin-top:20px;display:flex;gap:12px;">
+    <a href="https://wa.me/your-number" class="btn btn-wa" target="_blank" rel="noopener">Start Free via WhatsApp</a>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     NAVBAR
+════════════════════════════════════════════ -->
+<header role="banner">
+<nav class="nav" id="navbar" aria-label="Main navigation">
+  <div class="nav-inner">
+    <a href="#" class="nav-logo" onclick="showPage('home');return false;" aria-label="GeoVera — Beranda">
+      <!-- Mark SVG inline -->
+      <svg class="nav-mark" viewBox="0 0 38 38" fill="none" aria-hidden="true">
+        <circle cx="19" cy="19" r="17.5" stroke="#16A34A" stroke-width="1" stroke-dasharray="80 30" stroke-dashoffset="10"/>
+        <circle cx="19" cy="19" r="9" fill="#090D12" stroke="#1C2535" stroke-width="1"/>
+        <circle cx="19" cy="19" r="3.5" fill="#16A34A"/>
+        <line x1="10" y1="19" x2="14.5" y2="19" stroke="#3D5070" stroke-width="1.3" stroke-linecap="round"/>
+        <line x1="23.5" y1="19" x2="28" y2="19" stroke="#3D5070" stroke-width="1.3" stroke-linecap="round"/>
+        <line x1="19" y1="10" x2="19" y2="14.5" stroke="#3D5070" stroke-width="1.3" stroke-linecap="round"/>
+        <line x1="19" y1="23.5" x2="19" y2="28" stroke="#3D5070" stroke-width="1.3" stroke-linecap="round"/>
+        <circle cx="19" cy="3.5" r="1.5" fill="#16A34A" opacity=".7"/>
+        <circle cx="34.5" cy="19" r="1.5" fill="#16A34A" opacity=".4"/>
+      </svg>
+      <span class="nav-wm">Geo<em>Vera</em></span>
+    </a>
+    <div class="nav-right">
+    <div class="nav-links" role="menubar">
+      <a href="#" class="nav-link active" data-page="home" onclick="showPage('home');return false;" role="menuitem">Home</a>
+      <a href="#layanan" class="nav-link" data-page="home" onclick="showHome('layanan');return false;" role="menuitem">Our Service</a>
+      <a href="#faq" class="nav-link" data-page="home" onclick="showHome('faq');return false;" role="menuitem">FAQ</a>
+      <a href="#blog" class="nav-link" data-page="blog" onclick="showPage('blog');return false;" role="menuitem">Blog</a>
+      <a href="#kontak" class="nav-link" data-page="home" onclick="showHome('kontak');return false;" role="menuitem">Contact Us</a>
+    </div>
+    <div class="nav-actions">
+      <a href="/login" class="btn btn-ghost btn-sm">Log In</a>
+      <a href="https://wa.me/your-number" class="btn btn-primary btn-sm" target="_blank" rel="noopener">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.477 2 2 6.477 2 12c0 1.89.524 3.657 1.435 5.163L2 22l4.949-1.386A9.953 9.953 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm5.05 14.4c-.21.59-1.04 1.08-1.73 1.22-.46.09-1.06.16-3.08-.66-2.58-1.05-4.24-3.64-4.37-3.81-.12-.17-1.02-1.36-1.02-2.59 0-1.23.64-1.83.87-2.08.22-.25.49-.31.65-.31h.47c.15 0 .36-.06.56.43l.72 1.9c.06.16.03.34-.07.48l-.31.4c-.1.13-.21.27-.09.53.46.93 1.16 1.72 1.92 2.32.83.66 1.71 1.04 1.94 1.15.23.11.37.09.5-.05l.66-.78c.17-.2.42-.25.65-.14l1.87.88c.22.1.37.15.42.24.06.12.06.68-.15 1.27z"/></svg>
+        Start Free
+      </a>
+      <button class="ham" id="ham" aria-label="Open menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    </div>
+  </div>
+</nav>
+</header>
+
+<!-- ════ PAGE: HOME ═════════════════════════════════════════════ -->
+<div id="page-home">
+<main>
+<!-- ════════════════════════════════════════════
+     SECTION 1: HERO
+════════════════════════════════════════════ -->
+<section class="hero" id="home" aria-labelledby="hero-h1">
+  <div class="hero-tex" aria-hidden="true"></div>
+  <div class="hero-glow" aria-hidden="true"></div>
+  <div class="wrap">
+    <div class="hero-inner">
+
+      <!-- ── Text column ── -->
+      <div class="hero-text reveal">
+        <div class="badge" role="text" style="margin-bottom:20px;">
+          <span class="badge-dot" aria-hidden="true"></span>
+          AI Brand Intelligence · SEO · GEO · WhatsApp
+        </div>
+
+        <h1 class="hero-title" id="hero-h1">
+          <span class="serif-line">Satu Platform AI</span>
+          untuk SEO, GEO &amp;<br>
+          <span class="grad-green">Marketing</span> via<br>
+          WhatsApp
+        </h1>
+
+        <p class="hero-sub">
+          Kelola SEO, GEO, Social Search, Marketing &amp; Analytics — langsung dari WhatsApp. Didukung 20+ integrasi dan tim AI C-Level 24/7.
+        </p>
+
+        <div class="hero-promise" aria-label="Key promises">
+          <div class="hero-promise-item">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+            Tanpa dashboard rumit yang perlu dipelajari
+          </div>
+          <div class="hero-promise-item">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+            Tanpa hire tim marketing yang besar
+          </div>
+          <div class="hero-promise-item">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+            Semua dari WhatsApp Anda — secara otomatis
+          </div>
+        </div>
+
+        <div class="hero-ctas">
+          <a href="https://wa.me/your-number" class="btn btn-wa btn-lg" target="_blank" rel="noopener" aria-label="Mulai gratis dengan WhatsApp">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.477 2 2 6.477 2 12c0 1.89.524 3.657 1.435 5.163L2 22l4.949-1.386A9.953 9.953 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm5.05 14.4c-.21.59-1.04 1.08-1.73 1.22-.46.09-1.06.16-3.08-.66-2.58-1.05-4.24-3.64-4.37-3.81-.12-.17-1.02-1.36-1.02-2.59 0-1.23.64-1.83.87-2.08.22-.25.49-.31.65-.31h.47c.15 0 .36-.06.56.43l.72 1.9c.06.16.03.34-.07.48l-.31.4c-.1.13-.21.27-.09.53.46.93 1.16 1.72 1.92 2.32.83.66 1.71 1.04 1.94 1.15.23.11.37.09.5-.05l.66-.78c.17-.2.42-.25.65-.14l1.87.88c.22.1.37.15.42.24.06.12.06.68-.15 1.27z"/></svg>
+            Start with WhatsApp
+          </a>
+
+        </div>
+
+        <div class="hero-logos">
+          <p class="hero-logos-label">Terintegrasi dengan</p>
+          <div class="logo-row" aria-label="Platform integrations">
+            <span class="logo-chip">Google</span>
+            <span class="logo-chip">Meta</span>
+            <span class="logo-chip">TikTok</span>
+            <span class="logo-chip">Shopify</span>
+            <span class="logo-chip">Stripe</span>
+            <span class="logo-chip">HubSpot</span>
+            <span class="logo-chip">OpenAI</span>
+            <span class="logo-chip">Claude</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── WA card column — pushed right ── -->
+      <div class="hero-wa reveal reveal-2" aria-hidden="true">
+
+        <!-- GEO Score badge floats above card -->
+        <div class="geo-score-badge">
+          <div>
+            <div class="geo-score-label">GEO SCORE</div>
+            <div style="display:flex;align-items:baseline;gap:4px;">
+              <span class="geo-score-num">74</span>
+              <span class="geo-score-delta">↑ +8</span>
+            </div>
+          </div>
+        </div>
+
+<style>
+/* ═══════════════════════════════════════════════════
+   PHONE WRAPPER — sparkle stage  v3
+═══════════════════════════════════════════════════ */
+
+/* ── Stage container ── */
+.ph-stage{
+  position:relative;
+  display:flex;align-items:center;justify-content:center;
+  /* +10% from 300 → 330px */
+  width:clamp(252px,28.6vw,330px);
+  flex-shrink:0;
+  padding:20px;
+  box-sizing:border-box;
+}
+
+/* ── Deep ambient halo ── */
+.ph-halo{
+  position:absolute;
+  inset:-60px;
+  border-radius:50%;
+  background:
+    radial-gradient(ellipse 65% 45% at 50% 60%, rgba(37,211,102,.17) 0%, transparent 65%),
+    radial-gradient(ellipse 45% 65% at 75% 15%, rgba(83,189,235,.09) 0%, transparent 58%),
+    radial-gradient(ellipse 35% 35% at 20% 80%, rgba(167,139,250,.06) 0%, transparent 55%);
+  pointer-events:none;
+  z-index:0;
+  animation:halo-pulse 7s ease-in-out infinite;
+}
+@keyframes halo-pulse{0%,100%{opacity:.65;transform:scale(1);}50%{opacity:1;transform:scale(1.04);}}
+
+/* ── Sparkles ── */
+.sp{position:absolute;pointer-events:none;z-index:25;line-height:0;}
+/* 4-point star shape via CSS — each sparkle is a unique size, color, position */
+.sp::before,.sp::after{content:'';position:absolute;background:currentColor;border-radius:9999px;}
+/* vertical arm */
+.sp::before{width:2px;height:100%;left:50%;transform:translateX(-50%);}
+/* horizontal arm */
+.sp::after{width:100%;height:2px;top:50%;transform:translateY(-50%);}
+
+/* Individual sparkle positions & styles */
+.sp-a{top:-14px;right:18%;width:14px;height:14px;color:#25D366;animation:spk-twinkle 2.6s ease-in-out infinite 0s;}
+.sp-b{top:16%;right:-20px;width:10px;height:10px;color:#53BDEB;animation:spk-twinkle 3.1s ease-in-out infinite .55s;}
+.sp-c{top:38%;right:-26px;width:7px;height:7px;color:#25D366;animation:spk-twinkle 2.4s ease-in-out infinite 1.2s;}
+.sp-d{bottom:22%;right:-18px;width:12px;height:12px;color:#FCD34D;animation:spk-twinkle 3.4s ease-in-out infinite .8s;}
+.sp-e{bottom:10%;left:12%;width:8px;height:8px;color:#A78BFA;animation:spk-twinkle 2.9s ease-in-out infinite .3s;}
+.sp-f{top:58%;left:-22px;width:11px;height:11px;color:#25D366;animation:spk-twinkle 3.6s ease-in-out infinite 1.7s;}
+.sp-g{top:22%;left:-14px;width:7px;height:7px;color:#53BDEB;animation:spk-twinkle 2.7s ease-in-out infinite .95s;}
+.sp-h{top:5%;left:30%;width:6px;height:6px;color:#FCD34D;animation:spk-twinkle 4.1s ease-in-out infinite 2.1s;}
+
+@keyframes spk-twinkle{
+  0%,100%{opacity:0;transform:scale(.4) rotate(0deg);}
+  35%{opacity:1;transform:scale(1) rotate(20deg);}
+  65%{opacity:.7;transform:scale(.85) rotate(12deg);}
+}
+
+/* ── Phone frame ── */
+.ph{
+  position:relative;
+  width:100%;
+  z-index:1;
+  animation:float 5.5s ease-in-out infinite;
+  filter:
+    drop-shadow(0 28px 56px rgba(0,0,0,.88))
+    drop-shadow(0 0 40px rgba(37,211,102,.16))
+    drop-shadow(0 0 100px rgba(37,211,102,.07));
+}
+.ph-body{
+  position:relative;
+  width:100%;
+  padding-bottom:207%;
+  border-radius:46px;
+  /* Premium titanium-dark finish */
+  background:
+    linear-gradient(162deg, #38383f 0%, #1e1e25 35%, #191920 65%, #22222c 100%);
+  border:1.5px solid transparent;
+  background-clip:padding-box;
+  box-shadow:
+    inset 0 1.5px 0 rgba(255,255,255,.13),
+    inset -1px 0 0 rgba(255,255,255,.04),
+    inset 1px 0 0 rgba(255,255,255,.06),
+    0 0 0 1.5px rgba(0,0,0,.9),
+    0 4px 12px rgba(0,0,0,.6);
+}
+
+/* Volume up */
+.ph-body::before{
+  content:'';position:absolute;left:-5px;top:96px;
+  width:4px;height:34px;border-radius:3px 0 0 3px;
+  background:linear-gradient(180deg,#282830 0%,#3c3c48 45%,#282830 100%);
+  box-shadow:-1px 0 0 rgba(255,255,255,.09),inset 0 1px 0 rgba(255,255,255,.07);
+}
+/* Power */
+.ph-body::after{
+  content:'';position:absolute;right:-5px;top:122px;
+  width:4px;height:58px;border-radius:0 3px 3px 0;
+  background:linear-gradient(180deg,#282830 0%,#3c3c48 45%,#282830 100%);
+  box-shadow:1px 0 0 rgba(255,255,255,.09),inset 0 1px 0 rgba(255,255,255,.07);
+}
+/* Volume down */
+.ph-vol-dn{
+  position:absolute;left:-5px;top:140px;
+  width:4px;height:34px;border-radius:3px 0 0 3px;
+  background:linear-gradient(180deg,#282830 0%,#3c3c48 45%,#282830 100%);
+  box-shadow:-1px 0 0 rgba(255,255,255,.09);
+}
+
+/* Screen */
+.ph-screen{
+  position:absolute;inset:8px;border-radius:39px;
+  background:#0B141A;overflow:hidden;
+  display:flex;flex-direction:column;
+}
+
+/* Dynamic Island */
+.ph-island{
+  position:absolute;top:11px;left:50%;
+  transform:translateX(-50%);
+  width:90px;height:26px;border-radius:14px;
+  background:#000;z-index:10;
+  box-shadow:0 0 0 1.5px rgba(255,255,255,.05),0 4px 8px rgba(0,0,0,.5);
+}
+
+/* Glass shine layers */
+.ph-shine{
+  position:absolute;inset:0;border-radius:46px;
+  background:
+    linear-gradient(125deg,
+      rgba(255,255,255,.09) 0%,
+      rgba(255,255,255,.02) 30%,
+      rgba(255,255,255,0) 50%),
+    linear-gradient(to right,
+      rgba(255,255,255,.04) 0%,
+      rgba(255,255,255,0) 15%);
+  pointer-events:none;z-index:5;
+}
+/* Edge ring */
+.ph-edge{
+  position:absolute;inset:0;border-radius:46px;
+  border:1px solid rgba(255,255,255,.08);
+  pointer-events:none;z-index:6;
+}
+
+/* ── STATUS BAR ── */
+.wa-sb{
+  flex-shrink:0;height:46px;background:#1F2C34;
+  display:flex;align-items:flex-end;padding:0 18px 9px;
+}
+.wa-sb-time{
+  font-family:'Inter',sans-serif;font-size:12.5px;font-weight:700;
+  color:#fff;letter-spacing:-.3px;margin-right:auto;
+}
+.wa-sb-r{display:flex;align-items:center;gap:6px;}
+.batt-wrap{
+  display:flex;align-items:center;
+  width:22px;height:11px;
+  border:1.3px solid rgba(255,255,255,.78);border-radius:2.5px;padding:1.5px;position:relative;
+}
+.batt-wrap::after{
+  content:'';position:absolute;right:-4.5px;top:50%;
+  transform:translateY(-50%);width:2.5px;height:5px;
+  border-radius:0 1.5px 1.5px 0;background:rgba(255,255,255,.4);
+}
+.batt-fill{width:70%;height:100%;background:linear-gradient(90deg,#4ADE80,#22C55E);border-radius:1px;}
+
+/* ── WA HEADER ── */
+.wa-hdr{
+  flex-shrink:0;height:60px;
+  background:linear-gradient(180deg,#203040 0%,#1F2C34 100%);
+  display:flex;align-items:center;padding:0 12px 0 8px;gap:9px;
+  border-bottom:1px solid rgba(0,0,0,.3);
+  box-shadow:0 1px 0 rgba(255,255,255,.04),0 4px 12px rgba(0,0,0,.15);
+}
+.wa-hdr-av{
+  width:38px;height:38px;border-radius:50%;
+  background:linear-gradient(135deg,#0d7a6e 0%,#1fa856 60%,#2ddd70 100%);
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Inter',sans-serif;font-size:14.5px;font-weight:800;color:#fff;flex-shrink:0;
+  box-shadow:0 0 0 2.5px rgba(37,211,102,.3),0 2px 10px rgba(0,0,0,.35);
+}
+.wa-hdr-info{flex:1;min-width:0;}
+.wa-hdr-name{
+  font-family:'Inter',sans-serif;font-size:13.5px;font-weight:700;
+  color:#E9EDEF;line-height:1.2;letter-spacing:-.01em;
+}
+.wa-hdr-st{
+  display:flex;align-items:center;gap:4px;
+  font-family:'Inter',sans-serif;font-size:10.5px;color:#25D366;margin-top:1px;
+}
+.wa-hdr-dot{
+  width:5.5px;height:5.5px;border-radius:50%;background:#25D366;flex-shrink:0;
+  animation:pulse 2s ease-in-out infinite;
+}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(37,211,102,.4);}50%{box-shadow:0 0 0 4px rgba(37,211,102,0);}}
+.wa-hdr-acts{display:flex;align-items:center;gap:14px;padding-right:2px;}
+
+/* ── CHAT AREA ── */
+.wa-chat{
+  flex:1;overflow:hidden;background:#0B141A;
+  display:flex;flex-direction:column;gap:6px;
+  padding:10px 10px 4px;position:relative;
+}
+/* WA wallpaper dots */
+.wa-chat::before{
+  content:'';position:absolute;inset:0;
+  background-image:radial-gradient(circle,rgba(255,255,255,.02) 1px,transparent 1px);
+  background-size:18px 18px;pointer-events:none;
+}
+.wa-date{
+  align-self:center;
+  font-family:'Inter',sans-serif;font-size:9px;letter-spacing:.05em;
+  color:#8696A0;text-transform:uppercase;
+  background:rgba(11,20,26,.88);
+  border:1px solid rgba(255,255,255,.06);
+  border-radius:11px;padding:2.5px 11px;margin-bottom:2px;
+}
+
+/* ── BUBBLES ── */
+.wb{display:flex;flex-direction:column;position:relative;}
+.wb-out{align-self:flex-end;max-width:82%;}
+.wb-in{align-self:flex-start;max-width:90%;}
+
+.wb-out .wb-bg{
+  background:linear-gradient(155deg,#006d5c,#005C4B 60%,#004f40);
+  border-radius:12px 3px 12px 12px;
+  box-shadow:0 2px 6px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.06);
+}
+.wb-in .wb-bg{
+  background:linear-gradient(155deg,#273644,#202C33 60%,#1c2730);
+  border-radius:3px 12px 12px 12px;
+  box-shadow:0 2px 6px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.04);
+}
+
+/* Tails */
+.wb-out::after{
+  content:'';position:absolute;right:-6px;bottom:18px;
+  border:6px solid transparent;border-left-color:#005C4B;
+  border-right:0;border-bottom:0;filter:drop-shadow(1px 1px 1px rgba(0,0,0,.15));
+}
+.wb-in::after{
+  content:'';position:absolute;left:-6px;bottom:18px;
+  border:6px solid transparent;border-right-color:#202C33;
+  border-left:0;border-bottom:0;filter:drop-shadow(-1px 1px 1px rgba(0,0,0,.15));
+}
+
+/* Bubble label */
+.wb-label{
+  font-family:'Inter',sans-serif;font-size:8px;font-weight:700;
+  letter-spacing:.07em;color:#25D366;
+  background:rgba(37,211,102,.08);
+  padding:4px 11px;
+  border-bottom:1px solid rgba(37,211,102,.12);
+}
+.wb-out .wb-bg .wb-label:first-child{border-radius:12px 3px 0 0;}
+.wb-in  .wb-bg .wb-label:first-child{border-radius:3px 12px 0 0;}
+
+.wb-txt{
+  font-family:'Inter',sans-serif;font-size:11.5px;line-height:1.55;
+  color:#E9EDEF;padding:7px 11px 3px;
+}
+.wb-row{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:2px 11px;
+  font-family:'Inter',sans-serif;font-size:9.5px;
+  border-top:1px solid rgba(255,255,255,.04);
+}
+.wb-row:first-of-type{border-top:none;}
+.wb-lbl{color:#8696A0;}
+.wb-val{color:#E9EDEF;font-weight:700;}
+.wb-pills{display:flex;gap:4px;flex-wrap:wrap;padding:5px 11px 3px;}
+.wp{padding:2px 8px;border-radius:10px;font-family:'Inter',sans-serif;font-size:7.5px;font-weight:700;}
+.wp-g{background:rgba(37,211,102,.15);color:#25D366;border:1px solid rgba(37,211,102,.3);}
+.wp-b{background:rgba(83,189,235,.13);color:#53BDEB;border:1px solid rgba(83,189,235,.25);}
+.wp-y{background:rgba(252,211,77,.11);color:#FCD34D;border:1px solid rgba(252,211,77,.25);}
+.wb-ci{display:flex;gap:6px;align-items:baseline;padding:2px 11px;font-family:'Inter',sans-serif;font-size:10px;color:#E9EDEF;}
+.wb-day{color:#25D366;font-weight:700;font-size:8.5px;min-width:34px;flex-shrink:0;}
+.wb-approve{
+  margin:5px 11px 5px;
+  background:linear-gradient(90deg,rgba(37,211,102,.18),rgba(37,211,102,.1));
+  border:1px solid rgba(37,211,102,.35);
+  border-radius:9px;padding:6px 10px;
+  font-family:'Inter',sans-serif;font-size:9.5px;font-weight:700;
+  color:#25D366;text-align:center;
+  box-shadow:0 0 16px rgba(37,211,102,.1);
+}
+.wb-meta{
+  display:flex;align-items:center;justify-content:flex-end;
+  gap:3px;padding:2px 10px 6px;
+  font-family:'Inter',sans-serif;font-size:8.5px;
+  color:rgba(134,150,160,.7);
+}
+
+/* ── TYPING ── */
+.wa-typ{
+  display:flex;align-items:center;gap:4px;
+  background:linear-gradient(155deg,#273644,#202C33);
+  border-radius:18px;padding:8px 14px;
+  align-self:flex-start;
+  box-shadow:0 2px 6px rgba(0,0,0,.22);
+}
+.td{width:5.5px;height:5.5px;border-radius:50%;background:#8696A0;}
+.td:nth-child(1){animation:tdb .9s ease-in-out infinite 0s;}
+.td:nth-child(2){animation:tdb .9s ease-in-out infinite .15s;}
+.td:nth-child(3){animation:tdb .9s ease-in-out infinite .3s;}
+@keyframes tdb{0%,60%,100%{opacity:.3;transform:translateY(0);}30%{opacity:1;transform:translateY(-4px);}}
+
+/* ── INPUT BAR ── */
+.wa-inp{
+  flex-shrink:0;height:58px;
+  background:linear-gradient(180deg,#1c2a36,#1F2C34);
+  display:flex;align-items:center;padding:0 10px;gap:8px;
+  border-top:1px solid rgba(0,0,0,.25);
+}
+.wa-inp-pill{
+  flex:1;height:38px;
+  background:#2A3942;border-radius:19px;
+  display:flex;align-items:center;padding:0 12px;gap:6px;
+  border:1px solid rgba(255,255,255,.06);
+  box-shadow:inset 0 1px 3px rgba(0,0,0,.2);
+}
+.wa-inp-ph{font-family:'Inter',sans-serif;font-size:11px;color:rgba(134,150,160,.6);flex:1;}
+.wa-send{
+  width:38px;height:38px;border-radius:50%;
+  background:linear-gradient(135deg,#2de070,#25D366,#1eb856);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  box-shadow:0 2px 12px rgba(37,211,102,.4),0 0 0 1px rgba(37,211,102,.2);
+}
+.ph-home{
+  flex-shrink:0;height:20px;background:#1F2C34;
+  display:flex;align-items:center;justify-content:center;
+}
+.ph-home::after{
+  content:'';width:36%;height:3px;
+  background:rgba(255,255,255,.2);border-radius:2px;
+}
+</style>
+<div class="ph-stage">
+
+  <!-- Ambient halo -->
+  <div class="ph-halo"></div>
+
+  <!-- 4-point CSS sparkles scattered around phone -->
+  <div class="sp sp-a"></div>
+  <div class="sp sp-b"></div>
+  <div class="sp sp-c"></div>
+  <div class="sp sp-d"></div>
+  <div class="sp sp-e"></div>
+  <div class="sp sp-f"></div>
+  <div class="sp sp-g"></div>
+  <div class="sp sp-h"></div>
+
+  <div class="ph">
+    <div class="ph-body">
+      <div class="ph-vol-dn"></div>
+      <div class="ph-shine"></div>
+      <div class="ph-edge"></div>
+      <div class="ph-screen">
+        <div class="ph-island"></div>
+
+        <!-- STATUS BAR -->
+        <div class="wa-sb">
+          <span class="wa-sb-time">9:41</span>
+          <div class="wa-sb-r">
+            <svg width="14" height="10" viewBox="0 0 16 12" fill="none"><rect x="0" y="5" width="3" height="7" rx="1" fill="white" opacity="0.38"/><rect x="4.5" y="3" width="3" height="9" rx="1" fill="white" opacity="0.62"/><rect x="9" y="1" width="3" height="11" rx="1" fill="white"/><rect x="13.5" y="0" width="2.5" height="12" rx="1" fill="white"/></svg>
+            <svg width="14" height="11" viewBox="0 0 18 14" fill="none"><path d="M1 11Q9 1 17 11" stroke="white" stroke-width="1.7" fill="none" stroke-linecap="round" opacity="0.45"/><path d="M4 13Q9 5 14 13" stroke="white" stroke-width="1.7" fill="none" stroke-linecap="round" opacity="0.78"/><circle cx="9" cy="13.5" r="1.6" fill="white"/></svg>
+            <div class="batt-wrap"><div class="batt-fill"></div></div>
+          </div>
+        </div>
+
+        <!-- WA HEADER -->
+        <div class="wa-hdr">
+          <svg width="8" height="14" viewBox="0 0 8 14" fill="none"><path d="M7 1L1 7L7 13" stroke="#25D366" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <div class="wa-hdr-av">G</div>
+          <div class="wa-hdr-info">
+            <div class="wa-hdr-name">GeoVera AI</div>
+            <div class="wa-hdr-st"><span class="wa-hdr-dot"></span>online</div>
+          </div>
+          <div class="wa-hdr-acts">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M15 10l4.553-2.277A1 1 0 0121 8.68v6.64a1 1 0 01-1.447.897L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" stroke="#B0BEC5" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81a19.79 19.79 0 01-3.07-8.67A2 2 0 012 .42h3a2 2 0 012 1.72c.13 1 .4 2 .72 2.96a2 2 0 01-.45 2.11L6.09 8.49a16 16 0 006.29 6.29l1.28-1.28a2 2 0 012.11-.45c.97.32 1.96.59 2.96.72A2 2 0 0122 16.92z" stroke="#B0BEC5" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <svg width="4" height="18" viewBox="0 0 4 18" fill="#B0BEC5"><circle cx="2" cy="2" r="2"/><circle cx="2" cy="9" r="2"/><circle cx="2" cy="16" r="2"/></svg>
+          </div>
+        </div>
+
+        <!-- CHAT -->
+        <div class="wa-chat">
+          <div class="wa-date">Today</div>
+
+          <!-- User msg 1 -->
+          <div class="wb wb-out">
+            <div class="wb-bg">
+              <div class="wb-txt">Analisa brand kami di Google &amp; AI Search 📊</div>
+              <div class="wb-meta">
+                <span>9:42</span>
+                <svg width="15" height="9" viewBox="0 0 16 10" fill="none"><path d="M1 5l3 3 4-7" stroke="#53BDEB" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 5l3 3 4-7" stroke="#53BDEB" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+            </div>
+          </div>
+
+          <!-- AI reply 1 — GEO Report -->
+          <div class="wb wb-in">
+            <div class="wb-bg">
+              <div class="wb-label">📊 GEO INTELLIGENCE REPORT</div>
+              <div class="wb-txt">Terdeteksi di <strong style="color:#25D366;font-weight:800">4/5 AI platforms</strong> 🔥</div>
+              <div class="wb-row"><span class="wb-lbl">SEO Traffic</span><span class="wb-val" style="color:#4ADE80">+18% ↑</span></div>
+              <div class="wb-row"><span class="wb-lbl">GEO Score</span><span class="wb-val" style="color:#25D366">74 / 100 · A</span></div>
+              <div class="wb-row"><span class="wb-lbl">TikTok Rank</span><span class="wb-val">#2 ↑</span></div>
+              <div class="wb-pills">
+                <span class="wp wp-g">A Grade</span>
+                <span class="wp wp-b">3 Insights</span>
+                <span class="wp wp-y">2 Actions</span>
+              </div>
+              <div class="wb-meta"><span>9:42</span></div>
+            </div>
+          </div>
+
+          <!-- User msg 2 -->
+          <div class="wb wb-out">
+            <div class="wb-bg">
+              <div class="wb-txt">Generate 7 konten Instagram minggu ini 🎨</div>
+              <div class="wb-meta">
+                <span>9:43</span>
+                <svg width="15" height="9" viewBox="0 0 16 10" fill="none"><path d="M1 5l3 3 4-7" stroke="#53BDEB" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 5l3 3 4-7" stroke="#53BDEB" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+            </div>
+          </div>
+
+          <!-- AI reply 2 — Content Studio -->
+          <div class="wb wb-in">
+            <div class="wb-bg">
+              <div class="wb-label">✨ CONTENT STUDIO · 7 posts ready</div>
+              <div class="wb-ci"><span class="wb-day">Senin</span>Behind-the-scenes story</div>
+              <div class="wb-ci"><span class="wb-day">Rabu</span>Product spotlight Reels</div>
+              <div class="wb-ci"><span class="wb-day">Jumat</span>Educational carousel</div>
+              <div class="wb-approve">✓ Approve &amp; Auto-publish</div>
+              <div class="wb-meta"><span>9:43</span></div>
+            </div>
+          </div>
+
+          <!-- Typing indicator -->
+          <div class="wa-typ">
+            <div class="td"></div>
+            <div class="td"></div>
+            <div class="td"></div>
+          </div>
+        </div><!-- /wa-chat -->
+
+        <!-- INPUT BAR -->
+        <div class="wa-inp">
+          <div class="wa-inp-pill">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#8696A0" stroke-width="1.5"/><path d="M8.5 14.5Q12 17.5 15.5 14.5" stroke="#8696A0" stroke-width="1.3" fill="none" stroke-linecap="round"/><circle cx="9.5" cy="10.5" r="1.3" fill="#8696A0"/><circle cx="14.5" cy="10.5" r="1.3" fill="#8696A0"/></svg>
+            <span class="wa-inp-ph">Message</span>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" stroke="#8696A0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="wa-send">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M12 20V4M5 11l7-7 7 7" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+
+        <div class="ph-home"></div>
+      </div><!-- /ph-screen -->
+    </div><!-- /ph-body -->
+  </div><!-- /ph -->
+
+</div><!-- /ph-stage -->
+
+        <!-- Bottom chip -->
+        <div class="hero-platforms">
+          <span class="hero-platforms-dot"></span>
+          20+ platforms connected
+        </div>
+
+      </div><!-- /hero-wa -->
+    </div><!-- /hero-inner -->
+  </div><!-- /wrap -->
+</section>
+
+<!-- ════════════════════════════════════════════
+     SECTION 2: TRUST BAR
+════════════════════════════════════════════ -->
+<div class="trust" role="complementary" aria-label="Platform highlights">
+  <div class="wrap">
+    <div class="trust-row">
+      <div class="trust-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+        20+ Platform Integrations
+      </div>
+      <div class="trust-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+        Data-Driven Intelligence
+      </div>
+      <div class="trust-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+        Built for AI Search Era
+      </div>
+      <div class="trust-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+        WhatsApp-First Automation
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     SECTION 3: PROBLEM
+════════════════════════════════════════════ -->
+<section aria-labelledby="problem-h2">
+  <div class="wrap">
+    <div class="problem-grid">
+      <div class="reveal">
+        <span class="eyebrow">Masalah yang Kita Hadapi</span>
+        <h2 class="h2" id="problem-h2" style="margin:12px 0 20px;">Bisnis modern tenggelam dalam <span class="geo">terlalu banyak tools</span></h2>
+        <p class="body" style="margin-bottom:28px;">Tim Anda berpindah dari satu dashboard ke dashboard lain, kehilangan waktu yang seharusnya digunakan untuk mengembangkan bisnis.</p>
+        <div class="chaos-grid" aria-label="Tools yang berserakan">
+          <div class="chaos-pill bad">SEO Tools</div>
+          <div class="chaos-pill bad">Ads Manager</div>
+          <div class="chaos-pill bad">Analytics</div>
+          <div class="chaos-pill bad">Social Media</div>
+          <div class="chaos-pill bad">Content Planner</div>
+          <div class="chaos-pill bad">CRM</div>
+          <div class="chaos-pill bad">Automation</div>
+          <div class="chaos-pill bad">AI Tools</div>
+          <div class="chaos-pill bad">Reporting</div>
+        </div>
+        <p class="caption" style="margin-top:14px;text-align:center;">Semua terpisah. Semua butuh waktu belajar. Semua memecah fokus tim Anda.</p>
+      </div>
+      <div class="reveal reveal-2">
+        <div class="solution-preview">
+          <div class="sol-header">
+            <div class="sol-dots">
+              <div class="sol-dot" style="background:#F87171;"></div>
+              <div class="sol-dot" style="background:#FCD34D;"></div>
+              <div class="sol-dot" style="background:#4ADE80;"></div>
+            </div>
+            <span style="font-family:var(--fm);font-size:var(--fs-2xs);color:var(--t3);margin-left:8px;">GeoVera via WhatsApp</span>
+          </div>
+          <div class="sol-body">
+            <div class="sol-cmd">
+              <span class="sol-cmd-icon">💬</span>
+              <div>
+                <span style="font-family:var(--fm);font-size:var(--fs-2xs);color:var(--t3);display:block;margin-bottom:3px;">COMMAND</span>
+                <span style="font-size:var(--fs-sm);">Analisa market + buat strategi minggu ini</span>
+              </div>
+            </div>
+            <div style="text-align:center;color:var(--g5);font-size:20px;padding:4px 0;">↓</div>
+            <div class="sol-cmd" style="background:var(--ga12);border-color:var(--ga20);">
+              <span class="sol-cmd-icon">⚡</span>
+              <div>
+                <span style="font-family:var(--fm);font-size:var(--fs-2xs);color:var(--g5);display:block;margin-bottom:3px;">OUTPUT</span>
+                <span style="font-size:var(--fs-xs);">SEO report + GEO score + 7 konten + campaign draft + competitor alert — semua sekaligus</span>
+              </div>
+            </div>
+            <div class="sol-result">
+              <span class="sol-tag" style="background:var(--ga12);color:var(--g5);border:1px solid var(--ga20);">✓ SEO Optimized</span>
+              <span class="sol-tag" style="background:rgba(56,189,248,.08);color:var(--di);border:1px solid rgba(56,189,248,.2);">✓ GEO Ready</span>
+              <span class="sol-tag" style="background:rgba(252,211,77,.08);color:var(--au);border:1px solid rgba(252,211,77,.2);">✓ Content Created</span>
+              <span class="sol-tag" style="background:rgba(167,139,250,.08);color:var(--pur);border:1px solid rgba(167,139,250,.2);">✓ Ads Optimized</span>
+            </div>
+          </div>
+        </div>
+        <p class="caption" style="text-align:center;margin-top:14px;">Satu command. Semua output. Dari WhatsApp Anda.</p>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+<footer role="contentinfo">
+  <div class="wrap">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a href="/" class="nav-logo" aria-label="GeoVera" style="gap:12px;">
+          <svg width="34" height="34" viewBox="0 0 38 38" fill="none" aria-hidden="true">
+            <circle cx="19" cy="19" r="17.5" stroke="#16A34A" stroke-width="1" stroke-dasharray="80 30" stroke-dashoffset="10"/>
+            <circle cx="19" cy="19" r="9" fill="#090D12" stroke="#1C2535" stroke-width="1"/>
+            <circle cx="19" cy="19" r="3.5" fill="#16A34A"/>
+            <line x1="10" y1="19" x2="14.5" y2="19" stroke="#3D5070" stroke-width="1.3" stroke-linecap="round"/>
+            <line x1="23.5" y1="19" x2="28" y2="19" stroke="#3D5070" stroke-width="1.3" stroke-linecap="round"/>
+            <line x1="19" y1="10" x2="19" y2="14.5" stroke="#3D5070" stroke-width="1.3" stroke-linecap="round"/>
+            <line x1="19" y1="23.5" x2="19" y2="28" stroke="#3D5070" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          <span class="nav-wm" style="font-size:22px;">Geo<em>Vera</em></span>
+        </a>
+        <p>AI Brand Intelligence Platform — SEO, GEO, Social Search, Marketing &amp; Analytics via WhatsApp. Dibangun untuk bisnis Indonesia yang ingin mendominasi era AI Search.</p>
+        <div style="margin-top:16px;">
+          <a href="https://wa.me/your-number" class="btn btn-wa btn-sm" target="_blank" rel="noopener">WhatsApp Us</a>
+        </div>
+      </div>
+      <div>
+        <h6>Platform</h6>
+        <div class="foot-links">
+          <a href="#layanan" class="foot-link">Fitur</a>
+          <a href="#layanan" class="foot-link">SEO &amp; GEO</a>
+          <a href="#layanan" class="foot-link">Content Studio</a>
+          <a href="#layanan" class="foot-link">Analytics</a>
+          <a href="#layanan" class="foot-link">20+ Integrations</a>
+        </div>
+      </div>
+      <div>
+        <h6>Perusahaan</h6>
+        <div class="foot-links">
+          <a href="#" class="foot-link">About Us</a>
+          <a href="#blog" class="foot-link" onclick="showPage('blog');return false;">Blog</a>
+          <a href="#faq" class="foot-link">FAQ</a>
+          <a href="#kontak" class="foot-link">Contact</a>
+          <a href="#" class="foot-link">Pricing</a>
+        </div>
+      </div>
+      <div>
+        <h6>Legal</h6>
+        <div class="foot-links">
+          <a href="#" class="foot-link">Privacy Policy</a>
+          <a href="#" class="foot-link">Terms of Service</a>
+          <a href="#" class="foot-link">Cookie Policy</a>
+        </div>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <span class="foot-copy">© 2026 GeoVera · Jakarta, Indonesia · geovera.xyz</span>
+      <span class="foot-copy">Built for the AI Search Era 🚀</span>
+    </div>
+  </div>
+</footer>
+</div><!-- /page-home -->
+
+<!-- ════ PAGE: BLOG ═════════════════════════════════════════════ -->
+<div id="page-blog" style="display:none">
+<section class="blog-hero">
+  <div class="wrap-md">
+    <div class="badge reveal"><div class="badge-dot"></div>GEOVERA INSIGHTS</div>
+    <h1 class="blog-hero-title reveal" style="transition-delay:.1s">Intelligence untuk <span class="grad">Era AI Search</span></h1>
+    <p class="blog-hero-sub reveal" style="transition-delay:.2s">Artikel, strategi, dan insight mendalam tentang GEO, Brand Visibility, dan cara brand Indonesia mendominasi AI platforms.</p>
+    <div class="blog-hero-stats reveal" style="transition-delay:.3s">
+      <div class="blog-stat"><div class="blog-stat-num">48</div><div class="blog-stat-label">Artikel</div></div>
+      <div class="blog-stat"><div class="blog-stat-num">12K+</div><div class="blog-stat-label">Pembaca</div></div>
+      <div class="blog-stat"><div class="blog-stat-num">6</div><div class="blog-stat-label">Topik</div></div>
+    </div>
+  </div>
+</section>
+
+<div class="filter-wrap">
+  <div class="filter-inner">
+    <button class="cat-pill active" data-cat="all">Semua</button>
+    <button class="cat-pill" data-cat="GEO">GEO Optimization</button>
+    <button class="cat-pill" data-cat="SEO">SEO Strategy</button>
+    <button class="cat-pill" data-cat="AI">AI Platforms</button>
+    <button class="cat-pill" data-cat="Content">Content</button>
+    <button class="cat-pill" data-cat="Brand">Brand Strategy</button>
+    <button class="cat-pill" data-cat="Indonesia">Indonesia Market</button>
+  </div>
+</div>
+
+<section class="masonry-section">
+  <div class="masonry" id="masonryGrid"></div>
+  <div class="load-sentinel" id="loadSentinel"><div class="spinner" id="spinner"></div></div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a href="/" class="nav-logo" style="gap:12px;">
+          <svg width="34" height="34" viewBox="0 0 38 38" fill="none">
+            <circle cx="19" cy="19" r="17.5" stroke="#16A34A" stroke-width="1" stroke-dasharray="80 30" stroke-dashoffset="10"/>
+            <circle cx="19" cy="19" r="9" fill="#090D12" stroke="#1C2535" stroke-width="1"/>
+            <circle cx="19" cy="19" r="3.5" fill="#16A34A"/>
+            <line x1="10" y1="19" x2="14.5" y2="19" stroke="#3D5070" stroke-width="1.3" stroke-linecap="round"/>
+            <line x1="23.5" y1="19" x2="28" y2="19" stroke="#3D5070" stroke-width="1.3" stroke-linecap="round"/>
+            <line x1="19" y1="23.5" x2="19" y2="28" stroke="#3D5070" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          <span class="nav-wm" style="font-size:22px;">Geo<em>Vera</em></span>
+        </a>
+        <p>AI Brand Intelligence Platform — SEO, GEO, Social Search, Marketing & Analytics via WhatsApp.</p>
+        <div style="margin-top:16px;"><a href="https://wa.me/your-number" class="btn btn-wa btn-sm" target="_blank">WhatsApp Us</a></div>
+      </div>
+      <div><h6>Platform</h6><div class="foot-links"><a href="/#layanan" class="foot-link">Fitur</a><a href="/#layanan" class="foot-link">SEO & GEO</a><a href="/#layanan" class="foot-link">Content Studio</a><a href="/#layanan" class="foot-link">Analytics</a></div></div>
+      <div><h6>Perusahaan</h6><div class="foot-links"><a href="#" class="foot-link">About Us</a><a href="/blog" class="foot-link">Blog</a><a href="/#faq" class="foot-link">FAQ</a><a href="/#kontak" class="foot-link">Contact</a></div></div>
+      <div><h6>Legal</h6><div class="foot-links"><a href="#" class="foot-link">Privacy Policy</a><a href="#" class="foot-link">Terms of Service</a><a href="#" class="foot-link">Cookie Policy</a></div></div>
+    </div>
+    <div class="foot-bottom">
+      <span class="foot-copy">© 2026 GeoVera · Jakarta, Indonesia · geovera.xyz</span>
+      <span class="foot-copy">Built for the AI Search Era 🚀</span>
+    </div>
+  </div>
+</footer>
+
+<div class="modal-overlay" id="modal">
+  <div class="modal-body" id="modalBody">
+    <div class="reading-prog"><div class="reading-prog-bar" id="readingBar"></div></div>
+    <div class="modal-cover" id="modalCover"></div>
+    <div class="modal-content" id="modalContent"></div>
+  </div>
+
+</div><!-- /page-blog -->
+
+<script>
+// Scroll progress bar
+const sp = document.getElementById('sp');
+window.addEventListener('scroll', () => {
+  const p = (scrollY / (document.body.scrollHeight - innerHeight)) * 100;
+  sp.style.width = p + '%';
+}, {passive:true});
+
+// Navbar solid on scroll
+const navbar = document.getElementById('navbar');
+window.addEventListener('scroll', () => {
+  navbar.classList.toggle('solid', scrollY > 10);
+}, {passive:true});
+
+// Active nav link
+const sections = ['home','layanan','faq','blog','kontak'];
+const navLinks = document.querySelectorAll('.nav-link');
+window.addEventListener('scroll', () => {
+  let cur = '';
+  sections.forEach(id => {
+    const el = document.getElementById(id);
+    if(el && scrollY >= el.offsetTop - 120) cur = id;
+  });
+  navLinks.forEach(l => {
+    const href = l.getAttribute('href').replace('#','');
+    l.classList.toggle('active', href === cur);
+  });
+}, {passive:true});
+
+// Reveal on scroll
+const io = new IntersectionObserver(entries => {
+  entries.forEach(e => { if(e.isIntersecting) e.target.classList.add('visible'); });
+}, {threshold: 0.08, rootMargin: '0px 0px -40px 0px'});
+document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+// FAQ accordion
+document.querySelectorAll('.faq-q').forEach(q => {
+  const action = () => {
+    const item = q.closest('.faq-item');
+    const isOpen = item.classList.contains('open');
+    document.querySelectorAll('.faq-item').forEach(i => {
+      i.classList.remove('open');
+      i.querySelector('.faq-q').setAttribute('aria-expanded','false');
+    });
+    if(!isOpen){
+      item.classList.add('open');
+      q.setAttribute('aria-expanded','true');
+    }
+  };
+  q.addEventListener('click', action);
+  q.addEventListener('keydown', e => { if(e.key==='Enter'||e.key===' '){e.preventDefault();action();} });
+});
+
+// Mobile nav
+const ham = document.getElementById('ham');
+const mobNav = document.getElementById('mobNav');
+const mobClose = document.getElementById('mobClose');
+const openMob = () => { mobNav.classList.add('open'); ham.setAttribute('aria-expanded','true'); document.body.style.overflow='hidden'; };
+const closeMob = () => { mobNav.classList.remove('open'); ham.setAttribute('aria-expanded','false'); document.body.style.overflow=''; };
+ham.addEventListener('click', openMob);
+mobClose.addEventListener('click', closeMob);
+mobNav.querySelectorAll('.mob-link').forEach(l => l.addEventListener('click', closeMob));
+mobNav.addEventListener('click', e => { if(e.target===mobNav) closeMob(); });
+
+// Smooth scroll
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+  a.addEventListener('click', e => {
+    const target = document.querySelector(a.getAttribute('href'));
+    if(target){ e.preventDefault(); target.scrollIntoView({behavior:'smooth',block:'start'}); }
+  });
+});
+
+// Contact form submit
+document.querySelector('.contact-form .btn-primary').addEventListener('click', function(){
+  const nama = document.getElementById('nama').value.trim();
+  const email = document.getElementById('email').value.trim();
+  if(!nama || !email){
+    this.textContent = '⚠ Lengkapi nama & email terlebih dahulu';
+    setTimeout(() => { this.textContent = 'Kirim Pesan →'; }, 2000);
+    return;
+  }
+  this.textContent = '✓ Terkirim! Kami akan menghubungi Anda segera';
+  this.style.background = 'var(--g7)';
+});
+</script>
+<!-- ── FLOATING THEME TOGGLE ─────────────────── -->
+<div id="theme-toggle" role="button" aria-label="Toggle light/dark mode" title="Toggle light mode">
+  <div class="tt-icon tt-sun">☀️</div>
+  <div class="tt-pill"><div class="tt-dot"></div></div>
+  <div class="tt-icon tt-moon">🌙</div>
+  <div class="tt-label">Theme</div>
+</div>
+
+<script>
+(function(){
+  const btn = document.getElementById('theme-toggle');
+  const STORE_KEY = 'gv-theme';
+  // restore saved preference
+  if(localStorage.getItem(STORE_KEY) === 'light'){
+    document.body.classList.add('light-mode');
+  }
+  btn.addEventListener('click', function(){
+    const isLight = document.body.classList.toggle('light-mode');
+    localStorage.setItem(STORE_KEY, isLight ? 'light' : 'dark');
+  });
+})();
+</script>
+
+<script>
+const ARTICLES=[
+{id:1,title:"GEO vs SEO: Pergeseran Menuju AI-Powered Discovery",category:"GEO",catColor:"var(--g5)",emoji:"🔭",coverBg:"linear-gradient(135deg,#0a1a0f,#0d2416,#0f2d1a)",readTime:7,author:"Rafi Ananda",date:"10 Mar 2026",tags:["GEO","SEO","AI Search"],excerpt:"Di 2026, lebih dari 40% pencarian produk premium dimulai dari AI platforms. Brand yang belum paham GEO sudah tertinggal.",content:`<p>Ada momen yang menentukan bagi setiap era digital. Dulu, itu adalah Google menggantikan direktori web. Sekarang, itu adalah AI yang menggantikan search engine tradisional sebagai titik awal discovery konsumen.</p><p><strong>GEO (Generative Engine Optimization)</strong> bukan sekadar istilah baru. Ini adalah perubahan fundamental tentang bagaimana brand perlu memikirkan visibilitas mereka di era digital.</p><h2>Apa yang Berbeda?</h2><p>Ketika seseorang bertanya kepada ChatGPT "rekomendasikan skincare terbaik untuk kulit berminyak di Indonesia," AI tidak menampilkan 10 link biru. AI memberikan <em>jawaban</em> — dengan menyebut brand tertentu, menjelaskan alasannya, dan memberikan konteks yang relevan.</p><p>Di sinilah SEO konvensional mulai kehilangan relevansi. Ranking di halaman satu Google tidak otomatis berarti brand Anda disebutkan oleh AI. Dua mekanisme yang benar-benar berbeda.</p><div class="pull-quote">Brand yang menguasai GEO bukan yang paling banyak backlink-nya, tapi yang paling sering dijadikan referensi oleh AI sebagai sumber terpercaya.</div><h2>Tiga Perbedaan Utama SEO vs GEO</h2><p><strong>1. Sinyal Kepercayaan yang Berbeda.</strong> SEO mengukur otoritas domain, backlink, dan relevansi keyword. GEO mengukur seberapa sering AI systems mengutip brand Anda sebagai referensi — yang disebut <em>citation frequency</em>.</p><p><strong>2. Format Konten yang Berbeda.</strong> Konten SEO dioptimasi untuk crawler. Konten GEO dioptimasi untuk pemahaman AI — definisi yang jelas, pernyataan faktual yang terverifikasi, konteks yang kaya dan konsisten.</p><p><strong>3. Metrik Sukses yang Berbeda.</strong> SEO: SERP ranking, organic traffic, CTR. GEO: AI mention frequency, sentiment dalam jawaban AI, posisi dalam response.</p><div class="highlight"><strong>47%</strong> konsumen Indonesia usia 18-34 menggunakan AI platforms untuk mencari rekomendasi produk sebelum membeli. Brand yang tidak teroptimasi untuk AI kehilangan hampir setengah dari target demografis mereka.</div><h2>Bagaimana Mulai?</h2><p>Langkah pertama adalah audit. Tanyakan 20-30 pertanyaan relevan ke ChatGPT, Perplexity, Claude, dan Gemini. Catat: apakah brand Anda disebut? Di posisi apa? Dengan sentimen positif atau negatif?</p><p>Sebagian besar brand Indonesia yang kami analisis memiliki GEO score di bawah 40 dari 100. Kabar baiknya: GEO masih early stage. Brand yang bergerak sekarang memiliki <strong>window of opportunity</strong> yang tidak akan ada dalam 12-18 bulan ke depan.</p>`},
+{id:2,title:"Kenapa Brand Anda Tidak Muncul di ChatGPT?",category:"AI",catColor:"var(--di)",emoji:"🤖",coverBg:"linear-gradient(135deg,#080d1a,#0d1230,#111840)",readTime:5,author:"Dinda Kartika",date:"8 Mar 2026",tags:["ChatGPT","Visibility","AI Search"],excerpt:"5 alasan teknis mengapa AI tidak merekomendasikan brand Anda, dan cara mengatasinya secara sistematis.",content:`<p>Klien kami — sebuah brand F&B premium dari Jakarta — memiliki 50.000 followers Instagram, rating Google 4.8, dan artikel di beberapa media nasional. Tapi ketika kami tanyakan ke ChatGPT tentang restoran fine dining terbaik di Jakarta, nama mereka tidak muncul sama sekali.</p><p>Ini bukan anomali. Ini adalah krisis visibilitas yang diam-diam menyerang ribuan brand Indonesia.</p><h2>5 Alasan Teknis Brand Tidak Muncul di AI</h2><p><strong>1. Kurangnya Structured Authority Signals.</strong> Jika brand Anda disebutkan di berbagai sumber dengan nama yang berbeda-beda, AI kesulitan mengidentifikasi entitas yang sama dan membangun authority score yang solid.</p><p><strong>2. Konten Tidak Menjawab AI-Readable Questions.</strong> Website Anda mungkin penuh konten — tapi apakah konten itu menjawab pertanyaan yang <em>persis</em> ditanyakan konsumen ke AI?</p><p><strong>3. Tidak Ada Cross-Platform Corroboration.</strong> AI membangun kepercayaan melalui corroboration — semakin banyak sumber independen yang menyebutkan brand Anda dengan konsisten, semakin tinggi confidence AI untuk merekomendasikannya.</p><div class="pull-quote">AI tidak merekomendasikan brand yang paling bagus. AI merekomendasikan brand yang paling banyak diverifikasi oleh sumber-sumber yang ia percayai.</div><p><strong>4. Sentiment Ambiguity.</strong> Satu ulasan negatif yang viral bisa menurunkan confidence AI secara signifikan. Brand dengan sentiment "mixed" cenderung dilewati.</p><p><strong>5. Temporal Gap.</strong> Jika konten terbaru brand Anda sudah lebih dari 3 bulan, freshness score turun drastis. AI memprioritaskan informasi yang terverifikasi dan terkini.</p><h2>Quick Fix</h2><p>Mulai dengan "Brand Entity Clarity" — pastikan nama brand, kategori, dan value proposition Anda konsisten di semua platform. Buat satu halaman "About" yang komprehensif di website Anda yang menjawab semua pertanyaan yang mungkin ditanyakan tentang brand Anda.</p>`},
+{id:3,title:"Brand DNA: Pondasi Semua Strategi AI Visibility",category:"Brand",catColor:"var(--pur)",emoji:"🧬",coverBg:"linear-gradient(135deg,#12090d,#1a0d14,#22101a)",readTime:8,author:"Tim GeoVera",date:"6 Mar 2026",tags:["Brand DNA","Strategy","Foundation"],excerpt:"Brand yang memiliki DNA terdokumentasi dengan baik mendapatkan GEO score rata-rata 34 poin lebih tinggi. Inilah alasannya.",content:`<p>Bayangkan Anda mempekerjakan tim marketing baru. Pada hari pertama, Anda memberikan mereka satu dokumen yang menjelaskan <em>siapa</em> brand Anda, <em>apa</em> yang Anda perjuangkan, siapa target Anda. Tim itu bisa langsung bekerja dengan konsistensi yang solid.</p><p>Brand DNA bekerja dengan cara yang sama — tapi untuk AI systems.</p><h2>Apa Itu Brand DNA dalam Konteks GEO?</h2><p>Brand DNA adalah <strong>structured data profile</strong> yang mendefinisikan identitas brand Anda dengan cara yang dapat dibaca dan diinterpretasikan oleh AI systems secara konsisten.</p><p>GeoVera mendefinisikan Brand DNA melalui delapan dimensi:</p><ul><li><strong>Core Identity</strong> — Nama, kategori, subcategory, founding story, unique positioning</li><li><strong>Value Proposition</strong> — Apa yang brand Anda selesaikan, untuk siapa, dan mengapa berbeda</li><li><strong>Audience Profile</strong> — Demografis, psikografis, pain points, aspirations</li><li><strong>Voice & Tone</strong> — Bagaimana brand berbicara di berbagai konteks</li><li><strong>Competitive Positioning</strong> — Di mana brand Anda berada vs kompetitor</li><li><strong>Evidence Base</strong> — Data dan klaim yang dapat diverifikasi</li><li><strong>Content Pillars</strong> — Topik yang brand Anda miliki authority-nya</li><li><strong>Trust Signals</strong> — Awards, media mentions, certifications</li></ul><div class="pull-quote">Brand DNA bukan tentang bagaimana Anda ingin terlihat. Ini tentang bagaimana AI systems memahami dan merepresentasikan Anda.</div><p>Dalam analisis kami terhadap 200+ brand Indonesia, brand dengan Brand DNA yang terdokumentasi mendapatkan GEO score rata-rata <strong>34 poin lebih tinggi</strong> dibanding brand tanpa struktur ini.</p><h2>Cara GeoVera Membangun Brand DNA</h2><p>Proses onboarding GeoVera secara otomatis membangun Brand DNA melalui crawling website, analisis kompetitor landscape, dan synthesis oleh AI. Prosesnya memakan waktu 15-30 menit.</p>`},
+{id:4,title:"4 Pillar Framework: Visibility, Discovery, Authority, Trust",category:"GEO",catColor:"var(--g5)",emoji:"🏛️",coverBg:"linear-gradient(135deg,#080f10,#0d1a1c,#112228)",readTime:10,author:"Rafi Ananda",date:"4 Mar 2026",tags:["Framework","GEO Score","Strategy"],excerpt:"GEO Score bukan satu angka. Ini komposit dari empat dimensi yang masing-masing butuh strategi berbeda.",content:`<p>Visibilitas AI bukan satu dimensi linear. Ada empat dimensi berbeda yang saling berinteraksi, dan masing-masing butuh strategi yang berbeda.</p><h2>Pillar 1: Visibility</h2><p><strong>Pertanyaan kunci:</strong> Seberapa mudah brand Anda ditemukan ketika seseorang mencari kategori atau masalah yang Anda selesaikan?</p><p>Visibility diukur melalui: citation frequency di berbagai AI platforms, SERP ranking, share of search di kategori Anda, dan cross-platform presence score.</p><div class="highlight"><strong>Target:</strong> Visibility score A+ berarti brand Anda disebutkan dalam >60% queries relevan di 5 major AI platforms.</div><h2>Pillar 2: Discovery</h2><p><strong>Pertanyaan kunci:</strong> Bagaimana audiens baru menemukan brand Anda — bukan mereka yang sudah kenal, tapi yang belum pernah mendengar nama Anda?</p><p>Discovery adalah pillar yang paling sering diabaikan brand. Mereka fokus pada orang yang sudah tahu mereka, tapi AI sebenarnya adalah mesin discovery yang sangat powerful untuk new audiences.</p><h2>Pillar 3: Authority</h2><p><strong>Pertanyaan kunci:</strong> Apakah brand Anda dianggap sebagai sumber terpercaya dan ahli di kategorinya?</p><div class="pull-quote">Authority tidak bisa dibeli atau dimanipulasi. Authority dibangun satu konten berkualitas dalam satu waktu, diakui oleh sumber lain, dikutip berulang kali.</div><h2>Pillar 4: Trust</h2><p><strong>Pertanyaan kunci:</strong> Apakah representasi brand Anda di digital landscape konsisten dan positif?</p><p>Trust diukur melalui: sentiment analysis dari semua mentions, review scores dan tren, brand alignment consistency, dan reputation stability score.</p><h2>Bagaimana Keempatnya Berinteraksi?</h2><p>Brand baru biasanya lemah di Authority dan Trust. Strategi yang tepat adalah fokus membangun Discovery dulu (easier wins), sambil secara konsisten membangun Authority melalui konten expert dan Trust melalui review management.</p>`},
+{id:5,title:"Content yang Dikutip AI: Panduan Praktis",category:"Content",catColor:"var(--au)",emoji:"✍️",coverBg:"linear-gradient(135deg,#151005,#1e170a,#28200f)",readTime:9,author:"Dinda Kartika",date:"2 Mar 2026",tags:["Content","AI Citation","Writing"],excerpt:"Format, struktur, dan sinyal spesifik yang membuat AI memilih konten Anda sebagai referensi vs kompetitor.",content:`<p>Ada perbedaan mendasar antara konten yang dibaca manusia dan konten yang dikutip AI. Sebagian besar brand masih menulis konten hanya untuk manusia — dan bertanya-tanya mengapa mereka tidak pernah muncul dalam jawaban AI.</p><h2>Anatomi Konten yang AI Suka Kutip</h2><p><strong>1. Factual Density yang Tinggi.</strong> AI memprioritaskan konten yang kaya fakta yang dapat diverifikasi. Angka spesifik, persentase, tanggal, nama, lokasi — bukan opini umum.</p><p><strong>2. Clear Entity Definition.</strong> AI sangat baik mengenali entitas (orang, tempat, organisasi, konsep). Pastikan setiap konten Anda memiliki definisi yang crystal-clear tentang brand Anda sebagai entitas.</p><p><strong>3. Question-Answer Format.</strong> Konten yang secara eksplisit menjawab pertanyaan memiliki citation rate 3x lebih tinggi.</p><div class="pull-quote">Tulis setiap bagian konten seolah Anda sedang menjawab pertanyaan spesifik yang seseorang tanyakan ke AI.</div><p><strong>4. Konsistensi Terminologi.</strong> Pilih terminologi Anda dan stick with it. Inkonsistensi terminology mengacaukan authority score AI.</p><p><strong>5. Temporal Freshness Markers.</strong> Sertakan tanggal, versi, dan konteks temporal yang jelas. "Data Q1 2026 menunjukkan..." lebih baik dari "data terbaru menunjukkan..."</p><h2>Format yang Paling Efektif</h2><ul><li><strong>Long-form definitive guides</strong> (2000+ kata): citation rate tertinggi</li><li><strong>Statistical round-ups</strong>: dikutip untuk Discovery</li><li><strong>Comparison articles</strong>: sangat sering dikutip untuk Discovery queries</li><li><strong>FAQ pages</strong> komprehensif: foundation penting</li><li><strong>Case studies dengan data spesifik</strong>: Trust builder yang kuat</li></ul>`},
+{id:6,title:"Social Search Optimization: Frontier Ketiga",category:"Content",catColor:"var(--au)",emoji:"📱",coverBg:"linear-gradient(135deg,#150810,#1f0d16,#2a121e)",readTime:6,author:"Tim GeoVera",date:"28 Feb 2026",tags:["SSO","TikTok","Instagram","Social Search"],excerpt:"TikTok adalah search engine nomor dua di Indonesia untuk Gen Z. Apakah strategi SSO brand Anda sudah ada?",content:`<p>Tiga pilar discovery modern: SEO (Google), GEO (AI platforms), dan SSO — Social Search Optimization. Dari ketiganya, SSO adalah yang paling baru dan paling sering diabaikan brand Indonesia.</p><p>Data dari We Are Social 2026 menunjukkan bahwa <strong>63% Gen Z Indonesia</strong> menggunakan TikTok sebagai search engine pertama untuk mencari produk, review, dan rekomendasi.</p><h2>Apa yang Berbeda dari SSO?</h2><p>SSO mengoptimasi untuk algorithm berbasis engagement dan social proof di platforms seperti TikTok, Instagram, dan YouTube Shorts. Yang membuat SSO unik adalah <em>visual-first</em> nature-nya.</p><h2>Empat Komponen SSO</h2><p><strong>Caption Optimization.</strong> TikTok dan Instagram memiliki search function yang sangat bergantung pada keyword dalam caption — bukan sekadar hashtag.</p><p><strong>Creator Intelligence.</strong> Brand yang mendominasi SSO bekerja dengan micro-creators (10K-100K followers) yang memiliki engagement rate tinggi dan niche audience yang spesifik.</p><div class="pull-quote">Di era SSO, trust dibangun oleh orang nyata yang berbicara jujur tentang pengalaman mereka. Authentic beats polished every single time.</div><p><strong>Content Velocity.</strong> Algorithm SSO memprioritaskan consistency dan volume. Brand yang publish satu konten bagus per minggu kalah dengan brand yang publish tiga konten biasa per hari dalam hal discovery.</p><p><strong>Social Proof Amplification.</strong> Comments, shares, dan saves adalah sinyal kepercayaan yang sangat kuat — bukan sekadar views dan likes.</p><h2>Koneksi SSO dengan GEO</h2><p>AI platforms semakin mengindeks konten TikTok dan Instagram. Brand yang menguasai SSO hari ini sedang membangun foundation GEO untuk masa depan.</p>`},
+{id:7,title:"Competitive Intelligence di Era AI Answers",category:"Brand",catColor:"var(--pur)",emoji:"🎯",coverBg:"linear-gradient(135deg,#0a0a18,#0d0d24,#121230)",readTime:7,author:"Rafi Ananda",date:"25 Feb 2026",tags:["Competitive Intel","Strategy","Analysis"],excerpt:"Bagaimana AI merepresentasikan kompetitor Anda? Data ini lebih valuable dari laporan analis tradisional manapun.",content:`<p>Intelligence kompetitif telah berubah secara fundamental. Sekarang, AI platforms memberikan real-time competitive intelligence setiap hari — jika Anda tahu cara membacanya.</p><h2>AI sebagai Cermin Kompetitif</h2><p>Ketika konsumen bertanya kepada AI tentang kategori produk Anda, AI memberikan "competitive landscape" berdasarkan apa yang ia ketahui dan percayai. Bagaimana AI merepresentasikan kompetitor Anda adalah salah satu data paling valuable.</p><p>Pertanyaan yang harus Anda tanyakan secara rutin:</p><ul><li>"Apa saja [kategori] terbaik di Indonesia?"</li><li>"Apa kelebihan [kompetitor A] dibanding [kompetitor B]?"</li><li>"Untuk [use case spesifik], mana yang lebih baik: [brand Anda] atau [kompetitor]?"</li></ul><div class="pull-quote">Kompetitor terkuat Anda bukan yang paling banyak iklan. Tapi yang paling sering disebutkan oleh AI dengan sentimen positif.</div><h2>Tiga Layer Competitive Intelligence dari AI</h2><p><strong>Layer 1: Mention Analysis.</strong> Siapa yang disebut? Dalam urutan apa? Berapa sering? Brand yang disebut di kalimat pertama memiliki competitive advantage yang sangat signifikan.</p><p><strong>Layer 2: Sentiment Comparison.</strong> Bagaimana AI mendeskripsikan brand Anda vs kompetitor? Perbedaan kecil yang berdampak besar pada keputusan pembelian.</p><p><strong>Layer 3: Gap Analysis.</strong> Pertanyaan mana yang kompetitor jawab tapi brand Anda tidak? Ini adalah content opportunities yang bisa Anda ambil.</p><h2>Monitoring yang Efektif</h2><p>GeoVera menjalankan 300 pertanyaan per hari ke 5 AI platforms untuk setiap brand — secara otomatis melacak mention frequency, sentiment trends, dan competitive positioning changes dengan delta tracking 7/14/28 hari.</p>`},
+{id:8,title:"Kenapa Brand Indonesia Butuh AI Visibility Sekarang",category:"Indonesia",catColor:"var(--red)",emoji:"🇮🇩",coverBg:"linear-gradient(135deg,#150808,#20100a,#2a150c)",readTime:6,author:"Dinda Kartika",date:"22 Feb 2026",tags:["Indonesia","Market","Opportunity"],excerpt:"Window of opportunity untuk GEO di Indonesia masih terbuka lebar. Tapi tidak untuk selamanya.",content:`<p>Indonesia adalah pasar yang unik untuk AI adoption. Dengan 278 juta penduduk, penetrasi smartphone yang tinggi, dan Gen Z sebagai demographic terbesar, Indonesia seharusnya menjadi salah satu pasar AI terbesar di Asia Tenggara.</p><p>Tapi realitasnya? Hanya sekitar 3% brand Indonesia yang telah memiliki strategi GEO yang terstruktur.</p><h2>Mengapa Ini Urgent?</h2><p>Di 2025, search behavior mulai bergeser secara signifikan. Di 2026, AI search untuk produk premium dan considered purchases sudah menjadi mainstream. Di 2027-2028, brand yang tidak punya AI visibility yang solid akan menghadapi competitive disadvantage yang sangat serius.</p><div class="pull-quote">First-mover advantage di GEO bukan sekadar keunggulan kecil. Di pasar yang saturasi, menjadi brand yang "dimiliki" AI dalam kategori Anda adalah moat yang sangat kuat.</div><h2>Karakteristik Unik Pasar Indonesia</h2><p><strong>WhatsApp-first behavior.</strong> Konsumen Indonesia tidak menggunakan ChatGPT via browser — mereka mencari AI yang bisa diakses via WhatsApp. Ini membuka peluang baru untuk brand yang memahami context ini.</p><p><strong>Multi-language complexity.</strong> Bahasa Indonesia, Bahasa Jawa, Bahasa Sunda, dan Bahasa Gaul Gen Z semuanya relevan dalam AI search. Brand yang mengoptimasi hanya untuk Bahasa Indonesia formal kehilangan significant share of queries.</p><p><strong>Local platform dominance.</strong> Brand yang aktif dan teroptimasi di Tokopedia, Shopee, dan Traveloka memiliki GEO advantage yang unik.</p><h2>Window yang Sedang Menutup</h2><p>Berdasarkan trajectory adoption di markets yang lebih mature, Indonesia memiliki sekitar 18-24 bulan sebelum competitive landscape GEO menjadi jauh lebih sulit untuk dimasuki.</p>`},
+{id:9,title:"GEO Score: Apa Arti Angkanya Sebenarnya",category:"GEO",catColor:"var(--g5)",emoji:"📊",coverBg:"linear-gradient(135deg,#060e08,#0a1510,#0d1d14)",readTime:5,author:"Tim GeoVera",date:"19 Feb 2026",tags:["GEO Score","Metrics","Analytics"],excerpt:"GEO Score 72 vs 45 — apa bedanya dalam konteks business impact? Panduan interpreting angka yang benar.",content:`<p>GEO Score adalah metric yang dirancang untuk menjawab satu pertanyaan sederhana: <em>seberapa baik posisi brand Anda di AI discovery landscape?</em></p><h2>Cara GEO Score Dihitung</h2><p>GEO Score adalah komposit weighted dari empat pillar — Visibility (30%), Discovery (25%), Authority (25%), dan Trust (20%).</p><ul><li><strong>A+ (95-100):</strong> Gold Standard. Brand secara konsisten muncul di posisi awal response AI dengan sentiment sangat positif.</li><li><strong>A (85-94):</strong> Excellent. Strong presence dengan beberapa area yang masih bisa ditingkatkan.</li><li><strong>B (70-84):</strong> Good. Terlihat di AI, tapi kompetitor tertentu masih unggul di beberapa queries.</li><li><strong>C (55-69):</strong> Developing. Intermittent visibility, perlu strategi konten yang lebih agresif.</li><li><strong>D (40-54):</strong> Weak. Hanya muncul untuk branded queries.</li><li><strong>F (&lt;40):</strong> Critical. Hampir tidak terlihat di AI landscape.</li></ul><div class="highlight"><strong>Rata-rata brand Indonesia</strong> yang kami analisis memiliki GEO Score 38 — range F. Brand dengan strategi GEO aktif mencapai 68-75 dalam 90 hari pertama.</div><h2>Apa yang Bisa Berubah Cepat vs Lambat?</h2><p><strong>Cepat (7-14 hari):</strong> Trust sentiment, freshness score, beberapa Discovery signals.</p><p><strong>Sedang (30-60 hari):</strong> Visibility di AI platforms, cross-platform corroboration score.</p><p><strong>Lambat (90+ hari):</strong> Authority score — tidak bisa diakselarasi secara artificial.</p><div class="pull-quote">GEO Score bukan tujuan akhir. Tujuan akhirnya adalah lebih banyak brand discovery yang menghasilkan revenue. GEO Score hanyalah leading indicator terbaik yang kita miliki.</div>`},
+{id:10,title:"WhatsApp sebagai Business Intelligence Interface",category:"AI",catColor:"var(--di)",emoji:"💬",coverBg:"linear-gradient(135deg,#051408,#08200d,#0b2c12)",readTime:5,author:"Rafi Ananda",date:"16 Feb 2026",tags:["WhatsApp","Interface","AI","Indonesia"],excerpt:"Mengapa WhatsApp adalah pilihan paling natural untuk AI business intelligence di pasar Indonesia.",content:`<p>Di Indonesia, future of AI sudah ada — dan ada di WhatsApp. Dengan 167 juta pengguna aktif WhatsApp di Indonesia, WhatsApp adalah default operating system komunikasi bisnis Indonesia.</p><h2>Mengapa WhatsApp Membuat Sense sebagai AI Interface?</h2><p><strong>Zero learning curve.</strong> Semua orang sudah tahu cara menggunakan WhatsApp. Tidak ada training, tidak ada onboarding, tidak ada UI yang perlu dipelajari.</p><p><strong>Contextual memory via threads.</strong> WhatsApp threads secara natural menjadi conversation history yang dapat diakses AI untuk context.</p><p><strong>Notification-native.</strong> Dashboard harus dikunjungi. WhatsApp datang kepada Anda. AI insights yang real-time jauh lebih actionable ketika mereka masuk sebagai notifikasi WhatsApp.</p><div class="pull-quote">Interface terbaik untuk AI bukan yang paling canggih. Interface terbaik adalah yang paling tidak terasa seperti menggunakan teknologi baru.</div><h2>Bagaimana GeoVera Menggunakan WhatsApp?</h2><p>GeoVera terintegrasi dengan WhatsApp Business API. Brand manager bisa request konten on-demand, get instant intelligence, receive proactive alerts tentang competitor moves, dan approve content sebelum posting.</p><p>Command recognition menggunakan natural language — "Buat laporan," "analisis kompetitor," "siapkan konten Ramadan" — semua bekerja secara natural.</p>`},
+{id:11,title:"Real Cost of Being Invisible to AI Search",category:"Brand",catColor:"var(--pur)",emoji:"💸",coverBg:"linear-gradient(135deg,#100a06,#1a1008,#24160a)",readTime:6,author:"Dinda Kartika",date:"13 Feb 2026",tags:["ROI","Visibility","Revenue","Risk"],excerpt:"Kalkulasi konkret: berapa revenue yang hilang ketika brand Anda tidak muncul di AI recommendations untuk kategori Anda.",content:`<p>Brand manager sering bertanya: "Berapa ROI dari investasi GEO?" Pertanyaan yang tepat tapi diajukan terbalik. Pertanyaan yang benar adalah: "Berapa biaya dari <em>tidak</em> berinvestasi di GEO?"</p><h2>Estimasi Kerugian per Skenario</h2><p><strong>Skenario A: F&B Premium, Jakarta.</strong> Rata-rata 2.400 orang per bulan mencari "restoran fine dining Jakarta" di AI platforms. Conversion dari AI recommendation ke reservasi: rata-rata 18%. Average check per kepala: Rp 850.000.</p><p>Brand yang tidak muncul di AI kehilangan estimated 432 covers per bulan. Pada average check Rp 850.000: <strong>Rp 367 juta potensial revenue per bulan yang tidak diakses</strong>.</p><div class="highlight">Ini bukan revenue yang hilang ke kompetitor. Ini revenue yang <em>tidak pernah ada dalam radar Anda</em> karena konsumen tidak pernah tahu Anda exist dalam AI landscape.</div><h2>Tapi Ada Cost Lain yang Lebih Berbahaya</h2><p><strong>Brand perception erosion.</strong> Ketika AI tidak menyebut brand Anda, konsumen mendapat informasi tentang brand lain yang kemudian membentuk persepsi mereka. Brand yang tidak hadir di AI secara aktif membiarkan kompetitor mendefinisikan kategori mereka.</p><p><strong>Authority dilution over time.</strong> Semakin lama brand Anda tidak membangun AI presence, semakin sulit untuk masuk. AI systems build authority scores yang bersifat compound.</p><div class="pull-quote">Setiap bulan tanpa strategi GEO bukan just missed opportunity. Itu adalah hutang competitive disadvantage yang akan semakin mahal untuk dilunasi.</div><p>Dalam hampir semua kasus yang kami analisis, ROI dari investasi GEO adalah 8-15x dalam 12 bulan pertama untuk brand yang konsisten mengeksekusi strateginya.</p>`},
+{id:12,title:"Case Study: F&B Brand — 47 Perplexity Mentions dalam 30 Hari",category:"GEO",catColor:"var(--g5)",emoji:"📈",coverBg:"linear-gradient(135deg,#060f0a,#0a1a10,#0d2416)",readTime:8,author:"Tim GeoVera",date:"10 Feb 2026",tags:["Case Study","F&B","Results","GEO"],excerpt:"Dari 2 mentions ke 47 dalam satu bulan. Breakdown lengkap strategi yang kami gunakan untuk brand kuliner premium Surabaya.",content:`<p>Klien ini adalah brand kuliner premium dari Surabaya — kategori modern Indonesian cuisine, price point Rp 200.000-450.000 per pax. Brand established secara offline (6 tahun beroperasi, rating Google 4.7), tapi practically invisible di AI landscape.</p><p><strong>Baseline:</strong> 2 mentions di Perplexity, 0 di ChatGPT, 1 di Gemini. GEO Score: 28 (Grade F).</p><h2>Diagnosis: Apa yang Salah?</h2><p><strong>1. Entity fragmentation.</strong> Nama brand muncul dalam setidaknya 6 variasi berbeda di berbagai platform online. AI tidak bisa build solid authority profile.</p><p><strong>2. Konten gap besar.</strong> 47 pertanyaan yang sering ditanyakan tentang kuliner premium Surabaya — tidak satu pun yang dijawab secara eksplisit.</p><p><strong>3. Zero cross-platform corroboration.</strong> Presence hampir exclusively di Instagram. Tidak ada coverage media yang bisa dikutip AI.</p><h2>Strategi 30 Hari</h2><p><strong>Minggu 1:</strong> Standardisasi nama brand di semua platform. Update Google Business Profile dan semua directory relevan. Buat "about page" komprehensif di website.</p><p><strong>Minggu 2:</strong> Publish 8 long-form articles yang menjawab pertanyaan spesifik. Artikel 800-1500 kata, factually dense, question-answer format.</p><div class="pull-quote">Bukan tentang publish lebih banyak konten. Tentang publish konten yang tepat yang menjawab pertanyaan yang tepat yang ditanyakan target customer Anda ke AI.</div><p><strong>Minggu 3:</strong> Pitch 4 food media online. Media coverage menghasilkan 6 artikel independen dalam 2 minggu.</p><p><strong>Minggu 4:</strong> Campaign review management — systematic approach untuk mengundang customer loyal yang belum pernah meninggalkan review online. 23 new authentic reviews.</p><h2>Hasil Akhir Bulan 1</h2><p>Perplexity mentions: 2 → <strong>47</strong>. ChatGPT mentions: 0 → <strong>23</strong>. Gemini: 1 → <strong>31</strong>. GEO Score: 28 → <strong>67</strong> (Grade C+). Organic reservations dari AI-referred traffic: <strong>+34 covers</strong> dalam bulan pertama saja.</p><p>Setelah 90 hari: GEO Score 78, Grade B, dan brand ini menjadi salah satu kuliner yang paling sering direkomendasikan AI untuk kategori mereka di Surabaya.</p>`}
+];
+
+const QUOTES=[
+{text:"AI tidak merekomendasikan brand yang paling bagus. AI merekomendasikan brand yang paling diverifikasi.",attr:"GeoVera Research, 2026"},
+{text:"Di era AI Search, visibilitas bukan tentang siapa yang paling keras berteriak. Tapi siapa yang paling konsisten berbicara.",attr:"Rafi Ananda, GeoVera"},
+{text:"Brand yang tidak terlihat di AI bukan sekadar tidak terlihat. Mereka membiarkan kompetitor mendefinisikan kategori mereka.",attr:"GeoVera Intelligence Report"},
+{text:"GEO Score 0 hari ini adalah problem bisnis dalam 18 bulan ke depan. Waktu untuk bertindak adalah sekarang.",attr:"Dinda Kartika, GeoVera"},
+{text:"Content terbaik untuk AI bukan yang paling kreatif. Tapi yang paling jelas menjawab pertanyaan yang audiens Anda tanyakan.",attr:"GeoVera Content Lab"},
+];
+const CTAS=[
+{eyebrow:"FREE AUDIT",title:"Berapa GEO Score Brand Anda?",sub:"Cari tahu dalam 15 menit. Gratis, tanpa komitmen.",geoNum:"?",cta:"Audit Gratis via WhatsApp",wa:true},
+{eyebrow:"14 HARI GRATIS",title:"Coba GeoVera Tanpa Risiko",sub:"Full access semua fitur. Cancel kapan saja. No credit card.",geoNum:"✓",cta:"Mulai Trial Sekarang",wa:false},
+{eyebrow:"DEMO LIVE",title:"Lihat GeoVera Bekerja untuk Brand Anda",sub:"30 menit demo + analisis real-time brand Anda langsung.",geoNum:"→",cta:"Book Demo Session",wa:true},
+];
+
+const WA_ICON=`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 1.89.524 3.657 1.435 5.163L2 22l4.949-1.386A9.953 9.953 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm5.05 14.4c-.21.59-1.04 1.08-1.73 1.22-.46.09-1.06.16-3.08-.66-2.58-1.05-4.24-3.64-4.37-3.81-.12-.17-1.02-1.36-1.02-2.59 0-1.23.64-1.83.87-2.08.22-.25.49-.31.65-.31h.47c.15 0 .36-.06.56.43l.72 1.9c.06.16.03.34-.07.48l-.31.4c-.1.13-.21.27-.09.53.46.93 1.16 1.72 1.92 2.32.83.66 1.71 1.04 1.94 1.15.23.11.37.09.5-.05l.66-.78c.17-.2.42-.25.65-.14l1.87.88c.22.1.37.15.42.24.06.12.06.68-.15 1.27z"/></svg>`;
+const ARR=`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>`;
+
+const grid=document.getElementById('masonryGrid');
+let activeCategory='all',displayedCount=0,allItems=[];
+const BATCH=12;
+
+function buildMixed(){
+  const arts=[...ARTICLES];
+  for(let i=arts.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arts[i],arts[j]]=[arts[j],arts[i]];}
+  const mixed=[];let qi=0,ci=0;
+  arts.forEach((a,i)=>{
+    mixed.push({type:'article',data:a});
+    if((i+1)%3===0){mixed.push({type:'quote',data:QUOTES[qi%QUOTES.length]});qi++;}
+    if((i+1)%5===0){mixed.push({type:'cta',data:CTAS[ci%CTAS.length]});ci++;}
+  });
+  return mixed;
+}
+
+function getFiltered(){
+  if(activeCategory==='all')return allItems;
+  return allItems.filter(item=>item.type!=='article'||item.data.category===activeCategory);
+}
+
+/* ── Card: 2/3 cover image (aspect-ratio 3/4) · 1/3 compact text body ── */
+function renderArt(a){
+  return `<div class="masonry-item">
+  <article class="art-card reveal" onclick="openArticle(${a.id})">
+    <!-- COVER: fills ~2/3 of card via aspect-ratio 3/4 -->
+    <div class="art-cover" style="background:${a.coverBg}">
+      <span class="art-emoji">${a.emoji}</span>
+      <div class="art-cover-overlay"></div>
+      <!-- Category floating pill top-left -->
+      <span class="art-cat-pill" style="color:${a.catColor};border-color:${a.catColor}33;">${a.category}</span>
+      <!-- Title floats on bottom of cover -->
+      <div class="art-cover-label">
+        <h2 class="art-title">${a.title}</h2>
+      </div>
+    </div>
+    <!-- BODY: compact excerpt + meta -->
+    <div class="art-body">
+      <p class="art-excerpt">${a.excerpt}</p>
+      <div class="art-meta">
+        <span>${a.author}</span>
+        <span class="art-meta-dot"></span>
+        <span>${a.readTime} min read</span>
+        <span class="art-read-arrow">${ARR}</span>
+      </div>
+    </div>
+  </article>
+</div>`;
+}
+function renderQuote(q){return `<div class="masonry-item"><div class="quote-card reveal"><p class="quote-text">${q.text}</p><span class="quote-attr">— ${q.attr}</span></div></div>`;}
+function renderCTA(c){return `<div class="masonry-item"><div class="cta-inline reveal"><span class="cta-eyebrow">${c.eyebrow}</span><div class="cta-geo-badge"><div class="cta-geo-num">${c.geoNum}</div><div class="cta-geo-label">GEO Score</div></div><h3 class="cta-title">${c.title}</h3><p class="cta-sub">${c.sub}</p><a href="https://wa.me/your-number" class="btn ${c.wa?'btn-wa':'btn-primary'}" target="_blank" style="width:100%;justify-content:center;">${c.wa?WA_ICON:''}${c.cta}</a></div></div>`;}
+function renderItem(item){if(item.type==='article')return renderArt(item.data);if(item.type==='quote')return renderQuote(item.data);if(item.type==='cta')return renderCTA(item.data);return '';}
+
+function loadBatch(){
+  const items=getFiltered();
+  if(displayedCount>=items.length){document.getElementById('spinner').classList.remove('active');return;}
+  const batch=items.slice(displayedCount,displayedCount+BATCH);
+  const tmp=document.createElement('div');tmp.innerHTML=batch.map(renderItem).join('');
+  while(tmp.firstChild)grid.appendChild(tmp.firstChild);
+  displayedCount+=batch.length;
+  document.querySelectorAll('.reveal:not(.visible)').forEach(el=>io.observe(el));
+  document.getElementById('spinner').classList.remove('active');
+}
+function resetGrid(){grid.innerHTML='';displayedCount=0;loadBatch();}
+
+allItems=buildMixed();loadBatch();
+
+document.querySelectorAll('.cat-pill').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.cat-pill').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');activeCategory=btn.dataset.cat;resetGrid();
+  });
+});
+
+const sentinel=document.getElementById('loadSentinel');
+new IntersectionObserver(entries=>{
+  if(entries[0].isIntersecting&&displayedCount<getFiltered().length){
+    document.getElementById('spinner').classList.add('active');setTimeout(loadBatch,400);
+  }
+},{threshold:0.1}).observe(sentinel);
+
+const modal=document.getElementById('modal'),modalBody=document.getElementById('modalBody'),modalCover=document.getElementById('modalCover'),modalContent=document.getElementById('modalContent'),readingBar=document.getElementById('readingBar');
+
+function openArticle(id){
+  const a=ARTICLES.find(x=>x.id===id);if(!a)return;
+  modalCover.style.background=a.coverBg;
+  modalCover.innerHTML=`<span style="font-size:72px;position:relative;z-index:1;">${a.emoji}</span><button class="modal-close" onclick="closeModal()">✕</button>`;
+  modalContent.innerHTML=`<span class="modal-cat" style="color:${a.catColor}">${a.category}</span><h1 class="modal-title">${a.title}</h1><div class="modal-meta"><span>${a.author}</span><span class="modal-meta-dot"></span><span>${a.date}</span><span class="modal-meta-dot"></span><span>${a.readTime} min read</span><span class="modal-meta-dot"></span>${a.tags.map(t=>`<span class="art-tag">${t}</span>`).join('')}</div><div class="art-content">${a.content}</div><div style="margin-top:40px;padding:28px;background:var(--ga6);border:1px solid var(--ga20);border-radius:var(--r6);text-align:center;"><p style="font-family:var(--fd);font-weight:700;font-size:var(--fs-lg);color:var(--t1);margin-bottom:8px;">Tingkatkan GEO Score Brand Anda</p><p style="color:var(--t2);margin-bottom:20px;font-size:var(--fs-sm);">Audit gratis + strategi personal dalam 15 menit via WhatsApp.</p><a href="https://wa.me/your-number" class="btn btn-wa" target="_blank" style="margin:0 auto;">${WA_ICON}Mulai Audit Gratis</a></div>`;
+  modal.classList.add('open');document.body.style.overflow='hidden';
+  modalBody.addEventListener('scroll',updateRP);
+}
+function closeModal(){modal.classList.remove('open');document.body.style.overflow='';readingBar.style.width='0%';modalBody.removeEventListener('scroll',updateRP);}
+function updateRP(){readingBar.style.width=(modalBody.scrollTop/(modalBody.scrollHeight-modalBody.clientHeight))*100+'%';}
+modal.addEventListener('click',e=>{if(e.target===modal)closeModal();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&modal.classList.contains('open'))closeModal();});
+</script>
+<script>
+// ── SPA Page Router ──────────────────────────────────────────────
+function showPage(page) {
+  const home = document.getElementById('page-home');
+  const blogP = document.getElementById('page-blog');
+  const filterWrap = document.querySelector('.filter-wrap');
+  const isHome = page === 'home';
+  home.style.display = isHome ? '' : 'none';
+  blogP.style.display = isHome ? 'none' : '';
+  if(filterWrap) filterWrap.style.display = isHome ? 'none' : '';
+  window.scrollTo({top:0,behavior:'instant'});
+  history.pushState(null,'', isHome ? '#' : '#blog');
+  document.querySelectorAll('.nav-link[data-page]').forEach(l => {
+    l.classList.toggle('active', l.dataset.page === page && (page !== 'home' || l.getAttribute('href') === '#'));
+  });
+  // Re-trigger reveal animations on blog
+  if(!isHome) {
+    document.querySelectorAll('#page-blog .reveal:not(.visible)').forEach(el => io.observe(el));
+  }
+  document.title = isHome ? 'GeoVera — AI Brand Intelligence Platform' : 'Blog — GeoVera AI Brand Intelligence';
+}
+function showHome(sectionId) {
+  showPage('home');
+  setTimeout(()=>{ const el=document.getElementById(sectionId); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); }, 80);
+}
+// Browser back/forward
+window.addEventListener('popstate', () => {
+  showPage(window.location.hash === '#blog' ? 'blog' : 'home');
+});
+// Init on load
+document.addEventListener('DOMContentLoaded', () => {
+  const startPage = window.location.hash === '#blog' ? 'blog' : 'home';
+  showPage(startPage);
+  // Hide filter bar on home load
+  const fw = document.querySelector('.filter-wrap');
+  if(fw && startPage === 'home') fw.style.display = 'none';
+});
+</script>
+
+<!-- ── FLOATING THEME TOGGLE ─────────────────── -->
+<div id="theme-toggle" role="button" aria-label="Toggle light/dark mode" title="Toggle light mode">
+  <div class="tt-icon tt-sun">☀️</div>
+  <div class="tt-pill"><div class="tt-dot"></div></div>
+  <div class="tt-icon tt-moon">🌙</div>
+  <div class="tt-label">Theme</div>
+</div>
+
+<script>
+(function(){
+  const btn = document.getElementById('theme-toggle');
+  const STORE_KEY = 'gv-theme';
+  // restore saved preference
+  if(localStorage.getItem(STORE_KEY) === 'light'){
+    document.body.classList.add('light-mode');
+  }
+  btn.addEventListener('click', function(){
+    const isLight = document.body.classList.toggle('light-mode');
+    localStorage.setItem(STORE_KEY, isLight ? 'light' : 'dark');
+  });
+})();
+</script>
+<!-- ── Background Sparkles ───────────────── -->
+<script>
+(function(){
+  const colors = ['#25D366','#53BDEB','#FCD34D','#A78BFA','#4ADE80','#38BDF8'];
+  const isMobile = window.innerWidth < 640;
+  const count = isMobile ? 18 : 38;
+  const container = document.createElement('div');
+  container.id = 'bg-sparkles';
+  container.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden;';
+
+  for(let i = 0; i < count; i++){
+    const sp = document.createElement('div');
+    const size = 4 + Math.random() * 8;
+    const x = Math.random() * 100;
+    const y = Math.random() * 100;
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    const dur = 2.4 + Math.random() * 2.8;
+    const delay = Math.random() * 4;
+    sp.style.cssText = `
+      position:absolute;
+      left:${x}%;top:${y}%;
+      width:${size}px;height:${size}px;
+      pointer-events:none;
+      opacity:0;
+      animation:bg-spk ${dur}s ease-in-out infinite ${delay}s;
+    `;
+    // 4-point star via pseudo-like divs
+    sp.innerHTML = `
+      <div style="position:absolute;width:2px;height:100%;left:50%;transform:translateX(-50%);background:${color};border-radius:9999px;"></div>
+      <div style="position:absolute;height:2px;width:100%;top:50%;transform:translateY(-50%);background:${color};border-radius:9999px;"></div>
+    `;
+    container.appendChild(sp);
+  }
+
+  document.body.appendChild(container);
+
+  // Add keyframes
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes bg-spk {
+      0%,100%{opacity:0;transform:scale(.6) rotate(0deg);}
+      50%{opacity:.45;transform:scale(1) rotate(20deg);}
+    }
+    body.light-mode #bg-sparkles { opacity: 1; }
+    @media(max-width:640px){ #bg-sparkles { opacity: 0.6; } }
+  `;
+  document.head.appendChild(style);
+})();
+</script>
+
+</html>
+</body>
+
