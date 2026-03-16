@@ -4,7 +4,8 @@ import { useRouter, usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 // Routes inside (admin) that don't need an active subscription
-const OPEN_PATHS = ["/backend", "/pricing"];
+// /start is open so non-subscribers aren't stuck in a redirect loop
+const OPEN_PATHS = ["/backend", "/start"];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -17,24 +18,24 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     if (skip) { setReady(true); return; }
 
     async function gate() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { router.replace("/signin"); return; }
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { router.replace("/signin"); return; }
 
       const { data: profile } = await supabase
         .from("user_profiles")
         .select("status, is_admin")
-        .eq("id", session.user.id)
+        .eq("id", user.id)
         .single();
 
       // Admin bypasses all gates
-      const isAdmin = profile?.is_admin || session.user.email === "andrewsus83@gmail.com";
+      const isAdmin = profile?.is_admin || user.email === "andrewsus83@gmail.com";
       if (isAdmin) { setReady(true); return; }
 
       // Active users get in
       if (profile?.status === "active") { setReady(true); return; }
 
-      // Everyone else → pricing / waiting
-      router.replace("/pricing");
+      // Everyone else → start (brand intelligence teaser + subscription CTA)
+      router.replace("/start");
     }
     gate();
   }, [pathname, router]);

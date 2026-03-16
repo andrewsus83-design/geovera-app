@@ -1,181 +1,55 @@
 "use client";
-import { useEffect, useState, useRef, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-
-type Status = "loading" | "confirmed" | "pending" | "failed" | "timeout";
-
-function PaymentSuccessContent() {
-  const params = useSearchParams();
-  const invoiceId = params.get("invoice_id") ?? params.get("external_id") ?? "";
-  const plan = params.get("plan") ?? "";
-
-  const [status, setStatus] = useState<Status>("loading");
-  const [paymentInfo, setPaymentInfo] = useState<{ amount?: number; currency?: string; channel?: string } | null>(null);
-  const attempts = useRef(0);
-
-  useEffect(() => {
-    if (!invoiceId) {
-      setStatus("failed");
-      return;
-    }
-
-    const MAX = 10;
-    const poll = async () => {
-      if (attempts.current >= MAX) {
-        setStatus("timeout");
-        return;
-      }
-      attempts.current++;
-      try {
-        const res = await fetch("/api/payment", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "check_payment_status", invoice_id: invoiceId }),
-        });
-        const data = await res.json();
-        if (data.success) {
-          const inv = data.invoice;
-          if (inv.status === "PAID" || inv.status === "SETTLED") {
-            setPaymentInfo({ amount: inv.amount, currency: inv.currency, channel: inv.payment_channel });
-            setStatus("confirmed");
-          } else if (inv.status === "EXPIRED" || inv.status === "FAILED") {
-            setStatus("failed");
-          } else {
-            setTimeout(poll, 3000);
-          }
-        } else {
-          setTimeout(poll, 3000);
-        }
-      } catch {
-        setTimeout(poll, 3000);
-      }
-    };
-    poll();
-  }, [invoiceId]);
-
-  const planLabel = plan
-    ? plan.charAt(0).toUpperCase() + plan.slice(1).toLowerCase()
-    : "your plan";
-
-  return (
-    <div className="w-full max-w-md">
-      {/* Card */}
-      <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden shadow-sm">
-
-        {/* Loading */}
-        {status === "loading" && (
-          <div className="p-10 flex flex-col items-center gap-4 text-center">
-            <div className="h-14 w-14 rounded-full border-4 border-brand-200 border-t-brand-500 animate-spin" />
-            <div>
-              <h1 className="text-lg font-semibold text-gray-900 dark:text-white">Verifying Payment…</h1>
-              <p className="text-sm text-gray-400 mt-1">Please wait while we confirm your payment</p>
-            </div>
-          </div>
-        )}
-
-        {/* Confirmed */}
-        {status === "confirmed" && (
-          <div className="p-10 flex flex-col items-center gap-4 text-center">
-            <div className="h-14 w-14 rounded-full bg-brand-50 dark:bg-brand-500/10 flex items-center justify-center">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-brand-500">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900 dark:text-white" style={{ fontFamily: "Georgia, serif" }}>
-                Payment Confirmed!
-              </h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                {planLabel} plan is now active
-              </p>
-            </div>
-            {paymentInfo?.amount && (
-              <div className="w-full rounded-xl bg-gray-50 dark:bg-gray-800/60 px-4 py-3 text-sm space-y-1">
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Amount Paid</span>
-                  <span className="font-medium text-gray-700 dark:text-gray-300">
-                    {paymentInfo.currency} {paymentInfo.amount?.toLocaleString()}
-                  </span>
-                </div>
-                {paymentInfo.channel && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Payment Method</span>
-                    <span className="font-medium text-gray-700 dark:text-gray-300">{paymentInfo.channel}</span>
-                  </div>
-                )}
-              </div>
-            )}
-            <Link
-              href="/"
-              className="w-full rounded-xl bg-brand-500 px-4 py-3 text-sm font-semibold text-white hover:bg-brand-600 transition-colors text-center block"
-            >
-              Go to Dashboard
-            </Link>
-          </div>
-        )}
-
-        {/* Pending / timeout */}
-        {(status === "pending" || status === "timeout") && (
-          <div className="p-10 flex flex-col items-center gap-4 text-center">
-            <div className="h-14 w-14 rounded-full bg-amber-50 dark:bg-amber-500/10 flex items-center justify-center">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-amber-500">
-                <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
-              </svg>
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900 dark:text-white">Payment Pending</h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                Your payment is being processed. Your plan will activate automatically once confirmed.
-              </p>
-            </div>
-            <Link href="/" className="w-full rounded-xl bg-brand-500 px-4 py-3 text-sm font-semibold text-white hover:bg-brand-600 transition-colors text-center block">
-              Go to Dashboard
-            </Link>
-          </div>
-        )}
-
-        {/* Failed */}
-        {status === "failed" && (
-          <div className="p-10 flex flex-col items-center gap-4 text-center">
-            <div className="h-14 w-14 rounded-full bg-red-50 dark:bg-red-500/10 flex items-center justify-center">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-red-500">
-                <circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" />
-              </svg>
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900 dark:text-white">Payment Failed</h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Your payment could not be processed.</p>
-            </div>
-            <Link href="/" className="w-full rounded-xl bg-gray-900 dark:bg-white px-4 py-3 text-sm font-semibold text-white dark:text-gray-900 hover:opacity-90 transition-opacity text-center block">
-              Return to Dashboard
-            </Link>
-          </div>
-        )}
-
-      </div>
-
-      {/* Footer */}
-      <p className="text-center text-xs text-gray-400 mt-4">
-        Powered by <span className="font-medium">Xendit</span> · Secure payment processing
-      </p>
-    </div>
-  );
-}
 
 export default function PaymentSuccessPage() {
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-4">
-      <Suspense fallback={
-        <div className="w-full max-w-md">
-          <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-10 flex flex-col items-center gap-4 text-center shadow-sm">
-            <div className="h-14 w-14 rounded-full border-4 border-brand-200 border-t-brand-500 animate-spin" />
-            <p className="text-sm text-gray-400">Loading…</p>
+    <div style={{ minHeight: "100vh", background: "var(--gv-color-bg-base)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div style={{ width: "100%", maxWidth: 460 }}>
+        {/* BL07 gv-payment-success */}
+        <div style={{ background: "var(--gv-color-bg-surface)", border: "1.5px solid var(--gv-color-neutral-200)", borderRadius: "var(--gv-radius-xl)", overflow: "hidden", boxShadow: "var(--gv7-depth-2)", textAlign: "center" }}>
+          {/* Dark hero */}
+          <div style={{ padding: "40px 32px 32px", background: "var(--gv-color-primary-900)", position: "relative", overflow: "hidden" }}>
+            <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at 50% 0%, rgba(122,179,171,0.25) 0%, transparent 70%)" }} />
+            <div style={{ width: 72, height: 72, borderRadius: "50%", margin: "0 auto 16px", position: "relative", zIndex: 1, background: "rgba(16,185,129,0.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ position: "absolute", inset: -6, borderRadius: "50%", border: "2px solid rgba(16,185,129,0.3)", animation: "gv-ss-blink 2s ease-in-out infinite" }} />
+              <div style={{ width: 44, height: 44, borderRadius: "50%", background: "var(--gv-color-success-500)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 20px rgba(16,185,129,0.4)" }}>
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path d="M4 10l4 4 8-8" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+            </div>
+            <div style={{ fontFamily: "var(--gv-font-heading)", fontSize: 24, fontWeight: 900, color: "var(--gv-color-bg-surface)", letterSpacing: "-0.04em", marginBottom: 6, position: "relative", zIndex: 1 }}>
+              Bukti Pembayaran Diterima!
+            </div>
+            <div style={{ fontSize: 13, color: "var(--gv-color-primary-200)", lineHeight: 1.6, position: "relative", zIndex: 1 }}>
+              Tim GeoVera akan memverifikasi dan mengaktifkan akun kamu
+            </div>
+          </div>
+
+          {/* Body */}
+          <div style={{ padding: "24px 32px" }}>
+            <p style={{ fontSize: 14, color: "var(--gv-color-neutral-500)", fontFamily: "var(--gv-font-body)", marginBottom: 24, lineHeight: 1.6 }}>
+              Proses verifikasi membutuhkan waktu <strong style={{ color: "var(--gv-color-neutral-700)" }}>1×24 jam hari kerja</strong>. Kamu akan menerima email konfirmasi saat akun diaktifkan.
+            </p>
+            <div style={{ display: "flex", gap: 10 }}>
+              <Link
+                href="/analytics"
+                style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--gv-gradient-primary)", color: "white", borderRadius: "var(--gv-radius-sm)", padding: "11px 20px", fontSize: 13, fontWeight: 700, textDecoration: "none", fontFamily: "var(--gv-font-body)", boxShadow: "0 3px 12px rgba(95,143,139,0.3)" }}
+              >
+                Ke Dashboard
+              </Link>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div style={{ padding: "12px 24px", borderTop: "1px solid var(--gv-color-neutral-100)", background: "var(--gv-color-bg-surface-elevated)", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1a5 5 0 100 10A5 5 0 006 1zm0 4.5v3M6 3.5h.01" stroke="var(--gv-color-success-500)" strokeWidth="1.2" strokeLinecap="round" /></svg>
+            <span style={{ fontSize: 11, color: "var(--gv-color-neutral-400)", fontFamily: "var(--gv-font-body)" }}>
+              Butuh bantuan? <strong style={{ color: "var(--gv-color-neutral-600)" }}>support@geovera.xyz</strong>
+            </span>
           </div>
         </div>
-      }>
-        <PaymentSuccessContent />
-      </Suspense>
+      </div>
     </div>
   );
 }

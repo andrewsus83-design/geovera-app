@@ -71,7 +71,9 @@ export default function SignInForm() {
           .select("onboarding_completed, status")
           .eq("id", session.user.id)
           .single();
-        if (profile?.status === "active") { router.push("/getting-started"); return; }
+        // Admin always goes to backend (absolute URL ensures correct domain)
+        if (session.user.email === "andrewsus83@gmail.com") { window.location.href = "https://backend.geovera.xyz/backend"; return; }
+        if (profile?.status === "active") { router.push("/analytics"); return; }
         if (!profile?.onboarding_completed) { router.push("/onboarding"); return; }
       }
       router.push("/pricing");

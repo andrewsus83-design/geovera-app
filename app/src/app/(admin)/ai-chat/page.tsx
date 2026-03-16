@@ -1,1007 +1,861 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import NavColumn from "@/components/shared/NavColumn";
-import ThreeColumnLayout from "@/components/shared/ThreeColumnLayout";
+import AppShell from "@/components/shared/AppShell";
 import { supabase } from "@/lib/supabase";
 
-/* ══════════════════════════════════════════════════════════════════════
-   GeoVera AI Chat — DS v7.0
-   ─────────────────────────────────────────────────────────────────────
-   • Liquid glass surfaces + depth system
-   • Mode-specific accent colors (SEO blue / GEO purple / Social pink / General teal)
-   • Daily suggested prompts from gv_keywords (5 basic / 10 premium / 20 partner)
-   • Daily cost cap enforcement ($0.30 / $0.80 / $1.20 by tier)
-   • Per-message token + cost metadata with animated reveal
-   • Spring-eased micro-animations throughout
-   • Session history in right panel with live stats
-══════════════════════════════════════════════════════════════════════ */
-
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-type ChatMode = "general" | "seo" | "geo" | "social";
-
-interface Message {
-  id:           string;
-  role:         "user" | "assistant";
-  message:      string;
-  created_at:   string;
-  tokens_used?: number;
-  cost_usd?:    number;
-  model_used?:  string;
-  isThinking?:  boolean;
-  isError?:     boolean;
-}
-
+/* ── Types ── */
 interface ChatSession {
-  id:             string;
-  title:          string;
-  message_count:  number;
-  total_tokens:   number;
-  total_cost_usd: number;
-  updated_at:     string;
+  id: string;
+  title: string;
+  message_count: number;
+  created_at: string;
+  updated_at: string;
 }
 
-interface BrandInfo {
-  id:                 string;
-  brand_name:         string;
-  brand_category:     string | null;
-  brand_country:      string | null;
-  subscription_tier:  string | null;
+interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  message: string;
+  conversation_type?: string;
+  created_at: string;
 }
 
-interface SuggestedPrompt {
-  keyword:      string;
-  keyword_type: "seo" | "geo" | "social";
-}
+/* ── Models ── */
+const MODELS = [
+  { id: "gpt-4o",           name: "GPT-4o",         desc: "Insight Synthesis — OpenAI",     dot: "gpt"    },
+  { id: "claude-sonnet-4-6", name: "Claude Sonnet", desc: "Deep Analysis — Anthropic",      dot: "claude" },
+  { id: "perplexity",       name: "Perplexity Pro",  desc: "External Reality Engine",        dot: "perp"   },
+];
 
-// ─── DS v7.0 Config ───────────────────────────────────────────────────────────
-
-const MODES: Record<ChatMode, {
-  label:       string;
-  accent:      string;
-  light:       string;
-  border:      string;
-  text:        string;
-  description: string;
-  icon:        string;
-}> = {
-  general: {
-    label:       "General",
-    accent:      "#5F8F8B",
-    light:       "#EDF5F4",
-    border:      "#A8D5CF",
-    text:        "#3D6562",
-    description: "Brand strategy & general insights",
-    icon:        "✦",
-  },
-  seo: {
-    label:       "SEO",
-    accent:      "#3B82F6",
-    light:       "#EFF6FF",
-    border:      "#BFDBFE",
-    text:        "#1D4ED8",
-    description: "Google rankings, keywords & backlinks",
-    icon:        "◎",
-  },
-  geo: {
-    label:       "GEO",
-    accent:      "#8B5CF6",
-    light:       "#F5F3FF",
-    border:      "#DDD6FE",
-    text:        "#6D28D9",
-    description: "AI citation & answer engine optimization",
-    icon:        "◈",
-  },
-  social: {
-    label:       "Social",
-    accent:      "#EC4899",
-    light:       "#FDF2F8",
-    border:      "#FBCFE8",
-    text:        "#BE185D",
-    description: "TikTok, Instagram, YouTube & more",
-    icon:        "◉",
-  },
+const DOT_COLORS: Record<string, string> = {
+  gpt:    "var(--gv-color-success-500)",
+  claude: "var(--gv-color-warning-500)",
+  perp:   "var(--gv-color-info-500)",
 };
 
-const TIER_CONFIG: Record<string, { dailyCap: number; suggestedCount: number; label: string }> = {
-  partner:   { dailyCap: 1.20, suggestedCount: 20, label: "Partner"   },
-  premium:   { dailyCap: 0.80, suggestedCount: 10, label: "Premium"   },
-  basic:     { dailyCap: 0.30, suggestedCount: 5,  label: "Basic"     },
-  essential: { dailyCap: 0.30, suggestedCount: 5,  label: "Essential" },
-  starter:   { dailyCap: 0.15, suggestedCount: 3,  label: "Starter"   },
-  free:      { dailyCap: 0.10, suggestedCount: 3,  label: "Free"      },
-};
+/* ── Suggestion chips ── */
+const CHIPS = [
+  { label: "Apa itu GEO?" },
+  { label: "Audit Website" },
+  { label: "AI Authority Score" },
+  { label: "Dashboard Signal" },
+  { label: "Competitor Gap" },
+];
 
-function getTierConfig(tier: string | null) {
-  return TIER_CONFIG[tier ?? "basic"] ?? TIER_CONFIG.basic;
-}
+/* ── Quick actions for empty state ── */
+const QUICK_ACTIONS = [
+  { title: "Audit Signal",   sub: "Cek score L0–L3",  icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> },
+  { title: "AI Search Gap",  sub: "Temukan peluang",   icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> },
+  { title: "Authority Score",sub: "Bangun kepercayaan",icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg> },
+  { title: "Content Matrix", sub: "Strategi konten AI",icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg> },
+];
 
-function fmtCost(usd: number) {
-  return usd < 0.01 ? `$${(usd * 100).toFixed(3)}¢` : `$${usd.toFixed(4)}`;
-}
+/* ════════════════════════════════════════════════
+   Chat Center Column
+════════════════════════════════════════════════ */
+function ChatCenter({
+  messages,
+  isTyping,
+  input,
+  onInputChange,
+  onSend,
+  onChipClick,
+  model,
+  charCount,
+}: {
+  messages: ChatMessage[];
+  isTyping: boolean;
+  input: string;
+  onInputChange: (v: string) => void;
+  onSend: () => void;
+  onChipClick: (label: string) => void;
+  model: string;
+  charCount: number;
+}) {
+  const threadRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-function fmtTime(iso: string) {
-  const d = new Date(iso);
-  const now = new Date();
-  const diff = (now.getTime() - d.getTime()) / 1000;
-  if (diff < 60)    return "just now";
-  if (diff < 3600)  return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return d.toLocaleDateString("en", { month: "short", day: "numeric" });
-}
+  /* Scroll to bottom on new messages */
+  useEffect(() => {
+    threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages, isTyping]);
 
-function shuffle<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
+  /* Auto-resize textarea */
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = Math.min(ta.scrollHeight, 160) + "px";
+  }, [input]);
 
-// ─── Micro-components ────────────────────────────────────────────────────────
+  const modelObj = MODELS.find((m) => m.id === model) ?? MODELS[0];
 
-function ThinkingDots() {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      onSend();
+    }
+  };
+
+  const [copied, setCopied] = useState<string | null>(null);
+  const handleCopy = (content: string, id: string) => {
+    navigator.clipboard.writeText(content).then(() => {
+      setCopied(id);
+      setTimeout(() => setCopied(null), 1500);
+    });
+  };
+
   return (
-    <div className="flex items-center gap-1 px-1 py-0.5">
-      {[0, 1, 2].map(i => (
-        <span
-          key={i}
-          className="gv7-thinking-dot inline-block w-1.5 h-1.5 rounded-full"
-          style={{ background: "var(--gv-color-primary-400)" }}
-        />
-      ))}
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+
+      {/* ── C01: Chat Header ── */}
+      <div style={{
+        flexShrink: 0,
+        padding: "14px 20px",
+        background: "var(--gv-color-glass-bg, rgba(255,255,255,0.72))",
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
+        borderBottom: "1px solid var(--gv-color-neutral-100)",
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+      }}>
+        {/* Avatar with online dot */}
+        <div style={{ position: "relative", flexShrink: 0 }}>
+          <div style={{
+            width: 38, height: 38, borderRadius: "50%",
+            background: "var(--gv-gradient-primary)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 13, fontWeight: 700, color: "white",
+            fontFamily: "var(--gv-font-heading)",
+          }}>GV</div>
+          <div style={{
+            position: "absolute", bottom: 1, right: 1,
+            width: 9, height: 9, borderRadius: "50%",
+            background: "var(--gv-color-success-500)",
+            border: "2px solid var(--gv-color-bg-surface, white)",
+          }} />
+        </div>
+
+        {/* Name + model */}
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--gv-color-neutral-900)", fontFamily: "var(--gv-font-heading)", lineHeight: 1.2 }}>
+            GeoVera AI
+          </div>
+          <div style={{ fontSize: 11, color: "var(--gv-color-neutral-400)", fontFamily: "var(--gv-font-mono)", marginTop: 1 }}>
+            {modelObj.name} · Online
+          </div>
+        </div>
+
+        {/* Action buttons */}
+        {[
+          <svg key="search" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>,
+          <svg key="settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
+        ].map((icon, i) => (
+          <button key={i} style={{
+            width: 32, height: 32, borderRadius: "var(--gv-radius-sm, 8px)",
+            border: "1px solid var(--gv-color-neutral-200)",
+            background: "var(--gv-color-bg-surface)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: "var(--gv-color-neutral-500)", cursor: "pointer",
+          }}>{icon}</button>
+        ))}
+      </div>
+
+      {/* ── Thread area ── */}
+      <div ref={threadRef} style={{ flex: 1, overflowY: "auto", padding: "24px 20px 0" }}>
+
+        {/* C10: Empty state */}
+        {messages.length === 0 && !isTyping && (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", paddingTop: 40, paddingBottom: 24 }}>
+            {/* Orb */}
+            <div style={{
+              width: 80, height: 80, borderRadius: "50%",
+              background: "var(--gv-gradient-primary)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              marginBottom: 24, position: "relative",
+              animation: "gv-float 3s ease-in-out infinite",
+            }}>
+              <div style={{
+                position: "absolute", inset: -8, borderRadius: "50%",
+                border: "2px solid var(--gv-color-primary-200)",
+                animation: "gv-pulse-ring 2.5s ease-out infinite",
+              }} />
+              <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" width="32" height="32">
+                <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>
+              </svg>
+            </div>
+
+            <h2 style={{ fontFamily: "var(--gv-font-heading)", fontSize: 22, fontWeight: 900, color: "var(--gv-color-neutral-900)", letterSpacing: "-0.03em", marginBottom: 8 }}>
+              Selamat datang di GeoVera AI
+            </h2>
+            <p style={{ fontSize: 14, color: "var(--gv-color-neutral-500)", fontFamily: "var(--gv-font-body)", lineHeight: 1.7, maxWidth: 380, marginBottom: 32 }}>
+              Tanyakan apa saja tentang SEO, GEO, dan Social Discovery. Saya akan membantu bisnis kamu <strong style={{ color: "var(--gv-color-neutral-700)" }}>Own the Algorithm</strong>.
+            </p>
+
+            {/* C10: Quick actions 2×2 grid */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, width: "100%", maxWidth: 440 }}>
+              {QUICK_ACTIONS.map((qa) => (
+                <button
+                  key={qa.title}
+                  onClick={() => onChipClick(qa.title)}
+                  style={{
+                    display: "flex", flexDirection: "column", alignItems: "flex-start",
+                    padding: "16px 16px", borderRadius: "var(--gv-radius-md, 12px)",
+                    border: "1.5px solid var(--gv-color-neutral-200)",
+                    background: "var(--gv-color-bg-surface)",
+                    cursor: "pointer", textAlign: "left", gap: 8,
+                    transition: "all 0.15s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLElement).style.borderColor = "var(--gv-color-primary-300)";
+                    (e.currentTarget as HTMLElement).style.background = "var(--gv-color-primary-50)";
+                    (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)";
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLElement).style.borderColor = "var(--gv-color-neutral-200)";
+                    (e.currentTarget as HTMLElement).style.background = "var(--gv-color-bg-surface)";
+                    (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
+                  }}
+                >
+                  <span style={{ color: "var(--gv-color-primary-500)", display: "flex" }}>{qa.icon}</span>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--gv-color-neutral-900)", fontFamily: "var(--gv-font-body)" }}>{qa.title}</div>
+                    <div style={{ fontSize: 11, color: "var(--gv-color-neutral-400)", marginTop: 2 }}>{qa.sub}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* C02: Chat bubbles */}
+        {messages.map((msg) => {
+          const isAI = msg.role === "assistant";
+          const time = new Date(msg.created_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+          return (
+            <div key={msg.id} style={{
+              display: "flex",
+              flexDirection: isAI ? "row" : "row-reverse",
+              gap: 10,
+              marginBottom: 20,
+              alignItems: "flex-start",
+            }}>
+              {/* Avatar */}
+              <div style={{
+                width: 34, height: 34, borderRadius: "50%", flexShrink: 0,
+                background: isAI ? "var(--gv-gradient-primary)" : "var(--gv-color-primary-100)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 11, fontWeight: 700,
+                color: isAI ? "white" : "var(--gv-color-primary-700)",
+                fontFamily: "var(--gv-font-heading)",
+              }}>
+                {isAI ? "GV" : "U"}
+              </div>
+
+              <div style={{ maxWidth: "78%", display: "flex", flexDirection: "column", gap: 6 }}>
+                {/* Bubble */}
+                <div style={{
+                  padding: "12px 16px",
+                  borderRadius: isAI
+                    ? "4px 12px 12px 12px"
+                    : "12px 4px 12px 12px",
+                  background: isAI
+                    ? "var(--gv-color-bg-surface)"
+                    : "var(--gv-gradient-primary)",
+                  boxShadow: isAI ? "0 2px 8px rgba(31,36,40,0.08)" : "0 2px 12px rgba(95,143,139,0.25)",
+                  border: isAI ? "1px solid var(--gv-color-neutral-100)" : "none",
+                  fontSize: 14,
+                  lineHeight: 1.65,
+                  color: isAI ? "var(--gv-color-neutral-800)" : "white",
+                  fontFamily: "var(--gv-font-body)",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                }}>
+                  {msg.message}
+                </div>
+
+                {/* Meta */}
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  fontSize: 11, color: "var(--gv-color-neutral-400)",
+                  justifyContent: isAI ? "flex-start" : "flex-end",
+                }}>
+                  <span>{time}</span>
+                  {isAI && <><span>·</span><span style={{ fontFamily: "var(--gv-font-mono)" }}>{modelObj.name}</span></>}
+                  {!isAI && (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="var(--gv-color-primary-400)" strokeWidth="2.5" width="12" height="12">
+                      <path d="M20 6 9 17l-5-5"/>
+                    </svg>
+                  )}
+                </div>
+
+                {/* C08: Feedback actions — AI only */}
+                {isAI && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
+                    {[
+                      { label: "Copy",       action: () => handleCopy(msg.message, msg.id), icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="13" height="13"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>, active: copied === msg.id },
+                      { label: "Helpful",    action: () => {},                               icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="13" height="13"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/></svg> },
+                      { label: "Not Helpful",action: () => {},                               icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="13" height="13"><path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"/></svg> },
+                    ].map((btn) => (
+                      <button
+                        key={btn.label}
+                        title={btn.label}
+                        onClick={btn.action}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 4,
+                          padding: "3px 8px", borderRadius: "var(--gv-radius-xs, 6px)",
+                          border: "1px solid var(--gv-color-neutral-200)",
+                          background: btn.active ? "var(--gv-color-primary-50)" : "var(--gv-color-bg-surface)",
+                          color: btn.active ? "var(--gv-color-primary-600)" : "var(--gv-color-neutral-500)",
+                          fontSize: 11, cursor: "pointer", fontFamily: "var(--gv-font-body)",
+                          transition: "all 0.12s ease",
+                        }}
+                      >
+                        {btn.icon}
+                        {btn.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+
+        {/* C03: Typing indicator */}
+        {isTyping && (
+          <div style={{ display: "flex", gap: 10, marginBottom: 20, alignItems: "flex-start" }}>
+            <div style={{
+              width: 34, height: 34, borderRadius: "50%",
+              background: "var(--gv-gradient-primary)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 11, fontWeight: 700, color: "white", fontFamily: "var(--gv-font-heading)", flexShrink: 0,
+            }}>GV</div>
+            <div style={{
+              padding: "12px 16px", borderRadius: "4px 12px 12px 12px",
+              background: "var(--gv-color-bg-surface)",
+              border: "1px solid var(--gv-color-neutral-100)",
+              boxShadow: "0 2px 8px rgba(31,36,40,0.08)",
+              display: "flex", alignItems: "center", gap: 10,
+            }}>
+              <div style={{ display: "flex", gap: 4 }}>
+                {[0, 1, 2].map((i) => (
+                  <div key={i} style={{
+                    width: 7, height: 7, borderRadius: "50%",
+                    background: "var(--gv-color-primary-400)",
+                    animation: `gv-bounce 1.2s ease-in-out ${i * 0.2}s infinite`,
+                  }} />
+                ))}
+              </div>
+              <span style={{ fontSize: 12, color: "var(--gv-color-neutral-400)", fontFamily: "var(--gv-font-body)" }}>
+                GeoVera AI sedang mengetik…
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Bottom padding */}
+        <div style={{ height: 16 }} />
+      </div>
+
+      {/* ── C05: Suggestion chips (only when no messages) ── */}
+      {messages.length === 0 && (
+        <div style={{
+          flexShrink: 0, padding: "8px 20px 4px",
+          display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
+        }}>
+          <span style={{ fontSize: 11, color: "var(--gv-color-neutral-400)", fontFamily: "var(--gv-font-body)", flexShrink: 0 }}>
+            Saran:
+          </span>
+          {CHIPS.map((chip) => (
+            <button
+              key={chip.label}
+              onClick={() => onChipClick(chip.label)}
+              style={{
+                padding: "5px 12px", borderRadius: "var(--gv-radius-full, 999px)",
+                border: "1.5px solid var(--gv-color-neutral-200)",
+                background: "var(--gv-color-bg-surface)",
+                fontSize: 12, color: "var(--gv-color-neutral-700)",
+                fontFamily: "var(--gv-font-body)", cursor: "pointer",
+                transition: "all 0.15s cubic-bezier(0.34, 1.56, 0.64, 1)",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.borderColor = "var(--gv-color-primary-400)";
+                (e.currentTarget as HTMLElement).style.color = "var(--gv-color-primary-600)";
+                (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.borderColor = "var(--gv-color-neutral-200)";
+                (e.currentTarget as HTMLElement).style.color = "var(--gv-color-neutral-700)";
+                (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
+              }}
+            >
+              {chip.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── C04: Chat input ── */}
+      <div style={{
+        flexShrink: 0, padding: "12px 20px 16px",
+        borderTop: messages.length > 0 ? "1px solid var(--gv-color-neutral-100)" : "none",
+      }}>
+        <div style={{
+          borderRadius: "var(--gv-radius-xl, 20px)",
+          border: "1.5px solid var(--gv-color-neutral-200)",
+          background: "var(--gv-color-bg-surface)",
+          overflow: "hidden",
+          transition: "border-color 0.15s, box-shadow 0.15s",
+        }}
+          onFocus={(e) => {
+            const el = e.currentTarget as HTMLElement;
+            el.style.borderColor = "var(--gv-color-primary-400)";
+            el.style.boxShadow = "0 0 0 3px var(--gv-color-primary-50)";
+          }}
+          onBlur={(e) => {
+            const el = e.currentTarget as HTMLElement;
+            el.style.borderColor = "var(--gv-color-neutral-200)";
+            el.style.boxShadow = "none";
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 8, padding: "10px 14px" }}>
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(e) => onInputChange(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Tanya GeoVera AI…"
+              rows={1}
+              maxLength={4000}
+              style={{
+                flex: 1, resize: "none", border: "none", outline: "none",
+                background: "transparent", fontSize: 14, lineHeight: 1.6,
+                color: "var(--gv-color-neutral-900)", fontFamily: "var(--gv-font-body)",
+                minHeight: 22, maxHeight: 160, overflow: "auto",
+              }}
+            />
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+              {/* Attach */}
+              <button style={{
+                width: 30, height: 30, borderRadius: "var(--gv-radius-sm, 8px)",
+                border: "1px solid var(--gv-color-neutral-200)",
+                background: "transparent", cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: "var(--gv-color-neutral-400)",
+              }}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 0 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.47"/></svg>
+              </button>
+              {/* Send */}
+              <button
+                onClick={onSend}
+                disabled={!input.trim()}
+                style={{
+                  width: 34, height: 34, borderRadius: "var(--gv-radius-sm, 8px)",
+                  background: input.trim() ? "var(--gv-gradient-primary)" : "var(--gv-color-neutral-200)",
+                  border: "none", cursor: input.trim() ? "pointer" : "default",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  color: "white", transition: "opacity 0.15s",
+                  boxShadow: input.trim() ? "0 3px 10px rgba(95,143,139,0.35)" : "none",
+                }}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" width="15" height="15"><path d="M22 2L11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></svg>
+              </button>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div style={{
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            padding: "6px 14px 8px",
+            borderTop: "1px solid var(--gv-color-neutral-100)",
+          }}>
+            <span style={{ fontSize: 11, color: "var(--gv-color-neutral-400)", display: "flex", alignItems: "center", gap: 4, fontFamily: "var(--gv-font-body)" }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="11" height="11"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+              Shift + Enter untuk baris baru
+            </span>
+            <span style={{ fontSize: 11, color: "var(--gv-color-neutral-400)", fontFamily: "var(--gv-font-mono)" }}>
+              {charCount} / 4000
+            </span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
-function ModeTab({
-  mode,
-  active,
-  onClick,
+/* ════════════════════════════════════════════════
+   Chat Right Column
+════════════════════════════════════════════════ */
+function ChatRight({
+  sessions,
+  activeSessionId,
+  onSessionClick,
+  onNewChat,
+  model,
+  onModelChange,
+  modelOpen,
+  setModelOpen,
 }: {
-  mode:    ChatMode;
-  active:  boolean;
-  onClick: () => void;
+  sessions: ChatSession[];
+  activeSessionId: string | null;
+  onSessionClick: (id: string) => void;
+  onNewChat: () => void;
+  model: string;
+  onModelChange: (id: string) => void;
+  modelOpen: boolean;
+  setModelOpen: (v: boolean) => void;
 }) {
-  const m = MODES[mode];
+  const modelObj = MODELS.find((m) => m.id === model) ?? MODELS[0];
+
+  /* Group sessions by date */
+  const today = new Date().toDateString();
+  const yesterday = new Date(Date.now() - 86400000).toDateString();
+  const todaySessions    = sessions.filter((s) => new Date(s.created_at).toDateString() === today);
+  const yesterdaySessions = sessions.filter((s) => new Date(s.created_at).toDateString() === yesterday);
+  const olderSessions    = sessions.filter((s) => {
+    const d = new Date(s.created_at).toDateString();
+    return d !== today && d !== yesterday;
+  });
+
   return (
-    <button
-      onClick={onClick}
-      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-semibold transition-all duration-200 whitespace-nowrap flex-shrink-0"
-      style={{
-        background:  active ? m.light : "transparent",
-        border:      `1.5px solid ${active ? m.border : "var(--gv-color-neutral-200)"}`,
-        color:       active ? m.text  : "var(--gv-color-neutral-500)",
-        boxShadow:   active ? `0 2px 8px ${m.accent}22` : "none",
-        transform:   active ? "scale(1.02)" : "scale(1)",
-      }}
-    >
-      <span style={{ fontSize: 10 }}>{m.icon}</span>
-      {m.label}
-    </button>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", padding: "16px 16px 16px 0" }}>
+
+      {/* ── C06: Model Selector ── */}
+      <div style={{ flexShrink: 0, marginBottom: 16, position: "relative" }}>
+        <div style={{
+          borderRadius: "var(--gv-radius-md, 12px)",
+          border: "1.5px solid var(--gv-color-neutral-200)",
+          background: "var(--gv-color-bg-surface)",
+          overflow: "hidden",
+        }}>
+          {/* Trigger */}
+          <button
+            onClick={() => setModelOpen(!modelOpen)}
+            style={{
+              width: "100%", padding: "10px 14px",
+              display: "flex", alignItems: "center", gap: 10,
+              background: "transparent", border: "none", cursor: "pointer",
+              textAlign: "left",
+            }}
+          >
+            <div style={{
+              width: 32, height: 32, borderRadius: "var(--gv-radius-sm, 8px)",
+              background: "var(--gv-color-primary-50)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              color: "var(--gv-color-primary-500)", flexShrink: 0,
+            }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" width="16" height="16"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--gv-color-neutral-900)", fontFamily: "var(--gv-font-body)" }}>{modelObj.name}</div>
+              <div style={{ fontSize: 11, color: "var(--gv-color-neutral-400)", marginTop: 1 }}>{modelObj.desc}</div>
+            </div>
+            <div style={{
+              fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 4,
+              background: "var(--gv-color-success-50)", color: "var(--gv-color-success-600)",
+              flexShrink: 0,
+            }}>Active</div>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" width="14" height="14"
+              style={{ color: "var(--gv-color-neutral-400)", transform: modelOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s", flexShrink: 0 }}>
+              <path d="m6 9 6 6 6-6"/>
+            </svg>
+          </button>
+
+          {/* Dropdown */}
+          {modelOpen && (
+            <div style={{ borderTop: "1px solid var(--gv-color-neutral-100)" }}>
+              {MODELS.map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => { onModelChange(m.id); setModelOpen(false); }}
+                  style={{
+                    width: "100%", padding: "9px 14px",
+                    display: "flex", alignItems: "center", gap: 10,
+                    background: m.id === model ? "var(--gv-color-primary-50)" : "transparent",
+                    border: "none", cursor: "pointer", textAlign: "left",
+                  }}
+                >
+                  <div style={{
+                    width: 8, height: 8, borderRadius: "50%",
+                    background: DOT_COLORS[m.dot] ?? "var(--gv-color-neutral-400)",
+                    flexShrink: 0,
+                  }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--gv-color-neutral-900)", fontFamily: "var(--gv-font-body)" }}>{m.name}</div>
+                    <div style={{ fontSize: 11, color: "var(--gv-color-neutral-400)", marginTop: 1 }}>{m.desc}</div>
+                  </div>
+                  {m.id === model && (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="var(--gv-color-primary-500)" strokeWidth="2.5" width="14" height="14">
+                      <path d="M20 6 9 17l-5-5"/>
+                    </svg>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── C09: Chat History Sidebar ── */}
+      <div style={{
+        flex: 1, overflowY: "auto",
+        borderRadius: "var(--gv-radius-md, 12px)",
+        border: "1.5px solid var(--gv-color-neutral-200)",
+        background: "var(--gv-color-bg-surface)",
+        display: "flex", flexDirection: "column",
+        padding: "12px",
+        gap: 4,
+      }}>
+        {/* New conversation */}
+        <button
+          onClick={onNewChat}
+          style={{
+            width: "100%", padding: "9px 12px",
+            borderRadius: "var(--gv-radius-sm, 8px)",
+            border: "1.5px dashed var(--gv-color-neutral-300)",
+            background: "transparent", cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
+            color: "var(--gv-color-primary-500)", fontSize: 13, fontFamily: "var(--gv-font-body)", fontWeight: 600,
+            marginBottom: 8,
+          }}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" width="14" height="14"><path d="M12 5v14M5 12h14"/></svg>
+          New Conversation
+        </button>
+
+        {/* Session list */}
+        {sessions.length === 0 && (
+          <div style={{ padding: "20px 8px", textAlign: "center", color: "var(--gv-color-neutral-400)", fontSize: 12, fontFamily: "var(--gv-font-body)" }}>
+            Belum ada percakapan
+          </div>
+        )}
+
+        {[
+          { label: "Today",     list: todaySessions },
+          { label: "Yesterday", list: yesterdaySessions },
+          { label: "Older",     list: olderSessions },
+        ].map(({ label, list }) => list.length > 0 && (
+          <div key={label}>
+            <div style={{
+              fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase",
+              color: "var(--gv-color-neutral-400)", fontFamily: "var(--gv-font-mono)",
+              padding: "6px 6px 4px", marginTop: 4,
+            }}>{label}</div>
+            {list.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => onSessionClick(s.id)}
+                style={{
+                  width: "100%", padding: "8px 10px",
+                  borderRadius: "var(--gv-radius-sm, 8px)",
+                  border: "none", cursor: "pointer", textAlign: "left",
+                  background: s.id === activeSessionId ? "var(--gv-color-primary-50)" : "transparent",
+                  display: "flex", alignItems: "flex-start", gap: 8,
+                  marginBottom: 2,
+                }}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14"
+                  style={{ color: s.id === activeSessionId ? "var(--gv-color-primary-500)" : "var(--gv-color-neutral-400)", marginTop: 2, flexShrink: 0 }}>
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontSize: 12, fontWeight: 600, fontFamily: "var(--gv-font-body)",
+                    color: s.id === activeSessionId ? "var(--gv-color-primary-700)" : "var(--gv-color-neutral-800)",
+                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                    lineHeight: 1.3,
+                  }}>{s.title}</div>
+                  <div style={{ fontSize: 10, color: "var(--gv-color-neutral-400)", marginTop: 2 }}>
+                    {s.message_count} pesan
+                  </div>
+                </div>
+                {s.id === activeSessionId && (
+                  <div style={{
+                    fontSize: 10, fontWeight: 700, padding: "1px 6px",
+                    borderRadius: 4, background: "var(--gv-color-primary-100)",
+                    color: "var(--gv-color-primary-600)", flexShrink: 0,
+                  }}>
+                    {s.message_count}
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
-function SuggestedChip({
-  prompt,
-  mode,
-  onClick,
-}: {
-  prompt:  SuggestedPrompt;
-  mode:    ChatMode;
-  onClick: (text: string) => void;
-}) {
-  const m = MODES[mode];
-  const typeMode = (prompt.keyword_type as ChatMode) in MODES
-    ? (prompt.keyword_type as ChatMode)
-    : mode;
-  const tm = MODES[typeMode];
-
-  return (
-    <button
-      onClick={() => onClick(prompt.keyword)}
-      className="flex-shrink-0 text-left px-3 py-2 rounded-[12px] text-[12px] leading-snug transition-all duration-150 hover:scale-[1.02] active:scale-[0.98]"
-      style={{
-        background:  tm.light,
-        border:      `1.5px solid ${tm.border}`,
-        color:       tm.text,
-        maxWidth:    240,
-      }}
-    >
-      <span className="line-clamp-2">{prompt.keyword}</span>
-    </button>
-  );
-}
-
-// ─── Main Page ────────────────────────────────────────────────────────────────
-
+/* ════════════════════════════════════════════════
+   Main Page
+════════════════════════════════════════════════ */
 export default function AIChatPage() {
-  const router = useRouter();
+  const [sessions, setSessions]       = useState<ChatSession[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [messages, setMessages]       = useState<ChatMessage[]>([]);
+  const [input, setInput]             = useState("");
+  const [isTyping, setIsTyping]       = useState(false);
+  const [model, setModel]             = useState(MODELS[0].id);
+  const [modelOpen, setModelOpen]     = useState(false);
+  const [brandId, setBrandId]         = useState<string | null>(null);
 
-  // ── State ──────────────────────────────────────────────────────────────────
-  const [brand,           setBrand]           = useState<BrandInfo | null>(null);
-  const [userId,          setUserId]          = useState<string>("");
-  const [messages,        setMessages]        = useState<Message[]>([]);
-  const [sessions,        setSessions]        = useState<ChatSession[]>([]);
-  const [currentSession,  setCurrentSession]  = useState<string | null>(null);
-  const [suggested,       setSuggested]       = useState<SuggestedPrompt[]>([]);
-  const [chatMode,        setChatMode]        = useState<ChatMode>("general");
-  const [input,           setInput]           = useState("");
-  const [sending,         setSending]         = useState(false);
-  const [loading,         setLoading]         = useState(true);
-  const [dailySpend,      setDailySpend]      = useState(0);
-  const [showHistory,     setShowHistory]     = useState(false);
-  const [mobileRight,     setMobileRight]     = useState(false);
-  const [copiedId,        setCopiedId]        = useState<string | null>(null);
-
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef       = useRef<HTMLTextAreaElement>(null);
-
-  const tierConfig = getTierConfig(brand?.subscription_tier ?? null);
-  const capRemain  = Math.max(0, tierConfig.dailyCap - dailySpend);
-  const capPct     = Math.min(100, (dailySpend / tierConfig.dailyCap) * 100);
-  const capColor   = capPct >= 90 ? "#EF4444" : capPct >= 70 ? "#F59E0B" : "#5F8F8B";
-
-  // ── Init ───────────────────────────────────────────────────────────────────
+  /* Load user + brand profile */
   useEffect(() => {
-    async function init() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.replace("/signin"); return; }
-      setUserId(user.id);
-
-      const { data: ub } = await supabase
-        .from("user_brands")
-        .select("brand_id")
-        .eq("user_id", user.id)
-        .limit(1)
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+      const { data: brand } = await supabase
+        .from("brand_profiles")
+        .select("id")
+        .eq("user_id", session.user.id)
         .single();
+      if (brand) setBrandId(brand.id);
+    })();
+  }, []);
 
-      if (!ub?.brand_id) { setLoading(false); return; }
-
-      const { data: b } = await supabase
-        .from("gv_brands")
-        .select("id, brand_name, brand_category, brand_country, subscription_tier")
-        .eq("id", ub.brand_id)
-        .single();
-
-      if (b) setBrand(b as BrandInfo);
-      setLoading(false);
-    }
-    init();
-  }, [router]);
-
-  // ── Load sessions ──────────────────────────────────────────────────────────
+  /* Load chat sessions */
   const loadSessions = useCallback(async () => {
-    if (!brand || !userId) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return;
     const { data } = await supabase
       .from("gv_ai_chat_sessions")
-      .select("id, title, message_count, total_tokens, total_cost_usd, updated_at")
-      .eq("brand_id", brand.id)
-      .eq("user_id",  userId)
-      .is("archived_at", null)
+      .select("id, title, message_count, created_at, updated_at")
+      .eq("user_id", session.user.id)
       .order("updated_at", { ascending: false })
-      .limit(30);
-    if (data) setSessions(data as ChatSession[]);
-  }, [brand, userId]);
+      .limit(50);
+    if (data) setSessions(data);
+  }, []);
 
   useEffect(() => { loadSessions(); }, [loadSessions]);
 
-  // ── Load suggested prompts (tier-based) ────────────────────────────────────
-  useEffect(() => {
-    async function loadSuggested() {
-      if (!brand) return;
-      const { data } = await supabase
-        .from("gv_keywords")
-        .select("keyword, keyword_type")
-        .eq("brand_id", brand.id)
-        .eq("source",   "research_suggested")
-        .in("keyword_type", ["seo", "geo", "social"])
-        .eq("active", true)
-        .limit(100);
-
-      if (data && data.length > 0) {
-        const shuffled = shuffle(data as SuggestedPrompt[]);
-        setSuggested(shuffled.slice(0, tierConfig.suggestedCount));
-      }
-    }
-    loadSuggested();
-  }, [brand, tierConfig.suggestedCount]);
-
-  // ── Daily spend check ──────────────────────────────────────────────────────
-  useEffect(() => {
-    async function checkDailySpend() {
-      if (!brand || !userId) return;
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const { data } = await supabase
-        .from("gv_ai_conversations")
-        .select("cost_usd")
-        .eq("brand_id", brand.id)
-        .eq("user_id",  userId)
-        .eq("role",     "assistant")
-        .gte("created_at", today.toISOString());
-      if (data) {
-        const total = data.reduce((s, r) => s + (r.cost_usd ?? 0), 0);
-        setDailySpend(total);
-      }
-    }
-    checkDailySpend();
-  }, [brand, userId, messages]);
-
-  // ── Load session messages ──────────────────────────────────────────────────
-  const loadSessionMessages = useCallback(async (sessionId: string) => {
+  /* Load messages for active session */
+  const loadMessages = useCallback(async (sessionId: string) => {
     const { data } = await supabase
       .from("gv_ai_conversations")
-      .select("id, role, message, created_at, tokens_used, cost_usd, model_used")
+      .select("id, role, message, conversation_type, created_at")
       .eq("session_id", sessionId)
       .order("created_at", { ascending: true });
-    if (data) setMessages(data as Message[]);
+    if (data) setMessages(data as ChatMessage[]);
   }, []);
 
-  // ── Auto-scroll ────────────────────────────────────────────────────────────
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  const handleSessionClick = useCallback((id: string) => {
+    setActiveSessionId(id);
+    setMessages([]);
+    loadMessages(id);
+  }, [loadMessages]);
 
-  // ── Send message ───────────────────────────────────────────────────────────
-  const handleSend = useCallback(async (text?: string) => {
-    const msg = (text ?? input).trim();
-    if (!msg || sending || !brand) return;
-    if (capRemain <= 0) return; // cap reached
-
+  const handleNewChat = useCallback(() => {
+    setActiveSessionId(null);
+    setMessages([]);
     setInput("");
-    setSending(true);
+  }, []);
 
-    // Optimistic user message
-    const tempUserId = `temp-u-${Date.now()}`;
-    setMessages(prev => [...prev, {
-      id:         tempUserId,
-      role:       "user",
-      message:    msg,
+  const handleSend = useCallback(async () => {
+    const text = input.trim();
+    if (!text || !brandId) return;
+
+    /* Optimistically add user message */
+    const tempUserMsg: ChatMessage = {
+      id: `temp-${Date.now()}`,
+      role: "user",
+      message: text,
       created_at: new Date().toISOString(),
-    }]);
-
-    // Thinking indicator
-    const tempAiId = `temp-ai-${Date.now()}`;
-    setMessages(prev => [...prev, {
-      id:          tempAiId,
-      role:        "assistant",
-      message:     "",
-      created_at:  new Date().toISOString(),
-      isThinking:  true,
-    }]);
+    };
+    setMessages((prev) => [...prev, tempUserMsg]);
+    setInput("");
+    setIsTyping(true);
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch("/api/ai-chat", {
-        method:  "POST",
-        headers: {
-          "Content-Type":  "application/json",
-          "Authorization": `Bearer ${session?.access_token ?? ""}`,
+      if (!session) { setIsTyping(false); return; }
+
+      const { data, error } = await supabase.functions.invoke("ai-chat", {
+        body: {
+          brand_id: brandId,
+          session_id: activeSessionId ?? undefined,
+          message: text,
+          chat_mode: "general",
         },
-        body: JSON.stringify({
-          brand_id:   brand.id,
-          session_id: currentSession,
-          message:    msg,
-          chat_mode:  chatMode,
-        }),
+        headers: { Authorization: `Bearer ${session.access_token}` },
       });
 
-      const json = await res.json();
+      if (error) throw error;
 
-      if (!res.ok || !json.success) {
-        setMessages(prev => prev.map(m =>
-          m.id === tempAiId
-            ? { ...m, isThinking: false, isError: true, message: json.error ?? "Something went wrong." }
-            : m
-        ));
-        return;
+      /* Update active session from response */
+      if (data?.session_id && !activeSessionId) {
+        setActiveSessionId(data.session_id);
+        loadSessions();
       }
 
-      // Update temp AI message with real response
-      setMessages(prev => prev.map(m =>
-        m.id === tempAiId
-          ? {
-              ...m,
-              id:         json.message_id ?? tempAiId,
-              message:    json.response,
-              isThinking: false,
-              tokens_used: json.metadata?.tokens_used,
-              cost_usd:    json.metadata?.cost_usd,
-              model_used:  json.metadata?.model_used,
-            }
-          : m.id === tempUserId
-            ? { ...m, id: `real-u-${Date.now()}` }
-            : m
-      ));
+      /* Reload messages from DB (to get persisted IDs) */
+      const targetSession = data?.session_id ?? activeSessionId;
+      if (targetSession) await loadMessages(targetSession);
 
-      // Set session
-      if (!currentSession && json.session_id) {
-        setCurrentSession(json.session_id);
-      }
-
-      await loadSessions();
-    } catch {
-      setMessages(prev => prev.map(m =>
-        m.id === tempAiId
-          ? { ...m, isThinking: false, isError: true, message: "Network error — please try again." }
-          : m
-      ));
+    } catch (err) {
+      console.error("AI chat error:", err);
+      /* Show error message */
+      setMessages((prev) => [...prev, {
+        id: `err-${Date.now()}`,
+        role: "assistant",
+        message: "Maaf, terjadi kesalahan. Silakan coba lagi.",
+        created_at: new Date().toISOString(),
+      }]);
     } finally {
-      setSending(false);
-      inputRef.current?.focus();
+      setIsTyping(false);
     }
-  }, [input, sending, brand, currentSession, chatMode, capRemain, loadSessions]);
+  }, [input, brandId, activeSessionId, loadMessages, loadSessions]);
 
-  // ── New session ────────────────────────────────────────────────────────────
-  function handleNewSession() {
-    setCurrentSession(null);
-    setMessages([]);
-    inputRef.current?.focus();
-  }
+  const handleChipClick = useCallback((label: string) => {
+    setInput(label);
+  }, []);
 
-  // ── Select session ─────────────────────────────────────────────────────────
-  async function handleSelectSession(sessionId: string) {
-    setCurrentSession(sessionId);
-    await loadSessionMessages(sessionId);
-    setMobileRight(false);
-  }
+  return (
+    <>
+      {/* Keyframe animations */}
+      <style>{`
+        @keyframes gv-bounce {
+          0%, 60%, 100% { transform: translateY(0); }
+          30% { transform: translateY(-7px); }
+        }
+        @keyframes gv-float {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-10px); }
+        }
+        @keyframes gv-pulse-ring {
+          0% { transform: scale(1); opacity: 0.5; }
+          100% { transform: scale(1.6); opacity: 0; }
+        }
+      `}</style>
 
-  // ── Copy message ───────────────────────────────────────────────────────────
-  function handleCopy(text: string, id: string) {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopiedId(id);
-      setTimeout(() => setCopiedId(null), 1500);
-    });
-  }
-
-  // ── Textarea auto-height ───────────────────────────────────────────────────
-  function handleInputChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
-    setInput(e.target.value);
-    e.target.style.height = "auto";
-    e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // CENTER PANEL — Chat thread + input
-  // ─────────────────────────────────────────────────────────────────────────
-  const activeMode = MODES[chatMode];
-
-  const centerPanel = (
-    <div className="flex flex-col h-full" style={{ background: "var(--gv-color-bg-surface)" }}>
-
-      {/* ── Header ──────────────────────────────────────────────────────── */}
-      <div
-        className="flex-shrink-0 px-5 pt-5 pb-4"
-        style={{ borderBottom: "1px solid var(--gv-color-neutral-200)" }}
-      >
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2.5">
-            <div
-              className="w-8 h-8 rounded-[10px] flex items-center justify-center text-white text-sm font-bold"
-              style={{ background: `linear-gradient(135deg, ${activeMode.accent} 0%, ${activeMode.accent}cc 100%)` }}
-            >
-              {activeMode.icon}
-            </div>
-            <div>
-              <h1
-                className="text-[22px] font-bold leading-tight"
-                style={{ fontFamily: "var(--gv-font-heading)", color: "var(--gv-color-neutral-900)" }}
-              >
-                AI Chat
-              </h1>
-              <p className="text-[11px]" style={{ color: "var(--gv-color-neutral-400)" }}>
-                {brand?.brand_name ?? "Loading…"}
-              </p>
-            </div>
-          </div>
-
-          {/* Daily cost cap badge */}
-          <div className="flex items-center gap-2">
-            <div
-              className="px-3 py-1.5 rounded-[10px] flex items-center gap-2"
-              style={{
-                background: "var(--gv-color-neutral-50)",
-                border:     "1px solid var(--gv-color-neutral-200)",
-              }}
-            >
-              <div className="flex flex-col items-end gap-0.5">
-                <span className="text-[10px] font-semibold" style={{ color: capColor }}>
-                  {fmtCost(capRemain)} left
-                </span>
-                <div className="w-20 h-1 rounded-full overflow-hidden" style={{ background: "var(--gv-color-neutral-200)" }}>
-                  <div
-                    className="h-full rounded-full transition-all duration-500"
-                    style={{ width: `${capPct}%`, background: capColor }}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Mobile: open history */}
-            <button
-              className="lg:hidden flex items-center justify-center w-8 h-8 rounded-[10px] transition-colors"
-              style={{ background: "var(--gv-color-neutral-100)" }}
-              onClick={() => setMobileRight(true)}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M3 12h18M3 6h18M3 18h18" />
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        {/* Mode tabs */}
-        <div className="flex gap-2 overflow-x-auto no-scrollbar">
-          {(Object.keys(MODES) as ChatMode[]).map(m => (
-            <ModeTab
-              key={m}
-              mode={m}
-              active={chatMode === m}
-              onClick={() => setChatMode(m)}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* ── Messages ──────────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto px-5 py-4 custom-scrollbar" style={{ minHeight: 0 }}>
-
-        {loading ? (
-          <div className="flex items-center justify-center h-40">
-            <div className="gv-animate-spin w-6 h-6 rounded-full border-2 border-transparent"
-              style={{ borderTopColor: activeMode.accent, borderRightColor: `${activeMode.accent}44` }} />
-          </div>
-        ) : messages.length === 0 ? (
-          /* ── Empty state ─────────────────────────────────────────────── */
-          <div className="flex flex-col h-full">
-            {/* Hero */}
-            <div
-              className="rounded-[20px] p-6 mb-5 text-center"
-              style={{
-                background: `linear-gradient(135deg, ${activeMode.light} 0%, white 100%)`,
-                border:     `1.5px solid ${activeMode.border}`,
-              }}
-            >
-              <div
-                className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-3 text-xl font-bold"
-                style={{ background: `linear-gradient(135deg, ${activeMode.accent}, ${activeMode.accent}cc)`, color: "white" }}
-              >
-                {activeMode.icon}
-              </div>
-              <h2 className="text-[16px] font-bold mb-1" style={{ color: activeMode.text, fontFamily: "var(--gv-font-heading)" }}>
-                {activeMode.label} Mode
-              </h2>
-              <p className="text-[12px]" style={{ color: "var(--gv-color-neutral-500)" }}>
-                {activeMode.description}
-              </p>
-            </div>
-
-            {/* Suggested prompts */}
-            {suggested.length > 0 && (
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wide mb-3"
-                  style={{ color: "var(--gv-color-neutral-400)" }}>
-                  Suggested for you · {tierConfig.label}
-                </p>
-                <div className="flex flex-col gap-2">
-                  {suggested.map((p, i) => (
-                    <SuggestedChip
-                      key={i}
-                      prompt={p}
-                      mode={chatMode}
-                      onClick={text => handleSend(text)}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {suggested.length === 0 && (
-              <div className="text-center py-8">
-                <p className="text-[13px]" style={{ color: "var(--gv-color-neutral-400)" }}>
-                  Run a deep research first to get personalized suggestions
-                </p>
-              </div>
-            )}
-          </div>
-        ) : (
-          /* ── Message thread ──────────────────────────────────────────── */
-          <div className="flex flex-col gap-4">
-            {messages.map((msg, idx) => (
-              <MessageBubble
-                key={msg.id + idx}
-                msg={msg}
-                mode={chatMode}
-                copiedId={copiedId}
-                onCopy={handleCopy}
-              />
-            ))}
-            <div ref={messagesEndRef} />
-          </div>
-        )}
-      </div>
-
-      {/* ── Input area ────────────────────────────────────────────────────── */}
-      <div
-        className="flex-shrink-0 px-4 pb-4 pt-3"
-        style={{
-          borderTop:  "1px solid var(--gv-color-neutral-200)",
-          background: "var(--gv-color-bg-surface)",
-        }}
-      >
-        {/* Cap reached warning */}
-        {capRemain <= 0 && (
-          <div
-            className="mb-3 px-4 py-2.5 rounded-[12px] text-[12px] font-medium text-center"
-            style={{ background: "var(--gv-color-danger-50)", color: "var(--gv-color-danger-700)", border: "1px solid #FECACA" }}
-          >
-            Daily limit reached ({tierConfig.label}: {fmtCost(tierConfig.dailyCap)}/day). Resets at midnight.
-          </div>
-        )}
-
-        <div
-          className="flex items-end gap-2 rounded-[16px] p-2"
-          style={{
-            background: "var(--gv-color-neutral-50)",
-            border:     `1.5px solid ${sending ? activeMode.accent : "var(--gv-color-neutral-200)"}`,
-            transition: "border-color 200ms ease",
-            boxShadow:  sending ? `0 0 0 3px ${activeMode.accent}18` : "none",
-          }}
-        >
-          <textarea
-            ref={inputRef}
-            rows={1}
-            value={input}
-            onChange={handleInputChange}
-            onKeyDown={handleKeyDown}
-            disabled={sending || capRemain <= 0}
-            placeholder={capRemain <= 0 ? "Daily limit reached" : `Ask about ${activeMode.description.toLowerCase()}…`}
-            className="flex-1 resize-none outline-none text-[14px] leading-relaxed bg-transparent px-2 py-1.5"
-            style={{
-              color:       "var(--gv-color-neutral-900)",
-              fontFamily:  "var(--gv-font-body)",
-              minHeight:   36,
-              maxHeight:   160,
-            }}
+      <AppShell
+        center={
+          <ChatCenter
+            messages={messages}
+            isTyping={isTyping}
+            input={input}
+            onInputChange={setInput}
+            onSend={handleSend}
+            onChipClick={handleChipClick}
+            model={model}
+            charCount={input.length}
           />
-          <button
-            onClick={() => handleSend()}
-            disabled={!input.trim() || sending || capRemain <= 0}
-            className="flex-shrink-0 w-9 h-9 rounded-[12px] flex items-center justify-center transition-all duration-200"
-            style={{
-              background: !input.trim() || capRemain <= 0
-                ? "var(--gv-color-neutral-200)"
-                : `linear-gradient(135deg, ${activeMode.accent}, ${activeMode.accent}cc)`,
-              color:     !input.trim() || capRemain <= 0 ? "var(--gv-color-neutral-400)" : "white",
-              transform: sending ? "scale(0.92)" : "scale(1)",
-              boxShadow: input.trim() && capRemain > 0 ? `0 4px 12px ${activeMode.accent}44` : "none",
-            }}
-          >
-            {sending ? (
-              <div className="gv-animate-spin w-4 h-4 rounded-full border-2 border-transparent border-t-white" />
-            ) : (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                <path d="M22 2L11 13" /><path d="M22 2L15 22l-4-9-9-4 20-7z" />
-              </svg>
-            )}
-          </button>
-        </div>
-
-        <p className="text-center text-[10px] mt-2" style={{ color: "var(--gv-color-neutral-300)" }}>
-          Enter to send · Shift+Enter for new line
-        </p>
-      </div>
-    </div>
-  );
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // RIGHT PANEL — Sessions + brand context
-  // ─────────────────────────────────────────────────────────────────────────
-  const rightPanel = (
-    <div className="flex flex-col h-full" style={{ background: "var(--gv-color-bg-surface)" }}>
-
-      {/* Header */}
-      <div
-        className="flex-shrink-0 px-5 pt-5 pb-4"
-        style={{ borderBottom: "1px solid var(--gv-color-neutral-200)" }}
-      >
-        <div className="flex items-center justify-between">
-          <h2 className="text-[15px] font-bold" style={{ color: "var(--gv-color-neutral-900)", fontFamily: "var(--gv-font-heading)" }}>
-            History
-          </h2>
-          <button
-            onClick={handleNewSession}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-[10px] text-[12px] font-semibold transition-all hover:opacity-85"
-            style={{ background: `${activeMode.accent}12`, color: activeMode.accent, border: `1px solid ${activeMode.accent}30` }}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            New Chat
-          </button>
-        </div>
-      </div>
-
-      {/* Brand context card */}
-      {brand && (
-        <div className="flex-shrink-0 px-4 pt-4">
-          <div
-            className="rounded-[14px] p-3 mb-1"
-            style={{
-              background: "var(--gv7-bubble-ai-bg)",
-              border:     "1.5px solid var(--gv7-bubble-ai-border)",
-            }}
-          >
-            <div className="flex items-center gap-2.5 mb-2">
-              <div
-                className="w-7 h-7 rounded-[8px] flex items-center justify-center text-[11px] font-bold text-white"
-                style={{ background: "var(--gv-gradient-primary)" }}
-              >
-                {brand.brand_name.slice(0, 2).toUpperCase()}
-              </div>
-              <div>
-                <p className="text-[13px] font-semibold" style={{ color: "var(--gv-color-neutral-900)" }}>
-                  {brand.brand_name}
-                </p>
-                <p className="text-[11px]" style={{ color: "var(--gv-color-neutral-400)" }}>
-                  {brand.brand_category ?? "Brand"} · {brand.brand_country ?? "Global"}
-                </p>
-              </div>
-            </div>
-            {/* Daily cap progress */}
-            <div>
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-[10px] font-medium" style={{ color: "var(--gv-color-neutral-500)" }}>
-                  Daily budget
-                </span>
-                <span className="text-[10px] font-semibold" style={{ color: capColor }}>
-                  {fmtCost(dailySpend)} / {fmtCost(tierConfig.dailyCap)}
-                </span>
-              </div>
-              <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: "var(--gv-color-neutral-200)" }}>
-                <div
-                  className="h-full rounded-full transition-all duration-700"
-                  style={{ width: `${capPct}%`, background: capColor }}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Session list */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 custom-scrollbar" style={{ minHeight: 0 }}>
-        {sessions.length === 0 ? (
-          <div className="py-8 text-center">
-            <p className="text-[12px]" style={{ color: "var(--gv-color-neutral-400)" }}>
-              No conversations yet
-            </p>
-            <p className="text-[11px] mt-1" style={{ color: "var(--gv-color-neutral-300)" }}>
-              Start a new chat above
-            </p>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-1.5">
-            {sessions.map(s => (
-              <button
-                key={s.id}
-                onClick={() => handleSelectSession(s.id)}
-                className="w-full text-left rounded-[12px] p-3 transition-all duration-150 hover:scale-[1.005]"
-                style={{
-                  background: s.id === currentSession ? activeMode.light : "transparent",
-                  border:     `1.5px solid ${s.id === currentSession ? activeMode.border : "var(--gv-color-neutral-100)"}`,
-                }}
-              >
-                <p
-                  className="text-[12px] font-semibold line-clamp-1 mb-1"
-                  style={{ color: s.id === currentSession ? activeMode.text : "var(--gv-color-neutral-700)" }}
-                >
-                  {s.title || "Untitled session"}
-                </p>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px]" style={{ color: "var(--gv-color-neutral-400)" }}>
-                    {s.message_count} msgs
-                  </span>
-                  <span className="text-[10px]" style={{ color: "var(--gv-color-neutral-300)" }}>·</span>
-                  <span className="text-[10px]" style={{ color: "var(--gv-color-neutral-400)" }}>
-                    {fmtCost(s.total_cost_usd ?? 0)}
-                  </span>
-                  <span className="ml-auto text-[10px]" style={{ color: "var(--gv-color-neutral-300)" }}>
-                    {fmtTime(s.updated_at)}
-                  </span>
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Suggested prompts footer */}
-      {suggested.length > 0 && messages.length === 0 && (
-        <div
-          className="flex-shrink-0 px-4 pb-4 pt-3"
-          style={{ borderTop: "1px solid var(--gv-color-neutral-100)" }}
-        >
-          <p className="text-[10px] font-semibold uppercase tracking-wide mb-2"
-            style={{ color: "var(--gv-color-neutral-400)" }}>
-            Quick prompts
-          </p>
-          <div className="flex flex-col gap-1.5">
-            {suggested.slice(0, 3).map((p, i) => (
-              <button
-                key={i}
-                onClick={() => handleSend(p.keyword)}
-                className="text-left text-[11px] px-2.5 py-2 rounded-[10px] line-clamp-1 transition-all duration-150 hover:opacity-80"
-                style={{
-                  background: MODES[(p.keyword_type as ChatMode) in MODES ? (p.keyword_type as ChatMode) : "general"].light,
-                  color:      MODES[(p.keyword_type as ChatMode) in MODES ? (p.keyword_type as ChatMode) : "general"].text,
-                  border:     `1px solid ${MODES[(p.keyword_type as ChatMode) in MODES ? (p.keyword_type as ChatMode) : "general"].border}`,
-                }}
-              >
-                {p.keyword}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-
-  return (
-    <ThreeColumnLayout
-      left={<NavColumn />}
-      center={centerPanel}
-      right={rightPanel}
-      mobileRightOpen={mobileRight}
-      onMobileBack={() => setMobileRight(false)}
-      mobileBackLabel="Chat"
-    />
-  );
-}
-
-// ─── Message Bubble ───────────────────────────────────────────────────────────
-
-function MessageBubble({
-  msg,
-  mode,
-  copiedId,
-  onCopy,
-}: {
-  msg:      Message;
-  mode:     ChatMode;
-  copiedId: string | null;
-  onCopy:   (text: string, id: string) => void;
-}) {
-  const m = MODES[mode];
-  const isUser = msg.role === "user";
-  const [showMeta, setShowMeta] = useState(false);
-
-  return (
-    <div
-      className={`flex gv7-message-in ${isUser ? "justify-end" : "justify-start"}`}
-    >
-      <div style={{ maxWidth: "82%" }}>
-
-        {/* Role label */}
-        <p
-          className={`text-[10px] font-semibold mb-1 ${isUser ? "text-right" : "text-left"}`}
-          style={{ color: isUser ? m.accent : "var(--gv-color-neutral-400)" }}
-        >
-          {isUser ? "You" : "GeoVera AI"}
-        </p>
-
-        {/* Bubble */}
-        <div
-          className="rounded-[18px] px-4 py-3"
-          style={isUser ? {
-            background: `linear-gradient(135deg, ${m.accent} 0%, ${m.accent}dd 100%)`,
-            color:      "white",
-            borderBottomRightRadius: 6,
-            boxShadow:  `0 4px 16px ${m.accent}44`,
-          } : msg.isError ? {
-            background: "var(--gv7-bubble-error-bg)",
-            border:     "1.5px solid var(--gv7-bubble-error-border)",
-            color:      "var(--gv-color-danger-700)",
-            borderBottomLeftRadius: 6,
-          } : {
-            background: "var(--gv7-bubble-ai-bg)",
-            border:     "1.5px solid var(--gv7-bubble-ai-border)",
-            color:      "var(--gv-color-neutral-900)",
-            borderBottomLeftRadius: 6,
-          }}
-        >
-          {msg.isThinking ? (
-            <ThinkingDots />
-          ) : (
-            <p className="text-[14px] leading-relaxed whitespace-pre-wrap">
-              {msg.message}
-              {/* Streaming cursor placeholder */}
-            </p>
-          )}
-        </div>
-
-        {/* Metadata footer */}
-        {!isUser && !msg.isThinking && (
-          <div className={`flex items-center gap-3 mt-1.5 ${isUser ? "justify-end" : "justify-start"}`}>
-
-            {/* Copy button */}
-            <button
-              onClick={() => onCopy(msg.message, msg.id)}
-              className="text-[10px] flex items-center gap-1 transition-colors"
-              style={{ color: copiedId === msg.id ? m.accent : "var(--gv-color-neutral-300)" }}
-            >
-              {copiedId === msg.id ? (
-                <>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <path d="M20 6L9 17l-5-5" />
-                  </svg>
-                  Copied
-                </>
-              ) : (
-                <>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
-                  </svg>
-                  Copy
-                </>
-              )}
-            </button>
-
-            {/* Token/cost toggle */}
-            {(msg.tokens_used || msg.cost_usd) && (
-              <button
-                onClick={() => setShowMeta(v => !v)}
-                className="text-[10px] transition-colors"
-                style={{ color: showMeta ? m.accent : "var(--gv-color-neutral-300)" }}
-              >
-                {showMeta ? "hide stats" : "view stats"}
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Expanded token/cost metadata */}
-        {!isUser && showMeta && (msg.tokens_used || msg.cost_usd) && (
-          <div
-            className="mt-1.5 px-3 py-2 rounded-[10px] gv-animate-fade-in"
-            style={{
-              background: "var(--gv-color-neutral-50)",
-              border:     "1px solid var(--gv-color-neutral-200)",
-            }}
-          >
-            <div className="flex items-center gap-4">
-              {msg.tokens_used && (
-                <div>
-                  <p className="text-[9px] uppercase tracking-wide" style={{ color: "var(--gv-color-neutral-400)" }}>Tokens</p>
-                  <p className="text-[11px] font-semibold" style={{ color: "var(--gv-color-neutral-700)" }}>{msg.tokens_used.toLocaleString()}</p>
-                </div>
-              )}
-              {msg.cost_usd && (
-                <div>
-                  <p className="text-[9px] uppercase tracking-wide" style={{ color: "var(--gv-color-neutral-400)" }}>Cost</p>
-                  <p className="text-[11px] font-semibold" style={{ color: "var(--gv-color-neutral-700)" }}>{fmtCost(msg.cost_usd)}</p>
-                </div>
-              )}
-              {msg.model_used && (
-                <div>
-                  <p className="text-[9px] uppercase tracking-wide" style={{ color: "var(--gv-color-neutral-400)" }}>Model</p>
-                  <p className="text-[11px] font-semibold" style={{ color: "var(--gv-color-neutral-700)" }}>{msg.model_used}</p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+        }
+        right={
+          <ChatRight
+            sessions={sessions}
+            activeSessionId={activeSessionId}
+            onSessionClick={handleSessionClick}
+            onNewChat={handleNewChat}
+            model={model}
+            onModelChange={setModel}
+            modelOpen={modelOpen}
+            setModelOpen={setModelOpen}
+          />
+        }
+      />
+    </>
   );
 }

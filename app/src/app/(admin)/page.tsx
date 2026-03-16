@@ -1,6 +1,18 @@
-import { redirect } from "next/navigation";
+"use client";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
-// Admin root → Start page (first page after login)
 export default function AdminRootPage() {
-  redirect("/getting-started");
+  const router = useRouter();
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user?.email === "andrewsus83@gmail.com") {
+        router.replace("/backend");
+      } else {
+        router.replace("/analytics");
+      }
+    });
+  }, [router]);
+  return null;
 }

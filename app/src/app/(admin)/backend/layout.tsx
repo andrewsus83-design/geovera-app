@@ -31,6 +31,12 @@ const NAV = [
       <path d="M9 1.5l2.06 4.17 4.6.67-3.33 3.24.79 4.58L9 12.27l-4.12 2.17.79-4.58L2.34 6.34l4.6-.67L9 1.5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
     </svg>
   )},
+  { href: "/backend/quotas", label: "Quotas", icon: (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+      <path d="M9 1.5C4.86 1.5 1.5 4.86 1.5 9S4.86 16.5 9 16.5 16.5 13.14 16.5 9 13.14 1.5 9 1.5z" stroke="currentColor" strokeWidth="1.5"/>
+      <path d="M9 5v4l2.5 2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  )},
   { href: "/backend/settings", label: "Settings", icon: (
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
       <circle cx="9" cy="9" r="2.5" stroke="currentColor" strokeWidth="1.5"/>
@@ -56,8 +62,7 @@ export default function BackendLayout({ children }: { children: React.ReactNode 
         .eq("id", session.user.id)
         .single();
 
-      const isAdminByEmail = session.user.email === "andrewsus83@gmail.com";
-      if (!profile?.is_admin && !isAdminByEmail) { router.replace("/getting-started"); return; }
+      if (!profile?.is_admin) { window.location.href = "https://app.geovera.xyz/analytics"; return; }
       setAdminName(profile?.full_name || session.user.email || "Admin");
       setChecking(false);
     }

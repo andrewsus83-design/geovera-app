@@ -58,15 +58,45 @@ export default function BackendPaymentsPage() {
 
   async function approve(sub: SubRow) {
     setActionId(sub.id);
-    await supabase.rpc("activate_subscription_user", { sub_id: sub.id });
-    showToast(`Invoice ${sub.invoice_number} disetujui!`);
+    const { error: rpcError } = await supabase.rpc("activate_subscription_user", { sub_id: sub.id });
+    if (rpcError) {
+      showToast(`Gagal mengaktifkan: ${rpcError.message}`);
+      setActionId(null);
+      return;
+    }
+
+    // Send approval email via server-side API route (JWT-verified, admin-only)
+    if (sub.user_profiles?.email) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        await fetch("/api/payment", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
+          body: JSON.stringify({
+            action: "send_approval_email",
+            user_email: sub.user_profiles.email,
+            user_name: sub.user_profiles.full_name || sub.user_profiles.email.split("@")[0],
+            plan_name: sub.plans?.name || "GeoVera",
+            plan_price: sub.plans?.price_idr || null,
+            invoice_number: sub.invoice_number,
+          }),
+        }).catch(e => console.error("approval email error:", e));
+      }
+    }
+
+    showToast(`Invoice ${sub.invoice_number} disetujui! Email notifikasi terkirim.`);
     setActionId(null);
     load();
   }
 
   async function reject(subId: string, note: string) {
     setActionId(subId);
-    await supabase.from("subscriptions").update({ status: "rejected", notes: note || null }).eq("id", subId);
+    const { error: rejectError } = await supabase.from("subscriptions").update({ status: "rejected", notes: note || null }).eq("id", subId);
+    if (rejectError) {
+      showToast(`Gagal menolak: ${rejectError.message}`);
+      setActionId(null);
+      return;
+    }
     showToast("Pembayaran ditolak.");
     setRejectId(null);
     setRejectNote("");

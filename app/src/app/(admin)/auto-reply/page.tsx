@@ -1,920 +1,855 @@
 "use client";
-export const dynamic = "force-dynamic";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, CSSProperties } from "react";
+import AppShell from "@/components/shared/AppShell";
 import { supabase } from "@/lib/supabase";
-import ThreeColumnLayout from "@/components/shared/ThreeColumnLayout";
-import NavColumn from "@/components/shared/NavColumn";
-import PlatformIcon from "@/components/shared/PlatformIcon";
 
-/* ══════════════════════════════════════════════════════════════════════════
-   /auto-reply — GeoVera Auto-Reply Dashboard
-   Layout: Left = NavColumn | Center = Comments + Compose | Right = Settings + Sticky Mode Bar
-   DS v5.9 compliant — Tasks page style tabs
-══════════════════════════════════════════════════════════════════════════ */
+/* ── Mock data ── */
+const MOCK_COMMENTS = [
+  { id: "c1", plat: "ig",  user: "@marina_shop",   time: "2m ago",  txt: "Berapa harga untuk paket premium? Ada diskon ga?",                         unread: true  },
+  { id: "c2", plat: "tt",  user: "@rifki.digital",  time: "5m ago",  txt: "Wah kontennya bagus banget! Bisa collab gak?",                              unread: true  },
+  { id: "c3", plat: "ig",  user: "@store_bunda",    time: "12m ago", txt: "Min, produknya tersedia di Shopee juga gak?",                               unread: false },
+  { id: "c4", plat: "yt",  user: "Budi Santoso",   time: "18m ago", txt: "Tutorial-nya sangat membantu, terima kasih!",                               unread: false },
+  { id: "c5", plat: "tt",  user: "@cindy.creates",  time: "24m ago", txt: "Sound apa yang kamu pakai di video ini? Fire banget!",                      unread: false },
+  { id: "c6", plat: "ig",  user: "@toko_online99",  time: "31m ago", txt: "Reseller boleh? Minimum order berapa?",                                     unread: false },
+];
+const MOCK_RULES = [
+  { id: "r1", name: "Greeting Auto Reply",   keywords: ["halo","hai","hi","hello"],                   action: "Balas dengan sapaan ramah + link produk",   platforms: ["ig","tt"], active: true  },
+  { id: "r2", name: "Price Inquiry",         keywords: ["harga","price","berapa","cost"],             action: "Kirim price list + link pemesanan",          platforms: ["ig","yt"], active: true  },
+  { id: "r3", name: "Reseller Inquiry",      keywords: ["reseller","distributor","agen","dropship"],  action: "Arahkan ke halaman reseller",                platforms: ["ig"],      active: false },
+  { id: "r4", name: "Thank You Reply",       keywords: ["makasih","thanks","terima kasih","bagus"],   action: "Balas terima kasih + follow CTA",           platforms: ["ig","tt","yt"], active: true },
+];
+const TONE_OPTIONS = [
+  { key: "professional", icon: "💼", name: "Professional",   desc: "Formal dan tepercaya" },
+  { key: "friendly",     icon: "😊", name: "Friendly",       desc: "Hangat dan ramah" },
+  { key: "casual",       icon: "✌️", name: "Casual",         desc: "Santai dan relatable" },
+  { key: "energetic",    icon: "⚡", name: "Energetic",      desc: "Bersemangat dan motivatif" },
+  { key: "empathetic",   icon: "🤝", name: "Empathetic",     desc: "Penuh pengertian" },
+  { key: "witty",        icon: "🎯", name: "Witty",          desc: "Cerdas dan menghibur" },
+];
+const PLATFORMS_SETTING = [
+  { key: "ig",  name: "Instagram",  account: "@brand_official",       connected: true  },
+  { key: "tt",  name: "TikTok",     account: "@brand.tiktok",         connected: true  },
+  { key: "yt",  name: "YouTube",    account: "Brand Channel",         connected: false },
+  { key: "fb",  name: "Facebook",   account: "Brand Facebook Page",   connected: false },
+];
+const AI_TEMPLATES = [
+  { cat: "Greeting",    txt: "Halo! Terima kasih sudah menghubungi kami 😊 Ada yang bisa kami bantu?" },
+  { cat: "Price",       txt: "Untuk info harga lengkap, silakan cek link di bio ya! 🛍️" },
+  { cat: "Thank You",   txt: "Makasih banyak udah support kami! 🙏 Jangan lupa share ke teman-teman ya!" },
+  { cat: "Collab",      txt: "Haii! Untuk kolaborasi, DM kami ya dengan detail proposal kamu 🤝" },
+];
+const LOG_ITEMS = [
+  { plat: "ig", user: "@toko_rina", action: "Auto-replied to price inquiry", time: "3m ago" },
+  { plat: "tt", user: "@budi23",    action: "Auto-replied with greeting",    time: "7m ago" },
+  { plat: "ig", user: "@shop_nia",  action: "Auto-replied to reseller DM",  time: "12m ago"},
+  { plat: "yt", user: "Deni W.",    action: "Auto-replied to thank you",    time: "19m ago"},
+];
 
-const DEMO_BRAND_ID = process.env.NEXT_PUBLIC_DEMO_BRAND_ID || "a37dee82-5ed5-4ba4-991a-4d93dde9ff7a";
-
-type ReplyStatus = "queued" | "processing" | "sent" | "failed" | "skipped";
-type AttentionClassification = "purchase_intent" | "complaint" | "question" | "influencer" | "vip" | "spam" | "neutral";
-type ReplyMode = "manual" | "ai";
-
-interface CommentItem {
-  id: string;
-  source: "queue" | "attention";
-  platform: string;
-  commenter_username: string;
-  comment_text: string;
-  created_at: string;
-  status?: ReplyStatus;
-  ai_reply_draft?: string | null;
-  profile_tier?: string;
-  profile_score?: number;
-  weight?: number;
-  classification?: AttentionClassification;
-  ai_suggestion?: string | null;
-  sentiment?: string | null;
-  urgency?: string | null;
-  is_read?: boolean;
-  is_resolved?: boolean;
-}
-
-interface RateLimit {
-  platform: string;
-  last_reply_at: string | null;
-  cooldown_seconds: number;
-}
-
-const CLASSIFICATION_CONFIG: Record<AttentionClassification, { label: string; color: string; bg: string; icon: string }> = {
-  purchase_intent: { label: "Purchase Intent", color: "#16A34A", bg: "#DCFCE7", icon: "💰" },
-  complaint:       { label: "Complaint",        color: "#DC2626", bg: "#FEE2E2", icon: "⚠️" },
-  question:        { label: "Question",         color: "#2563EB", bg: "#DBEAFE", icon: "❓" },
-  influencer:      { label: "Influencer",       color: "#7C3AED", bg: "#EDE9FE", icon: "⭐" },
-  vip:             { label: "VIP",              color: "#D97706", bg: "#FEF3C7", icon: "👑" },
-  spam:            { label: "Spam",             color: "#6B7280", bg: "#F3F4F6", icon: "🚫" },
-  neutral:         { label: "Neutral",          color: "#374151", bg: "#F9FAFB", icon: "💬" },
+/* ── Token helpers ── */
+const platColor: Record<string, { bg: string; fg: string; label: string }> = {
+  ig: { bg: "var(--gv-color-error-50)",   fg: "var(--gv-color-error-700)",   label: "IG"  },
+  tt: { bg: "var(--gv-color-success-50)", fg: "var(--gv-color-success-800)", label: "TT"  },
+  yt: { bg: "var(--gv-color-error-50)",   fg: "var(--gv-color-error-800)",   label: "YT"  },
+  fb: { bg: "var(--gv-color-primary-50)", fg: "var(--gv-color-primary-700)", label: "FB"  },
 };
 
-const TIER_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  vip:    { label: "VIP",    color: "#D97706", bg: "#FEF3C7" },
-  high:   { label: "High",   color: "#16A34A", bg: "#DCFCE7" },
-  medium: { label: "Medium", color: "#2563EB", bg: "#DBEAFE" },
-  low:    { label: "Low",    color: "#6B7280", bg: "#F3F4F6" },
-  bot:    { label: "Bot",    color: "#9CA3AF", bg: "#F9FAFB" },
-};
-
-function PlatformBadge({ platform }: { platform: string }) {
+/* ── Shared micro-components ── */
+function PlatBadge({ plat }: { plat: string }) {
+  const c = platColor[plat] ?? platColor.ig;
   return (
     <span style={{
-      display: "inline-flex", alignItems: "center", gap: 4,
-      fontSize: 11, fontWeight: 600, padding: "2px 7px 2px 4px", borderRadius: 6,
-      background: "var(--gv-color-neutral-100)", color: "var(--gv-color-neutral-700)",
-    }}>
-      <PlatformIcon id={platform.toLowerCase()} size={13} />
-      {platform}
-    </span>
+      display: "inline-flex", alignItems: "center", justifyContent: "center",
+      width: 28, height: 28, borderRadius: "var(--gv-radius-full)",
+      background: c.bg, color: c.fg,
+      fontFamily: "var(--gv-font-mono)", fontSize: 9, fontWeight: 800,
+      letterSpacing: "0.04em", flexShrink: 0,
+    }}>{c.label}</span>
   );
 }
 
-function TierBadge({ tier }: { tier: string }) {
-  const cfg = TIER_CONFIG[tier] || TIER_CONFIG.medium;
+function Toggle({ on, onChange }: { on: boolean; onChange: () => void }) {
   return (
-    <span style={{
-      fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 5,
-      background: cfg.bg, color: cfg.color,
-    }}>
-      {cfg.label}
-    </span>
+    <button
+      onClick={onChange}
+      style={{
+        position: "relative", width: 34, height: 18, borderRadius: "var(--gv-radius-full)",
+        border: "none", cursor: "pointer", padding: 0, flexShrink: 0,
+        background: on ? "var(--gv-gradient-primary)" : "var(--gv-color-neutral-200)",
+        transition: "background var(--gv-duration-fast) var(--gv-easing-default)",
+      }}
+    >
+      <span style={{
+        position: "absolute", top: 3, left: on ? 19 : 3,
+        width: 12, height: 12, borderRadius: "50%",
+        background: on ? "var(--gv-color-bg-surface)" : "var(--gv-color-neutral-400)",
+        transition: "left var(--gv-duration-fast) var(--gv-easing-spring)",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+      }} />
+    </button>
   );
 }
 
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
-}
-
-function toDateKey(dateStr: string): string {
-  return dateStr.slice(0, 10);
-}
-
-function cache_label(s: string) { return `Cache ${s}`; }
-
-export default function AutoReplyPage() {
-  const [replyMode, setReplyMode]       = useState<ReplyMode>("ai");
-  const [selectedDateKey, setSDK]       = useState<string>(new Date().toISOString().slice(0, 10));
-  const [selectedId, setSelectedId]     = useState<string | null>(null);
-  const [comments, setComments]         = useState<CommentItem[]>([]);
-  const [rateLimits, setRateLimits]     = useState<RateLimit[]>([]);
-  const [loading, setLoading]           = useState(true);
-  const [mobileRightOpen, setMRO]       = useState(false);
-  const [manualReply, setManualReply]   = useState("");
-  const [aiEnabled, setAIEnabled]       = useState(true);
-  const [aiTone, setAITone]             = useState<"professional" | "friendly" | "casual">("friendly");
-  const [filter, setFilter]             = useState<"all" | "unreplied" | "replied">("unreplied");
-  const [sending, setSending]           = useState(false);
-  const [repliedComments, setReplied]   = useState<CommentItem[]>([]);
-
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    const [queueRes, attentionRes, rateLimitRes, sentRes, resolvedRes] = await Promise.all([
-      supabase.from("gv_reply_queue").select("*").eq("brand_id", DEMO_BRAND_ID)
-        .in("status", ["queued", "processing", "failed"]).order("weight", { ascending: false }).limit(100),
-      supabase.from("gv_attention_queue").select("*").eq("brand_id", DEMO_BRAND_ID)
-        .eq("is_resolved", false).order("created_at", { ascending: false }).limit(100),
-      supabase.from("gv_reply_rate_limit").select("platform,last_reply_at,cooldown_seconds").eq("brand_id", DEMO_BRAND_ID),
-      // Replied tab — sent/skipped queue items
-      supabase.from("gv_reply_queue").select("*").eq("brand_id", DEMO_BRAND_ID)
-        .in("status", ["sent", "skipped"]).order("updated_at", { ascending: false }).limit(100),
-      // Replied tab — resolved attention items
-      supabase.from("gv_attention_queue").select("*").eq("brand_id", DEMO_BRAND_ID)
-        .eq("is_resolved", true).order("updated_at", { ascending: false }).limit(100),
-    ]);
-
-    const mapQueue = (r: Record<string, unknown>): CommentItem => ({
-      id: r.id as string, source: "queue" as const,
-      platform: r.platform as string,
-      commenter_username: r.commenter_username as string,
-      comment_text: r.comment_text as string,
-      created_at: r.created_at as string,
-      status: r.status as ReplyStatus,
-      ai_reply_draft: r.ai_reply_draft as string | null,
-      profile_tier: r.profile_tier as string,
-      profile_score: r.profile_score as number,
-      weight: r.weight as number,
-    });
-
-    const mapAttention = (r: Record<string, unknown>): CommentItem => ({
-      id: r.id as string, source: "attention" as const,
-      platform: r.platform as string,
-      commenter_username: r.commenter_username as string,
-      comment_text: r.comment_text as string,
-      created_at: r.created_at as string,
-      classification: r.classification as AttentionClassification,
-      ai_suggestion: r.ai_suggestion as string | null,
-      sentiment: r.sentiment as string | null,
-      urgency: r.urgency as string | null,
-      is_read: r.is_read as boolean,
-      is_resolved: r.is_resolved as boolean,
-    });
-
-    const sort = (a: CommentItem, b: CommentItem) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-
-    setComments([
-      ...(queueRes.data ?? []).map(mapQueue),
-      ...(attentionRes.data ?? []).map(mapAttention),
-    ].sort(sort));
-
-    setReplied([
-      ...(sentRes.data ?? []).map(mapQueue),
-      ...(resolvedRes.data ?? []).map(mapAttention),
-    ].sort(sort));
-
-    setRateLimits((rateLimitRes.data ?? []) as RateLimit[]);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { fetchData(); }, [fetchData]);
-
-  /* ── 7D window: 3 days back + today + 3 ahead ── */
-  const sevenDays = useMemo(() => {
-    const days: string[] = [];
-    for (let i = -3; i <= 3; i++) {
-      const d = new Date();
-      d.setHours(0, 0, 0, 0);
-      d.setDate(d.getDate() + i);
-      days.push(d.toISOString().slice(0, 10));
-    }
-    return days;
-  }, []);
-
-  const countByDate = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const c of [...comments, ...repliedComments]) {
-      const key = toDateKey(c.created_at);
-      map[key] = (map[key] || 0) + 1;
-    }
-    return map;
-  }, [comments, repliedComments]);
-
-  const filteredComments = useMemo(() => {
-    const byDate = (arr: CommentItem[]) => arr.filter(c => toDateKey(c.created_at) === selectedDateKey);
-    if (filter === "unreplied") return byDate(comments);
-    if (filter === "replied")   return byDate(repliedComments);
-    return [...byDate(comments), ...byDate(repliedComments)]
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  }, [comments, repliedComments, selectedDateKey, filter]);
-
-  const selectedComment = [...comments, ...repliedComments].find(c => c.id === selectedId) ?? null;
-
-  const todayDateKey = new Date().toISOString().slice(0, 10);
-
-  /* ── Tab counts ── */
-  const countUnreplied = useMemo(() => comments.filter(c => toDateKey(c.created_at) === selectedDateKey).length, [comments, selectedDateKey]);
-  const countReplied   = useMemo(() => repliedComments.filter(c => toDateKey(c.created_at) === selectedDateKey).length, [repliedComments, selectedDateKey]);
-  const countAll       = countUnreplied + countReplied;
-
-  /* ── Send AI reply ── */
-  const handleSendAI = useCallback(async () => {
-    if (!selectedComment || sending) return;
-    const replyText = selectedComment.ai_reply_draft || selectedComment.ai_suggestion;
-    if (!replyText) return;
-    setSending(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/social-auto-reply`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${session?.access_token ?? ""}`,
-          },
-          body: JSON.stringify({
-            action: "send_single",
-            brand_id: DEMO_BRAND_ID,
-            queue_id: selectedComment.id,
-            reply_text: replyText,
-            source: selectedComment.source,
-          }),
-        }
-      );
-      if (res.ok) {
-        const sent = { ...selectedComment, status: "sent" as ReplyStatus };
-        setComments(prev => prev.filter(c => c.id !== selectedComment.id));
-        setReplied(prev => [sent, ...prev]);
-        setSelectedId(null);
-      } else {
-        const err = await res.json().catch(() => ({}));
-        console.error("[auto-reply] Send AI failed:", err);
-      }
-    } finally {
-      setSending(false);
-    }
-  }, [selectedComment, sending]);
-
-  /* ── Send manual reply ── */
-  const handleSendManual = useCallback(async () => {
-    if (!selectedComment || !manualReply.trim() || sending) return;
-    setSending(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/social-auto-reply`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${session?.access_token ?? ""}`,
-          },
-          body: JSON.stringify({
-            action: "send_single",
-            brand_id: DEMO_BRAND_ID,
-            queue_id: selectedComment.id,
-            reply_text: manualReply.trim(),
-            source: selectedComment.source,
-          }),
-        }
-      );
-      if (res.ok) {
-        setManualReply("");
-        const sent = { ...selectedComment, status: "sent" as ReplyStatus };
-        setComments(prev => prev.filter(c => c.id !== selectedComment.id));
-        setReplied(prev => [sent, ...prev]);
-        setSelectedId(null);
-      }
-    } finally {
-      setSending(false);
-    }
-  }, [selectedComment, manualReply, sending]);
-
-  /* ── Skip ── */
-  const handleSkip = useCallback(async () => {
-    if (!selectedComment || sending) return;
-    setSending(true);
-    try {
-      if (selectedComment.source === "queue") {
-        await supabase
-          .from("gv_reply_queue")
-          .update({ status: "skipped", updated_at: new Date().toISOString() })
-          .eq("id", selectedComment.id);
-      } else {
-        await supabase
-          .from("gv_attention_queue")
-          .update({ is_resolved: true, resolved_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-          .eq("id", selectedComment.id);
-      }
-      const skipped = { ...selectedComment, status: "skipped" as ReplyStatus, is_resolved: true };
-      setComments(prev => prev.filter(c => c.id !== selectedComment.id));
-      setReplied(prev => [skipped, ...prev]);
-      setSelectedId(null);
-    } finally {
-      setSending(false);
-    }
-  }, [selectedComment, sending]);
-
-  /* ════════════════════════════════════════════════════════════
-     LEFT COLUMN — NavColumn only
-  ════════════════════════════════════════════════════════════ */
-  const left = <NavColumn />;
-
-  /* ════════════════════════════════════════════════════════════
-     CENTER COLUMN — Single panel: tabs + comment list + compose
-  ════════════════════════════════════════════════════════════ */
-  const center = (
-    <div className="flex flex-col h-full overflow-hidden">
-
-      {/* ─── Header: title + 7D date strip ─── */}
-      <div
-        className="flex-shrink-0 px-5 pt-5 pb-4"
-        style={{ borderBottom: "1px solid var(--gv-color-neutral-200)", background: "var(--gv-color-bg-surface)" }}
-      >
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <h1 className="text-[22px] font-bold leading-tight"
-              style={{ color: "var(--gv-color-neutral-900)", fontFamily: "var(--gv-font-heading)" }}>
-              Reply
-            </h1>
-            <span className="gv-badge"
-              style={{ background: "var(--gv-color-neutral-100)", color: "var(--gv-color-neutral-700)" }}>
-              {filteredComments.length}/{comments.length}
-            </span>
-          </div>
-          {/* 7D date strip */}
-          <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
-            {sevenDays.map((dateStr) => {
-              const d          = new Date(dateStr + "T00:00:00");
-              const isToday    = dateStr === todayDateKey;
-              const isSelected = dateStr === selectedDateKey;
-              const dayName    = d.toLocaleDateString("en", { weekday: "short" });
-              const dayNum     = d.getDate();
-              const monthShort = d.toLocaleDateString("en", { month: "short" }).toUpperCase();
-              const hasDot     = (countByDate[dateStr] ?? 0) > 0;
-              const headerBg   = isSelected
-                ? "linear-gradient(135deg, #3D6562 0%, #5F8F8B 100%)"
-                : isToday ? "var(--gv-gradient-primary)"
-                : "var(--gv-color-neutral-200)";
-              const monthColor = (isSelected || isToday) ? "rgba(255,255,255,0.95)" : "var(--gv-color-neutral-500)";
-              const bodyBg     = isSelected ? "var(--gv-color-primary-100)" : isToday ? "var(--gv-color-primary-50)" : "var(--gv-color-bg-surface)";
-              const dayColor   = isSelected ? "var(--gv-color-primary-900)" : isToday ? "var(--gv-color-primary-700)" : "var(--gv-color-neutral-400)";
-              return (
-                <button
-                  key={dateStr}
-                  onClick={() => setSDK(dateStr)}
-                  className="flex-shrink-0 flex flex-col items-center gap-0.5 transition-all duration-200"
-                  style={{ cursor: "pointer", background: "none", border: "none", padding: 0 }}
-                >
-                  <div style={{ display: "inline-flex", flexDirection: "column", borderRadius: 12, overflow: "hidden", width: 52, userSelect: "none" }}>
-                    <div style={{ background: headerBg, padding: "5px 6px 4px", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <span style={{ fontFamily: "var(--gv-font-heading)", fontWeight: 700, fontSize: 8, color: monthColor, letterSpacing: "0.12em", textTransform: "uppercase" as const }}>
-                        {monthShort}
-                      </span>
-                    </div>
-                    <div style={{ background: bodyBg, padding: "4px 6px 5px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
-                      <span style={{ fontFamily: "var(--gv-font-heading)", fontWeight: 800, fontSize: 22, lineHeight: 1, color: dayColor, letterSpacing: "-0.03em" }}>
-                        {dayNum}
-                      </span>
-                      <span style={{ fontFamily: "var(--gv-font-body)", fontWeight: 500, fontSize: 8, color: "var(--gv-color-neutral-400)", letterSpacing: "0.06em", textTransform: "uppercase" as const }}>
-                        {dayName}
-                      </span>
-                    </div>
-                  </div>
-                  {hasDot && (
-                    <span style={{ width: 4, height: 4, borderRadius: "50%", background: isSelected ? "var(--gv-color-primary-600)" : isToday ? "var(--gv-color-primary-500)" : "var(--gv-color-neutral-300)" }} />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* ─── Segmented filter tabs — Tasks page style ─── */}
-      <div className="flex-shrink-0 px-4 py-3" style={{ borderBottom: "1px solid var(--gv-color-neutral-100)" }}>
-        <div
-          className="flex items-center"
-          style={{
-            background: "#F3F4F6",
-            borderRadius: "var(--gv-radius-full)",
-            padding: 4,
-            gap: 4,
-            height: 44,
-          }}
-        >
-          {([
-            { key: "all",       label: "All",       count: countAll },
-            { key: "unreplied", label: "Unreplied",  count: countUnreplied },
-            { key: "replied",   label: "Replied",   count: countReplied },
-          ] as { key: typeof filter; label: string; count: number }[]).map(f => {
-            const isActive = filter === f.key;
-            return (
-              <button
-                key={f.key}
-                onClick={() => setFilter(f.key)}
-                className="flex-1 text-center text-[13px] font-semibold transition-all duration-200"
-                style={{
-                  borderRadius: "var(--gv-radius-full)",
-                  padding: "8px 16px",
-                  background: isActive ? "var(--gv-color-bg-surface)" : "transparent",
-                  color: isActive ? "var(--gv-color-neutral-900)" : "var(--gv-color-neutral-400)",
-                  fontFamily: "var(--gv-font-body)",
-                  cursor: "pointer",
-                  border: "none",
-                  boxShadow: isActive ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
-                }}
-              >
-                {f.label}
-                {isActive && (
-                  <span style={{ opacity: 0.55, fontSize: 12, marginLeft: 4 }}>({f.count})</span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ─── Comment list — dynamic height ─── */}
-      <div
-        style={{
-          flex: selectedComment ? "0 0 42%" : "1 1 0%",
-          overflowY: "auto",
-          overflowX: "hidden",
-          minHeight: 0,
-        }}
-        className="flex flex-col gap-2 px-4 py-3"
-      >
-        {loading ? (
-          Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="rounded-[12px] animate-pulse h-[72px]" style={{ background: "var(--gv-color-neutral-100)" }} />
-          ))
-        ) : filteredComments.length === 0 ? (
-          <div className="flex flex-col items-center py-10 text-center">
-            <span className="text-[24px] mb-2">💬</span>
-            <p className="text-[12px] font-semibold" style={{ color: "var(--gv-color-neutral-600)" }}>
-              {filter === "replied" ? "No replied comments" : filter === "unreplied" ? "No unreplied comments" : "No comments"}
-            </p>
-            <p className="text-[10px] mt-1" style={{ color: "var(--gv-color-neutral-400)" }}>
-              {filter === "replied"
-                ? "Sent & skipped replies will appear here"
-                : filter === "unreplied"
-                ? (selectedDateKey === todayDateKey ? "All comments today have been replied to" : "No pending comments on this date")
-                : (selectedDateKey === todayDateKey ? "No comments today yet" : "No comments on this date")}
-            </p>
-          </div>
-        ) : (
-          filteredComments.map(item => {
-            const isSelected = selectedId === item.id;
-            const cls = item.classification ? CLASSIFICATION_CONFIG[item.classification] : null;
-            return (
-              <button
-                key={item.id}
-                onClick={() => {
-                  setSelectedId(isSelected ? null : item.id);
-                  if (!isSelected) setMRO(true);
-                }}
-                className="w-full text-left rounded-[12px] p-3 transition-all"
-                style={{
-                  background: isSelected ? "var(--gv-color-primary-50)" : "var(--gv-color-bg-surface)",
-                  border: `1.5px solid ${isSelected ? "var(--gv-color-primary-200)" : "var(--gv-color-neutral-100)"}`,
-                }}
-              >
-                <div className="flex items-start gap-2">
-                  {item.source === "attention" && !item.is_read && (
-                    <div className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5" style={{ background: "#DC2626" }} />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
-                      <span className="text-[12px] font-bold truncate" style={{ color: "var(--gv-color-neutral-900)" }}>
-                        @{item.commenter_username}
-                      </span>
-                      <PlatformIcon id={item.platform.toLowerCase()} size={12} />
-                      {cls && (
-                        <span className="text-[9px] font-bold rounded px-1.5 py-0.5 flex-shrink-0"
-                          style={{ background: cls.bg, color: cls.color }}>{cls.icon}</span>
-                      )}
-                      {item.urgency === "high" && (
-                        <span className="text-[9px] font-bold rounded px-1.5 py-0.5 flex-shrink-0"
-                          style={{ background: "#FEE2E2", color: "#DC2626" }}>!</span>
-                      )}
-                      {filter === "all" && (
-                        <span className="text-[9px] font-bold rounded px-1.5 py-0.5 flex-shrink-0" style={
-                          item.status === "sent"
-                            ? { background: "#DCFCE7", color: "#16A34A" }
-                            : item.status === "skipped" || item.is_resolved
-                            ? { background: "#F3F4F6", color: "#6B7280" }
-                            : { background: "#FEF3C7", color: "#D97706" }
-                        }>
-                          {item.status === "sent" ? "Replied" : item.status === "skipped" || item.is_resolved ? "Skipped" : "Unreplied"}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[11px] leading-relaxed line-clamp-2" style={{ color: "var(--gv-color-neutral-500)" }}>
-                      {item.comment_text}
-                    </p>
-                    {(item.ai_reply_draft || item.ai_suggestion) && (
-                      <p className="text-[10px] mt-1 italic line-clamp-1" style={{ color: "var(--gv-color-primary-500)" }}>
-                        AI: {item.ai_reply_draft || item.ai_suggestion}
-                      </p>
-                    )}
-                  </div>
-                  <span className="text-[10px] flex-shrink-0" style={{ color: "var(--gv-color-neutral-400)" }}>
-                    {timeAgo(item.created_at)}
-                  </span>
-                </div>
-              </button>
-            );
-          })
-        )}
-      </div>
-
-      {/* ─── Compose area — shown when a comment is selected ─── */}
-      {selectedComment && (
-        <div
-          className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-4"
-          style={{ borderTop: "1.5px solid var(--gv-color-neutral-100)", minHeight: 0 }}
-        >
-          {/* Comment bubble */}
-          <div className="rounded-[16px] p-4" style={{ background: "var(--gv-color-neutral-50)", border: "1px solid var(--gv-color-neutral-200)" }}>
-            <div className="flex items-center gap-2 mb-2 flex-wrap">
-              <span className="text-[14px] font-bold" style={{ color: "var(--gv-color-neutral-900)" }}>
-                @{selectedComment.commenter_username}
-              </span>
-              <PlatformBadge platform={selectedComment.platform} />
-              {selectedComment.profile_tier && <TierBadge tier={selectedComment.profile_tier} />}
-              {selectedComment.classification && (() => {
-                const cls = CLASSIFICATION_CONFIG[selectedComment.classification];
-                return (
-                  <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 5, background: cls.bg, color: cls.color }}>
-                    {cls.icon} {cls.label}
-                  </span>
-                );
-              })()}
-            </div>
-            <p className="text-[14px] leading-relaxed" style={{ color: "var(--gv-color-neutral-700)" }}>
-              {selectedComment.comment_text}
-            </p>
-            <p className="text-[11px] mt-2" style={{ color: "var(--gv-color-neutral-400)" }}>
-              {new Date(selectedComment.created_at).toLocaleString("id", { dateStyle: "medium", timeStyle: "short" })}
-            </p>
-          </div>
-
-          {/* Sentiment + Urgency (attention items only) */}
-          {selectedComment.source === "attention" && (selectedComment.sentiment || selectedComment.urgency) && (
-            <div className="flex gap-2">
-              {selectedComment.sentiment && (
-                <div className="flex-1 rounded-[12px] p-3" style={{ background: "var(--gv-color-bg-surface)", border: "1px solid var(--gv-color-neutral-100)" }}>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--gv-color-neutral-400)] mb-1">Sentiment</p>
-                  <p className="text-[13px] font-semibold capitalize" style={{ color: "var(--gv-color-neutral-800)" }}>{selectedComment.sentiment}</p>
-                </div>
-              )}
-              {selectedComment.urgency && (
-                <div className="flex-1 rounded-[12px] p-3" style={{ background: "var(--gv-color-bg-surface)", border: "1px solid var(--gv-color-neutral-100)" }}>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--gv-color-neutral-400)] mb-1">Urgency</p>
-                  <p className="text-[13px] font-semibold capitalize" style={{
-                    color: selectedComment.urgency === "high" ? "#DC2626" : selectedComment.urgency === "medium" ? "#D97706" : "var(--gv-color-neutral-800)"
-                  }}>{selectedComment.urgency}</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* MANUAL REPLY compose */}
-          {replyMode === "manual" && (
-            <div className="flex flex-col gap-3">
-              <p className="text-[12px] font-bold uppercase tracking-widest" style={{ color: "var(--gv-color-neutral-400)" }}>
-                Your Reply
-              </p>
-              <textarea
-                value={manualReply}
-                onChange={e => setManualReply(e.target.value)}
-                placeholder="Type your reply…"
-                rows={4}
-                className="w-full rounded-[14px] px-4 py-3 text-[14px] resize-none"
-                style={{
-                  background: "var(--gv-color-bg-surface)",
-                  border: "1.5px solid var(--gv-color-neutral-200)",
-                  outline: "none",
-                  color: "var(--gv-color-neutral-800)",
-                  lineHeight: 1.6,
-                }}
-              />
-              <div className="flex items-center justify-between">
-                <span className="text-[11px]" style={{ color: manualReply.length > 200 ? "#DC2626" : "var(--gv-color-neutral-400)" }}>
-                  {manualReply.length}/280
-                </span>
-                <button
-                  disabled={!manualReply.trim() || sending}
-                  onClick={handleSendManual}
-                  className="px-5 py-2 rounded-[12px] text-[13px] font-bold text-white transition-all"
-                  style={{
-                    background: manualReply.trim() && !sending ? "var(--gv-color-primary-600)" : "var(--gv-color-neutral-200)",
-                    color: manualReply.trim() && !sending ? "white" : "var(--gv-color-neutral-400)",
-                    cursor: manualReply.trim() && !sending ? "pointer" : "not-allowed",
-                  }}
-                >
-                  {sending ? "Sending…" : "Send Reply →"}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* AI AUTO REPLY compose */}
-          {replyMode === "ai" && (
-            <div className="flex flex-col gap-3">
-              {(selectedComment.ai_reply_draft || selectedComment.ai_suggestion) ? (
-                <>
-                  <div className="flex items-center gap-2">
-                    <p className="text-[12px] font-bold uppercase tracking-widest" style={{ color: "var(--gv-color-neutral-400)" }}>AI Draft Reply</p>
-                    <span className="text-[10px] font-bold rounded-full px-2 py-0.5"
-                      style={{ background: "var(--gv-color-primary-100)", color: "var(--gv-color-primary-700)" }}>
-                      Llama + Claude
-                    </span>
-                  </div>
-                  <div className="rounded-[14px] p-4" style={{ background: "var(--gv-color-primary-50)", border: "1.5px solid var(--gv-color-primary-200)" }}>
-                    <p className="text-[14px] italic leading-relaxed" style={{ color: "var(--gv-color-neutral-800)" }}>
-                      &ldquo;{selectedComment.ai_reply_draft || selectedComment.ai_suggestion}&rdquo;
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handleSendAI}
-                      disabled={sending}
-                      className="flex-1 py-2.5 rounded-[12px] text-[13px] font-bold text-white transition-all hover:opacity-85"
-                      style={{
-                        background: sending ? "var(--gv-color-neutral-300)" : "var(--gv-color-primary-600)",
-                        boxShadow: sending ? "none" : "0 3px 10px rgba(61,107,104,0.25)",
-                        cursor: sending ? "not-allowed" : "pointer",
-                      }}>
-                      {sending ? "Sending…" : "✓ Send AI Reply"}
-                    </button>
-                    <button
-                      className="px-4 py-2.5 rounded-[12px] text-[13px] font-semibold transition-all hover:opacity-80"
-                      onClick={() => { setManualReply(selectedComment.ai_reply_draft || selectedComment.ai_suggestion || ""); setReplyMode("manual"); }}
-                      style={{ background: "var(--gv-color-neutral-100)", color: "var(--gv-color-neutral-700)", cursor: "pointer" }}>
-                      Edit
-                    </button>
-                    <button
-                      onClick={handleSkip}
-                      disabled={sending}
-                      className="px-4 py-2.5 rounded-[12px] text-[13px] font-semibold transition-all hover:opacity-80"
-                      style={{ background: "#FEE2E2", color: "#DC2626", cursor: sending ? "not-allowed" : "pointer" }}>
-                      Skip
-                    </button>
-                  </div>
-                  <p className="text-[11px] text-center" style={{ color: "var(--gv-color-neutral-400)" }}>
-                    Reply will auto-send during cooldown window if not actioned
-                  </p>
-                </>
-              ) : (
-                <div className="rounded-[14px] p-4 text-center" style={{ background: "var(--gv-color-neutral-50)", border: "1px solid var(--gv-color-neutral-200)" }}>
-                  <p className="text-[13px] font-semibold" style={{ color: "var(--gv-color-neutral-600)" }}>⏳ AI draft generating…</p>
-                  <p className="text-[11px] mt-1" style={{ color: "var(--gv-color-neutral-400)" }}>Llama + Claude are composing a reply</p>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ─── Empty compose placeholder when nothing selected ─── */}
-      {!selectedComment && !loading && filteredComments.length > 0 && (
-        <div className="flex-shrink-0 px-5 py-4 flex items-center gap-3"
-          style={{ borderTop: "1px solid var(--gv-color-neutral-100)", background: "var(--gv-color-neutral-50)" }}>
-          <div className="w-8 h-8 rounded-[10px] flex items-center justify-center flex-shrink-0"
-            style={{ background: "var(--gv-color-neutral-100)" }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--gv-color-neutral-400)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
-            </svg>
-          </div>
-          <p className="text-[12px]" style={{ color: "var(--gv-color-neutral-400)" }}>
-            Select a comment above to compose a reply
-          </p>
-        </div>
-      )}
+function StatCard({ val, lbl }: { val: string; lbl: string }) {
+  return (
+    <div style={{
+      background: "var(--gv-color-bg-surface)", border: "1px solid var(--gv-color-neutral-100)",
+      borderRadius: "var(--gv-radius-md)", padding: "14px 16px",
+    }}>
+      <div style={{ fontFamily: "var(--gv-font-heading)", fontSize: "var(--gv-font-size-xl)", fontWeight: 800, color: "var(--gv-color-neutral-900)", lineHeight: 1 }}>{val}</div>
+      <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: 10, fontWeight: 600, color: "var(--gv-color-neutral-400)", letterSpacing: "0.08em", textTransform: "uppercase", marginTop: 4 }}>{lbl}</div>
     </div>
   );
+}
 
-  /* ════════════════════════════════════════════════════════════
-     RIGHT COLUMN — Settings only (mode switcher moved to bottom bar)
-  ════════════════════════════════════════════════════════════ */
-  const right = (
-    <div className="flex flex-col h-full">
+function BarRow({ label, val, max, plat }: { label: string; val: number; max: number; plat?: string }) {
+  const c = plat ? platColor[plat] : undefined;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+      {plat && <PlatBadge plat={plat} />}
+      {!plat && <span style={{ width: 80, fontSize: 11, color: "var(--gv-color-neutral-600)", fontWeight: 500, flexShrink: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>}
+      <div style={{ flex: 1, height: 6, borderRadius: "var(--gv-radius-full)", background: "var(--gv-color-neutral-100)", overflow: "hidden" }}>
+        <div style={{
+          height: "100%", width: `${(val / max) * 100}%`, borderRadius: "var(--gv-radius-full)",
+          background: c ? c.fg : "var(--gv-gradient-primary)", transition: "width 0.6s var(--gv-easing-spring)",
+        }} />
+      </div>
+      <span style={{ fontFamily: "var(--gv-font-mono)", fontSize: 10, fontWeight: 700, color: "var(--gv-color-neutral-500)", width: 28, textAlign: "right", flexShrink: 0 }}>{val}</span>
+    </div>
+  );
+}
 
-      {/* Settings content — scrollable */}
-      <div className="overflow-y-auto p-5 flex flex-col gap-5 h-full">
-        <p className="text-[11px] font-bold uppercase tracking-[0.1em]" style={{ color: "var(--gv-color-neutral-400)" }}>
-          Settings
+/* ────────────────────────────────────────────
+   MANUAL REPLY — Center
+──────────────────────────────────────────── */
+function ManualCenter() {
+  const [filter, setFilter]         = useState("all");
+  const [selected, setSelected]     = useState("c1");
+  const [replyText, setReplyText]   = useState("");
+  const [charCount, setCharCount]   = useState(0);
+  const [suggesting, setSuggesting] = useState(false);
+  const [sending, setSending]       = useState(false);
+  const [toast, setToast]           = useState<{ msg: string; ok: boolean } | null>(null);
+  const MAX_CHARS = 280;
+
+  const showToast = (msg: string, ok: boolean) => {
+    setToast({ msg, ok });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const getToken = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token ?? null;
+  };
+
+  const callSmartReply = async (payload: Record<string, unknown>) => {
+    const token = await getToken();
+    if (!token) throw new Error("Not authenticated");
+    const { data, error } = await supabase.functions.invoke("smart-reply-handler", {
+      body: payload,
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (error) throw error;
+    return data;
+  };
+
+  const handleSuggest = async (tone: string) => {
+    const c = MOCK_COMMENTS.find(x => x.id === selected);
+    if (!c) return;
+    setSuggesting(true);
+    try {
+      const res = await callSmartReply({
+        action: "suggest",
+        comment_text: c.txt,
+        comment_user: c.user,
+        platform: c.plat,
+        tone,
+      });
+      setReplyText(res.reply ?? "");
+      setCharCount((res.reply ?? "").length);
+    } catch (err) {
+      showToast("Gagal generate reply, coba lagi.", false);
+      console.error(err);
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
+  const handleSend = async () => {
+    const c = MOCK_COMMENTS.find(x => x.id === selected);
+    if (!c || !replyText.trim()) return;
+    setSending(true);
+    try {
+      await callSmartReply({
+        action: "send",
+        comment_text: c.txt,
+        comment_user: c.user,
+        platform: c.plat,
+        reply_text: replyText,
+      });
+      showToast("Reply terkirim!", true);
+      setReplyText("");
+      setCharCount(0);
+    } catch (err) {
+      showToast("Gagal mengirim reply, coba lagi.", false);
+      console.error(err);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const filters = [
+    { key: "all",     label: "All (12)"    },
+    { key: "ig",      label: "Instagram"   },
+    { key: "tt",      label: "TikTok"      },
+    { key: "yt",      label: "YouTube"     },
+    { key: "unread",  label: "Unread (2)"  },
+  ];
+
+  const visible = filter === "all" ? MOCK_COMMENTS
+    : filter === "unread" ? MOCK_COMMENTS.filter(c => c.unread)
+    : MOCK_COMMENTS.filter(c => c.plat === filter);
+
+  const selComment = MOCK_COMMENTS.find(c => c.id === selected);
+
+  const filterPill = (active: boolean): CSSProperties => ({
+    display: "inline-flex", alignItems: "center",
+    padding: "5px 12px", borderRadius: "var(--gv-radius-full)",
+    fontFamily: "var(--gv-font-mono)", fontSize: 10, fontWeight: 700,
+    letterSpacing: "0.04em", textTransform: "uppercase",
+    cursor: "pointer", flexShrink: 0,
+    background: active ? "var(--gv-gradient-primary)" : "var(--gv-color-bg-surface)",
+    color: active ? "var(--gv-color-bg-surface)" : "var(--gv-color-neutral-500)",
+    border: `1px solid ${active ? "transparent" : "var(--gv-color-neutral-200)"}`,
+    transition: "all var(--gv-duration-fast) var(--gv-easing-default)",
+  } as CSSProperties);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", position: "relative" }}>
+      {/* Toast */}
+      {toast && (
+        <div style={{
+          position: "absolute", top: 16, left: "50%", transform: "translateX(-50%)",
+          zIndex: 100, padding: "10px 18px", borderRadius: "var(--gv-radius-full)",
+          background: toast.ok ? "var(--gv-color-success-50)" : "var(--gv-color-error-50)",
+          border: `1px solid ${toast.ok ? "var(--gv-color-success-200)" : "var(--gv-color-error-200)"}`,
+          color: toast.ok ? "var(--gv-color-success-700)" : "var(--gv-color-error-700)",
+          fontSize: 12, fontWeight: 600, whiteSpace: "nowrap",
+          boxShadow: "var(--gv-shadow-md)",
+          animation: "gv-float-in 0.3s var(--gv-easing-spring) both",
+          pointerEvents: "none",
+        }}>
+          {toast.msg}
+        </div>
+      )}
+
+      {/* Header */}
+      <div style={{ padding: "20px 24px 0", flexShrink: 0 }}>
+        <h1 style={{ fontFamily: "var(--gv-font-heading)", fontSize: "var(--gv-font-size-2xl)", fontWeight: 800, color: "var(--gv-color-neutral-900)", letterSpacing: "-0.02em", marginBottom: 2 }}>
+          Manual Reply
+        </h1>
+        <p style={{ fontSize: 13, color: "var(--gv-color-neutral-500)", marginBottom: 14 }}>
+          Respond to comments with AI suggestions
         </p>
 
-        {/* AI Auto Reply toggle */}
-        <div className="rounded-[16px] overflow-hidden" style={{ border: "1px solid var(--gv-color-neutral-200)" }}>
-          <div className="px-4 py-3 flex items-center justify-between"
-            style={{ borderBottom: "1px solid var(--gv-color-neutral-100)", background: "var(--gv-color-neutral-50)" }}>
-            <div>
-              <p className="text-[13px] font-bold" style={{ color: "var(--gv-color-neutral-800)" }}>AI Auto Reply</p>
-              <p className="text-[11px] mt-0.5" style={{ color: "var(--gv-color-neutral-400)" }}>
-                {aiEnabled ? "Active — AI replies automatically" : "Paused — manual only"}
-              </p>
+        {/* Filter pills */}
+        <div style={{ display: "flex", gap: 6, overflowX: "auto", scrollbarWidth: "none", paddingBottom: 16, borderBottom: "1px solid var(--gv-color-neutral-100)" }}>
+          {filters.map(f => (
+            <button key={f.key} style={filterPill(filter === f.key)} onClick={() => setFilter(f.key)}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Queue label */}
+      <div style={{ padding: "12px 24px 6px", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ fontFamily: "var(--gv-font-mono)", fontSize: 9, fontWeight: 700, color: "var(--gv-color-neutral-400)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+          Comment Queue
+        </span>
+        <span style={{ fontFamily: "var(--gv-font-mono)", fontSize: 9, fontWeight: 600, color: "var(--gv-color-neutral-400)" }}>
+          {visible.length} comments
+        </span>
+      </div>
+
+      {/* Comment list */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "0 24px", scrollbarWidth: "none" }}>
+        {visible.map(c => (
+          <div
+            key={c.id}
+            onClick={() => setSelected(c.id)}
+            style={{
+              display: "flex", gap: 12, padding: "12px 14px",
+              borderRadius: "var(--gv-radius-md)", marginBottom: 4, cursor: "pointer",
+              background: selected === c.id ? "var(--gv-color-primary-50)" : "transparent",
+              borderLeft: selected === c.id ? `3px solid var(--gv-color-primary-500)` : "3px solid transparent",
+              transition: "all var(--gv-duration-fast) var(--gv-easing-default)",
+            }}
+          >
+            <PlatBadge plat={c.plat} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+                <span style={{ fontWeight: 600, fontSize: 12, color: "var(--gv-color-neutral-900)" }}>{c.user}</span>
+                {c.unread && <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--gv-color-primary-500)", flexShrink: 0 }} />}
+                <span style={{ marginLeft: "auto", fontFamily: "var(--gv-font-mono)", fontSize: 10, color: "var(--gv-color-neutral-400)", flexShrink: 0 }}>{c.time}</span>
+              </div>
+              <p style={{ fontSize: 12, color: "var(--gv-color-neutral-600)", lineHeight: 1.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.txt}</p>
             </div>
-            <button
-              onClick={() => setAIEnabled(!aiEnabled)}
-              className="w-12 h-6 rounded-full transition-all flex-shrink-0 relative"
-              style={{ background: aiEnabled ? "var(--gv-color-primary-600)" : "var(--gv-color-neutral-200)" }}
-            >
-              <span className="absolute top-0.5 bottom-0.5 w-5 h-5 rounded-full bg-white transition-all"
-                style={{ left: aiEnabled ? "calc(100% - 22px)" : 2, boxShadow: "0 1px 4px rgba(0,0,0,0.2)" }} />
+          </div>
+        ))}
+      </div>
+
+      {/* Composer */}
+      {selComment && (
+        <div style={{
+          flexShrink: 0, padding: 20, borderTop: "1px solid var(--gv-color-neutral-200)",
+          background: "var(--gv-color-bg-surface)",
+        }}>
+          {/* To line */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+            <span style={{ fontFamily: "var(--gv-font-mono)", fontSize: 10, fontWeight: 700, color: "var(--gv-color-neutral-400)", letterSpacing: "0.06em", textTransform: "uppercase", width: 28, flexShrink: 0 }}>To</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <PlatBadge plat={selComment.plat} />
+              <span style={{ fontSize: 13, fontWeight: 600, color: "var(--gv-color-neutral-800)" }}>{selComment.user}</span>
+            </div>
+          </div>
+
+          {/* AI tone buttons */}
+          <div style={{ display: "flex", gap: 6, marginBottom: 10, overflowX: "auto", scrollbarWidth: "none" }}>
+            {["professional","friendly","casual","empathetic"].map(tone => (
+              <button key={tone} disabled={suggesting} style={{
+                padding: "5px 12px", borderRadius: "var(--gv-radius-full)",
+                border: "1px solid var(--gv-color-neutral-200)", background: "transparent",
+                fontFamily: "var(--gv-font-mono)", fontSize: 10, fontWeight: 600,
+                color: "var(--gv-color-neutral-500)", cursor: suggesting ? "not-allowed" : "pointer", flexShrink: 0,
+                letterSpacing: "0.03em",
+                transition: "all var(--gv-duration-fast)",
+                opacity: suggesting ? 0.5 : 1,
+              }}
+              onMouseEnter={e => {
+                if (!suggesting) {
+                  (e.currentTarget as HTMLElement).style.background = "var(--gv-color-primary-50)";
+                  (e.currentTarget as HTMLElement).style.color = "var(--gv-color-primary-600)";
+                  (e.currentTarget as HTMLElement).style.borderColor = "var(--gv-color-primary-200)";
+                }
+              }}
+              onMouseLeave={e => {
+                (e.currentTarget as HTMLElement).style.background = "transparent";
+                (e.currentTarget as HTMLElement).style.color = "var(--gv-color-neutral-500)";
+                (e.currentTarget as HTMLElement).style.borderColor = "var(--gv-color-neutral-200)";
+              }}
+              onClick={() => handleSuggest(tone)}>
+                {tone.charAt(0).toUpperCase() + tone.slice(1)}
+              </button>
+            ))}
+            <button disabled={suggesting} style={{
+              padding: "5px 14px", borderRadius: "var(--gv-radius-full)",
+              border: "none", background: "var(--gv-gradient-primary)",
+              fontFamily: "var(--gv-font-mono)", fontSize: 10, fontWeight: 700,
+              color: "var(--gv-color-bg-surface)", cursor: suggesting ? "not-allowed" : "pointer", flexShrink: 0,
+              letterSpacing: "0.04em", opacity: suggesting ? 0.7 : 1,
+            }}
+            onClick={() => handleSuggest("friendly")}>
+              {suggesting ? "Generating…" : "✨ AI Suggest"}
             </button>
           </div>
 
-          {/* Tone picker */}
-          <div className="px-4 py-3">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--gv-color-neutral-400)] mb-2">Reply Tone</p>
-            <div className="flex gap-1.5">
-              {(["professional", "friendly", "casual"] as typeof aiTone[]).map(t => (
-                <button key={t} onClick={() => setAITone(t)}
-                  className="flex-1 py-1.5 rounded-[8px] text-[11px] font-semibold capitalize transition-all"
-                  style={{
-                    background: aiTone === t ? "var(--gv-color-primary-100)" : "var(--gv-color-neutral-50)",
-                    color: aiTone === t ? "var(--gv-color-primary-700)" : "var(--gv-color-neutral-500)",
-                    border: `1px solid ${aiTone === t ? "var(--gv-color-primary-200)" : "var(--gv-color-neutral-200)"}`,
-                    cursor: "pointer",
-                  }}>
-                  {t}
-                </button>
-              ))}
+          {/* Textarea */}
+          <textarea
+            value={replyText}
+            onChange={e => { setReplyText(e.target.value); setCharCount(e.target.value.length); }}
+            placeholder="Tulis balasan atau gunakan AI Suggest..."
+            rows={3}
+            style={{
+              width: "100%", resize: "none", outline: "none",
+              padding: "10px 12px", borderRadius: "var(--gv-radius-md)",
+              border: "1px solid var(--gv-color-neutral-200)",
+              background: "var(--gv-color-bg-base)",
+              fontSize: 13, color: "var(--gv-color-neutral-800)",
+              fontFamily: "var(--gv-font-body)", lineHeight: 1.6,
+              transition: "border-color var(--gv-duration-fast), box-shadow var(--gv-duration-fast)",
+              boxSizing: "border-box",
+            }}
+            onFocus={e => {
+              (e.currentTarget as HTMLElement).style.borderColor = "var(--gv-color-primary-400)";
+              (e.currentTarget as HTMLElement).style.boxShadow = "0 0 0 3px var(--gv-color-primary-100)";
+            }}
+            onBlur={e => {
+              (e.currentTarget as HTMLElement).style.borderColor = "var(--gv-color-neutral-200)";
+              (e.currentTarget as HTMLElement).style.boxShadow = "none";
+            }}
+          />
+
+          {/* Footer */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10 }}>
+            <span style={{
+              fontFamily: "var(--gv-font-mono)", fontSize: 10, fontWeight: 600,
+              color: charCount > MAX_CHARS * 0.9 ? "var(--gv-color-warning-600)" : "var(--gv-color-neutral-400)",
+            }}>
+              {charCount}/{MAX_CHARS}
+            </span>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => { setReplyText(""); setCharCount(0); }} style={{
+                padding: "8px 16px", borderRadius: "var(--gv-radius-md)",
+                border: "1px solid var(--gv-color-neutral-200)", background: "transparent",
+                fontSize: 12, fontWeight: 600, color: "var(--gv-color-neutral-600)", cursor: "pointer",
+              }}>
+                Clear
+              </button>
+              <button
+                onClick={handleSend}
+                disabled={sending || !replyText.trim()}
+                style={{
+                  padding: "8px 20px", borderRadius: "var(--gv-radius-md)",
+                  border: "none", background: "var(--gv-gradient-primary)",
+                  fontSize: 12, fontWeight: 700, color: "var(--gv-color-bg-surface)",
+                  cursor: sending || !replyText.trim() ? "not-allowed" : "pointer",
+                  boxShadow: "0 3px 12px rgba(95,143,139,0.35)",
+                  opacity: sending || !replyText.trim() ? 0.6 : 1,
+                  transition: "opacity var(--gv-duration-fast)",
+                }}
+              >
+                {sending ? "Sending…" : "Send Reply"}
+              </button>
             </div>
           </div>
         </div>
-
-        {/* Rate limits */}
-        <div className="rounded-[16px] overflow-hidden" style={{ border: "1px solid var(--gv-color-neutral-200)" }}>
-          <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--gv-color-neutral-100)", background: "var(--gv-color-neutral-50)" }}>
-            <p className="text-[13px] font-bold" style={{ color: "var(--gv-color-neutral-800)" }}>Rate Limits by Tier</p>
-            <p className="text-[11px] mt-0.5" style={{ color: "var(--gv-color-neutral-400)" }}>Cooldown + jitter per platform</p>
-          </div>
-          <div className="divide-y" style={{ borderColor: "var(--gv-color-neutral-100)" }}>
-            {[
-              { tier: "Basic",   cooldown: "10 min", jitter: "4 min", replies: "~6/h" },
-              { tier: "Premium", cooldown: "5 min",  jitter: "2 min", replies: "~12/h" },
-              { tier: "Partner", cooldown: "3 min",  jitter: "1 min", replies: "~20/h" },
-            ].map(t => (
-              <div key={t.tier} className="flex items-center justify-between px-4 py-2.5">
-                <div>
-                  <p className="text-[12px] font-semibold" style={{ color: "var(--gv-color-neutral-800)" }}>{t.tier}</p>
-                  <p className="text-[10px]" style={{ color: "var(--gv-color-neutral-400)" }}>{t.cooldown} + {t.jitter} jitter</p>
-                </div>
-                <span className="text-[11px] font-semibold px-2 py-1 rounded-[6px]"
-                  style={{ background: "var(--gv-color-neutral-100)", color: "var(--gv-color-neutral-700)" }}>
-                  {t.replies}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Profile tiers */}
-        <div className="rounded-[16px] overflow-hidden" style={{ border: "1px solid var(--gv-color-neutral-200)" }}>
-          <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--gv-color-neutral-100)", background: "var(--gv-color-neutral-50)" }}>
-            <p className="text-[13px] font-bold" style={{ color: "var(--gv-color-neutral-800)" }}>Smart Hash Profile Tiers</p>
-            <p className="text-[11px] mt-0.5" style={{ color: "var(--gv-color-neutral-400)" }}>SHA-256 profile cache — expiry per tier</p>
-          </div>
-          <div className="divide-y" style={{ borderColor: "var(--gv-color-neutral-100)" }}>
-            {[
-              { tier: "vip",    score: "≥85",   cache: "7d",  desc: "Influencer / verified / high-follower" },
-              { tier: "high",   score: "60–84", cache: "14d", desc: "Engaged, has bio & profile pic" },
-              { tier: "medium", score: "35–59", cache: "21d", desc: "Normal followers, partial profile" },
-              { tier: "low",    score: "<35",   cache: "30d", desc: "New accounts, minimal engagement" },
-              { tier: "bot",    score: "—",     cache: "30d", desc: "Bot pattern detected — auto-skip" },
-            ].map(t => (
-              <div key={t.tier} className="flex items-start justify-between px-4 py-2.5 gap-2">
-                <div>
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <TierBadge tier={t.tier} />
-                    <span className="text-[10px]" style={{ color: "var(--gv-color-neutral-400)" }}>Score: {t.score}</span>
-                  </div>
-                  <p className="text-[10px]" style={{ color: "var(--gv-color-neutral-400)" }}>{t.desc}</p>
-                </div>
-                <span className="text-[10px] font-medium flex-shrink-0 mt-1" style={{ color: "var(--gv-color-neutral-500)" }}>
-                  {cache_label(t.cache)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Live platform rate limit status */}
-        {rateLimits.length > 0 && (
-          <div className="rounded-[16px] overflow-hidden" style={{ border: "1px solid var(--gv-color-neutral-200)" }}>
-            <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--gv-color-neutral-100)", background: "var(--gv-color-neutral-50)" }}>
-              <p className="text-[13px] font-bold" style={{ color: "var(--gv-color-neutral-800)" }}>Live Platform Status</p>
-            </div>
-            <div className="divide-y" style={{ borderColor: "var(--gv-color-neutral-100)" }}>
-              {rateLimits.map(r => {
-                const lastMs   = r.last_reply_at ? new Date(r.last_reply_at).getTime() : 0;
-                const readyAt  = lastMs + (r.cooldown_seconds || 600) * 1000;
-                const isReady  = Date.now() >= readyAt;
-                const secsLeft = Math.max(0, Math.round((readyAt - Date.now()) / 1000));
-                return (
-                  <div key={r.platform} className="flex items-center justify-between px-4 py-2.5">
-                    <div className="flex items-center gap-2">
-                      <PlatformIcon id={r.platform.toLowerCase()} size={14} />
-                      <span className="text-[12px] font-medium capitalize" style={{ color: "var(--gv-color-neutral-700)" }}>{r.platform}</span>
-                    </div>
-                    <span style={{
-                      fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 5,
-                      background: isReady ? "#DCFCE7" : "#FEF3C7",
-                      color: isReady ? "#16A34A" : "#D97706",
-                    }}>
-                      {isReady ? "Ready" : `${secsLeft}s`}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-
+      )}
     </div>
   );
+}
 
+/* ────────────────────────────────────────────
+   MANUAL REPLY — Right
+──────────────────────────────────────────── */
+function ManualRight() {
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex-1 min-h-0">
-        <ThreeColumnLayout
-          left={left}
-          center={center}
-          right={right}
-          mobileRightOpen={mobileRightOpen}
-          onMobileBack={() => setMRO(false)}
-          mobileBackLabel="Reply"
-        />
+    <div style={{ padding: "20px 20px 100px" }}>
+      {/* Stats grid 2×2 */}
+      <p style={{ fontFamily: "var(--gv-font-mono)", fontSize: 9, fontWeight: 700, color: "var(--gv-color-neutral-400)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>Today's Stats</p>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 20 }}>
+        <StatCard val="47" lbl="Total Comments" />
+        <StatCard val="31" lbl="Replied" />
+        <StatCard val="16" lbl="Pending" />
+        <StatCard val="66%" lbl="Response Rate" />
       </div>
 
-      {/* ── Bottom mode bar — outside columns, floating glass pill, same as Studio ── */}
-      <nav
-        className="flex-shrink-0 flex justify-center pt-0 pb-4"
-        style={{ background: "var(--gv-color-bg-base)" }}
-      >
-        <div
-          className="overflow-hidden"
-          style={{
-            borderRadius: "var(--gv-radius-2xl)",
-            border: "1px solid var(--gv-color-glass-border)",
-            background: "var(--gv-color-glass-bg)",
-            backdropFilter: "blur(var(--gv-blur-lg))",
-            WebkitBackdropFilter: "blur(var(--gv-blur-lg))",
-            boxShadow: "var(--gv-shadow-sidebar)",
+      {/* Per-platform bars */}
+      <p style={{ fontFamily: "var(--gv-font-mono)", fontSize: 9, fontWeight: 700, color: "var(--gv-color-neutral-400)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>By Platform</p>
+      <div style={{ background: "var(--gv-color-bg-surface)", borderRadius: "var(--gv-radius-md)", padding: "14px 16px", marginBottom: 20, border: "1px solid var(--gv-color-neutral-100)" }}>
+        <BarRow label="Instagram" val={24} max={50} plat="ig" />
+        <BarRow label="TikTok" val={18} max={50} plat="tt" />
+        <BarRow label="YouTube" val={5} max={50} plat="yt" />
+      </div>
+
+      {/* AI Templates */}
+      <p style={{ fontFamily: "var(--gv-font-mono)", fontSize: 9, fontWeight: 700, color: "var(--gv-color-neutral-400)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>Quick Templates</p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {AI_TEMPLATES.map((t, i) => (
+          <div key={i} style={{
+            background: "var(--gv-color-bg-surface)", border: "1px solid var(--gv-color-neutral-100)",
+            borderRadius: "var(--gv-radius-md)", padding: "10px 14px", cursor: "pointer",
+            borderLeft: "3px solid var(--gv-color-primary-300)",
+            transition: "all var(--gv-duration-fast)",
           }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "var(--gv-color-primary-50)"; (e.currentTarget as HTMLElement).style.borderLeftColor = "var(--gv-color-primary-500)"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "var(--gv-color-bg-surface)"; (e.currentTarget as HTMLElement).style.borderLeftColor = "var(--gv-color-primary-300)"; }}
+          >
+            <span style={{ fontFamily: "var(--gv-font-mono)", fontSize: 9, fontWeight: 700, color: "var(--gv-color-primary-600)", letterSpacing: "0.06em", textTransform: "uppercase" }}>{t.cat}</span>
+            <p style={{ fontSize: 12, color: "var(--gv-color-neutral-600)", lineHeight: 1.5, marginTop: 4 }}>{t.txt}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────
+   AUTO REPLY — Center
+──────────────────────────────────────────── */
+function AutoCenter() {
+  const [autoEnabled, setAutoEnabled] = useState(true);
+  const [rules, setRules]             = useState(MOCK_RULES);
+
+  const toggleRule = (id: string) =>
+    setRules(prev => prev.map(r => r.id === id ? { ...r, active: !r.active } : r));
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+      {/* Header */}
+      <div style={{ padding: "20px 24px 16px", flexShrink: 0, borderBottom: "1px solid var(--gv-color-neutral-100)" }}>
+        <h1 style={{ fontFamily: "var(--gv-font-heading)", fontSize: "var(--gv-font-size-2xl)", fontWeight: 800, color: "var(--gv-color-neutral-900)", letterSpacing: "-0.02em", marginBottom: 2 }}>
+          Auto Reply
+        </h1>
+        <p style={{ fontSize: 13, color: "var(--gv-color-neutral-500)" }}>
+          Automated keyword-triggered responses
+        </p>
+      </div>
+
+      {/* Auto enable status card */}
+      <div style={{ margin: "16px 24px 0", flexShrink: 0, background: autoEnabled ? "var(--gv-color-success-50)" : "var(--gv-color-neutral-50)", border: `1px solid ${autoEnabled ? "var(--gv-color-success-200)" : "var(--gv-color-neutral-200)"}`, borderRadius: "var(--gv-radius-lg)", padding: "14px 18px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{
+              width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
+              background: autoEnabled ? "var(--gv-color-success-500)" : "var(--gv-color-neutral-300)",
+              boxShadow: autoEnabled ? "0 0 0 3px var(--gv-color-success-100)" : "none",
+            }} />
+            <span style={{ fontSize: 13, fontWeight: 700, color: autoEnabled ? "var(--gv-color-success-800)" : "var(--gv-color-neutral-600)" }}>
+              {autoEnabled ? "Auto Reply Active" : "Auto Reply Paused"}
+            </span>
+          </div>
+          <Toggle on={autoEnabled} onChange={() => setAutoEnabled(v => !v)} />
+        </div>
+
+        {/* Stats row */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+          {[{ val: "124", lbl: "Replied Today" }, { val: "98%", lbl: "Accuracy" }, { val: "2.1s", lbl: "Avg Response" }].map(s => (
+            <div key={s.lbl} style={{ textAlign: "center" }}>
+              <div style={{ fontFamily: "var(--gv-font-heading)", fontSize: "var(--gv-font-size-lg)", fontWeight: 800, color: autoEnabled ? "var(--gv-color-success-700)" : "var(--gv-color-neutral-500)" }}>{s.val}</div>
+              <div style={{ fontFamily: "var(--gv-font-mono)", fontSize: 9, fontWeight: 600, color: "var(--gv-color-neutral-400)", letterSpacing: "0.08em", textTransform: "uppercase", marginTop: 2 }}>{s.lbl}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Rules header */}
+      <div style={{ padding: "16px 24px 8px", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ fontFamily: "var(--gv-font-mono)", fontSize: 9, fontWeight: 700, color: "var(--gv-color-neutral-400)", letterSpacing: "0.1em", textTransform: "uppercase" }}>Reply Rules ({rules.length})</span>
+        <span style={{ fontFamily: "var(--gv-font-mono)", fontSize: 9, fontWeight: 600, color: "var(--gv-color-success-600)" }}>{rules.filter(r => r.active).length} active</span>
+      </div>
+
+      {/* Rules list */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "0 24px 16px", scrollbarWidth: "none" }}>
+        {rules.map(rule => (
+          <div key={rule.id} style={{
+            background: "var(--gv-color-bg-surface)", border: "1px solid var(--gv-color-neutral-100)",
+            borderRadius: "var(--gv-radius-md)", padding: "14px 16px", marginBottom: 8,
+            opacity: rule.active ? 1 : 0.6,
+            transition: "opacity var(--gv-duration-fast)",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "var(--gv-color-neutral-900)" }}>{rule.name}</span>
+                <div style={{ display: "flex", gap: 4 }}>
+                  {rule.platforms.map(p => <PlatBadge key={p} plat={p} />)}
+                </div>
+              </div>
+              <Toggle on={rule.active} onChange={() => toggleRule(rule.id)} />
+            </div>
+
+            {/* Keywords */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 8 }}>
+              {rule.keywords.map(kw => (
+                <span key={kw} style={{
+                  padding: "3px 8px", borderRadius: "var(--gv-radius-full)",
+                  background: "var(--gv-color-primary-50)", color: "var(--gv-color-primary-700)",
+                  fontFamily: "var(--gv-font-mono)", fontSize: 10, fontWeight: 600,
+                  border: "1px solid var(--gv-color-primary-100)",
+                }}>{kw}</span>
+              ))}
+            </div>
+
+            {/* Preview */}
+            <div style={{ borderLeft: "2px solid var(--gv-color-primary-300)", paddingLeft: 10 }}>
+              <p style={{ fontSize: 11, color: "var(--gv-color-neutral-600)", lineHeight: 1.5, margin: 0 }}>{rule.action}</p>
+            </div>
+          </div>
+        ))}
+
+        {/* Add rule CTA */}
+        <button style={{
+          width: "100%", padding: "14px", borderRadius: "var(--gv-radius-md)",
+          border: "2px dashed var(--gv-color-neutral-200)", background: "transparent",
+          fontSize: 13, fontWeight: 600, color: "var(--gv-color-neutral-500)", cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+          transition: "all var(--gv-duration-fast)",
+        }}
+        onMouseEnter={e => {
+          (e.currentTarget as HTMLElement).style.background = "var(--gv-color-primary-50)";
+          (e.currentTarget as HTMLElement).style.borderColor = "var(--gv-color-primary-300)";
+          (e.currentTarget as HTMLElement).style.color = "var(--gv-color-primary-600)";
+        }}
+        onMouseLeave={e => {
+          (e.currentTarget as HTMLElement).style.background = "transparent";
+          (e.currentTarget as HTMLElement).style.borderColor = "var(--gv-color-neutral-200)";
+          (e.currentTarget as HTMLElement).style.color = "var(--gv-color-neutral-500)";
+        }}
         >
-          <div className="flex items-center px-3 py-2 gap-1">
-            {([
-              {
-                key: "manual" as ReplyMode,
-                label: "Manual Reply",
-                icon: (
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
-                    <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                  </svg>
-                ),
-              },
-              {
-                key: "ai" as ReplyMode,
-                label: "AI Auto Reply",
-                icon: (
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 2 L14 10 L22 12 L14 14 L12 22 L10 14 L2 12 L10 10 Z" />
-                  </svg>
-                ),
-              },
-            ]).map((mode) => {
-              const isActive = replyMode === mode.key;
+          <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>
+          Add New Rule
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────
+   AUTO REPLY — Right
+──────────────────────────────────────────── */
+function AutoRight() {
+  return (
+    <div style={{ padding: "20px 20px 100px" }}>
+      {/* Performance */}
+      <p style={{ fontFamily: "var(--gv-font-mono)", fontSize: 9, fontWeight: 700, color: "var(--gv-color-neutral-400)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>Performance (7d)</p>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 20 }}>
+        <StatCard val="867" lbl="Auto Replies" />
+        <StatCard val="94%" lbl="Accuracy" />
+        <StatCard val="1.8s" lbl="Avg Response" />
+        <StatCard val="4" lbl="Rules Active" />
+      </div>
+
+      {/* Rule triggers */}
+      <p style={{ fontFamily: "var(--gv-font-mono)", fontSize: 9, fontWeight: 700, color: "var(--gv-color-neutral-400)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>Rule Triggers Today</p>
+      <div style={{ background: "var(--gv-color-bg-surface)", borderRadius: "var(--gv-radius-md)", padding: "14px 16px", marginBottom: 20, border: "1px solid var(--gv-color-neutral-100)" }}>
+        <BarRow label="Greeting"    val={52} max={100} />
+        <BarRow label="Price"       val={38} max={100} />
+        <BarRow label="Thank You"   val={27} max={100} />
+        <BarRow label="Reseller"    val={7}  max={100} />
+      </div>
+
+      {/* Activity log */}
+      <p style={{ fontFamily: "var(--gv-font-mono)", fontSize: 9, fontWeight: 700, color: "var(--gv-color-neutral-400)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>Activity Log</p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {LOG_ITEMS.map((log, i) => (
+          <div key={i} style={{
+            display: "flex", alignItems: "center", gap: 10,
+            background: "var(--gv-color-bg-surface)", border: "1px solid var(--gv-color-neutral-100)",
+            borderRadius: "var(--gv-radius-md)", padding: "10px 12px",
+          }}>
+            <PlatBadge plat={log.plat} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: 11, fontWeight: 600, color: "var(--gv-color-neutral-800)", marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{log.user}</p>
+              <p style={{ fontSize: 10, color: "var(--gv-color-neutral-500)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{log.action}</p>
+            </div>
+            <span style={{ fontFamily: "var(--gv-font-mono)", fontSize: 9, color: "var(--gv-color-neutral-400)", flexShrink: 0 }}>{log.time}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────
+   SETTING — Center
+──────────────────────────────────────────── */
+function SettingCenter() {
+  const [platforms, setPlatforms] = useState(PLATFORMS_SETTING);
+  const [activeTone, setActiveTone] = useState("friendly");
+  const [limits, setLimits] = useState({ perHour: 30, perDay: 200, delayMin: 5 });
+
+  const togglePlatform = (key: string) =>
+    setPlatforms(prev => prev.map(p => p.key === key ? { ...p, connected: !p.connected } : p));
+
+  return (
+    <div style={{ overflowY: "auto", height: "100%", scrollbarWidth: "none" }}>
+      <div style={{ padding: "20px 24px 100px" }}>
+        {/* Header */}
+        <h1 style={{ fontFamily: "var(--gv-font-heading)", fontSize: "var(--gv-font-size-2xl)", fontWeight: 800, color: "var(--gv-color-neutral-900)", letterSpacing: "-0.02em", marginBottom: 2 }}>
+          Settings
+        </h1>
+        <p style={{ fontSize: 13, color: "var(--gv-color-neutral-500)", marginBottom: 24 }}>
+          Configure platforms, AI tone, and reply limits
+        </p>
+
+        {/* Platform connections */}
+        <div style={{ marginBottom: 28 }}>
+          <p style={{ fontFamily: "var(--gv-font-mono)", fontSize: 9, fontWeight: 700, color: "var(--gv-color-neutral-400)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>Platform Connections</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {platforms.map(p => {
+              const c = platColor[p.key] ?? platColor.ig;
               return (
-                <button
-                  key={mode.key}
-                  onClick={() => setReplyMode(mode.key)}
-                  className="flex items-center gap-2 h-10 px-4 transition-all duration-200"
-                  style={{
-                    borderRadius: "var(--gv-radius-full)",
-                    background: isActive ? "var(--gv-color-primary-50)" : "transparent",
-                    color: isActive ? "var(--gv-color-primary-500)" : "var(--gv-color-neutral-700)",
-                    border: isActive ? "1px solid rgba(95,143,139,0.3)" : "1px solid transparent",
-                  }}
-                >
-                  <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center">
-                    {mode.icon}
-                  </span>
-                  <span className="text-[13px] font-[550] whitespace-nowrap leading-none">{mode.label}</span>
+                <div key={p.key} style={{
+                  display: "flex", alignItems: "center", gap: 14,
+                  background: "var(--gv-color-bg-surface)", border: "1px solid var(--gv-color-neutral-100)",
+                  borderRadius: "var(--gv-radius-md)", padding: "14px 16px",
+                }}>
+                  <span style={{
+                    width: 36, height: 36, borderRadius: "var(--gv-radius-md)",
+                    background: c.bg, color: c.fg,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontFamily: "var(--gv-font-mono)", fontSize: 10, fontWeight: 800, flexShrink: 0,
+                  }}>{c.label}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: "var(--gv-color-neutral-900)", marginBottom: 2 }}>{p.name}</p>
+                    <p style={{ fontSize: 11, color: "var(--gv-color-neutral-500)" }}>{p.account}</p>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{
+                      padding: "4px 10px", borderRadius: "var(--gv-radius-full)",
+                      fontFamily: "var(--gv-font-mono)", fontSize: 9, fontWeight: 700,
+                      letterSpacing: "0.06em", textTransform: "uppercase",
+                      background: p.connected ? "var(--gv-color-success-50)" : "var(--gv-color-neutral-100)",
+                      color: p.connected ? "var(--gv-color-success-700)" : "var(--gv-color-neutral-400)",
+                    }}>{p.connected ? "Connected" : "Disconnected"}</span>
+                    <Toggle on={p.connected} onChange={() => togglePlatform(p.key)} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* AI Tone */}
+        <div style={{ marginBottom: 28 }}>
+          <p style={{ fontFamily: "var(--gv-font-mono)", fontSize: 9, fontWeight: 700, color: "var(--gv-color-neutral-400)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>AI Reply Tone</p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+            {TONE_OPTIONS.map(tone => {
+              const active = activeTone === tone.key;
+              return (
+                <button key={tone.key} onClick={() => setActiveTone(tone.key)} style={{
+                  padding: "14px 12px", borderRadius: "var(--gv-radius-md)", cursor: "pointer",
+                  border: `2px solid ${active ? "var(--gv-color-primary-500)" : "var(--gv-color-neutral-200)"}`,
+                  background: active ? "var(--gv-color-primary-50)" : "var(--gv-color-bg-surface)",
+                  textAlign: "center", transition: "all var(--gv-duration-fast) var(--gv-easing-default)",
+                }}>
+                  <div style={{ fontSize: 20, lineHeight: 1, marginBottom: 6 }}>{tone.icon}</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: active ? "var(--gv-color-primary-700)" : "var(--gv-color-neutral-800)", marginBottom: 3 }}>{tone.name}</div>
+                  <div style={{ fontSize: 10, color: "var(--gv-color-neutral-400)", lineHeight: 1.4 }}>{tone.desc}</div>
                 </button>
               );
             })}
           </div>
         </div>
-      </nav>
+
+        {/* Limits */}
+        <div>
+          <p style={{ fontFamily: "var(--gv-font-mono)", fontSize: 9, fontWeight: 700, color: "var(--gv-color-neutral-400)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>Reply Limits & Schedule</p>
+          <div style={{ background: "var(--gv-color-bg-surface)", border: "1px solid var(--gv-color-neutral-100)", borderRadius: "var(--gv-radius-md)", overflow: "hidden" }}>
+            {[
+              { key: "perHour", label: "Max replies per hour", max: 100 },
+              { key: "perDay",  label: "Max replies per day",  max: 500 },
+              { key: "delayMin",label: "Min delay between replies (sec)", max: 60 },
+            ].map((item, idx) => (
+              <div key={item.key} style={{
+                display: "flex", alignItems: "center", gap: 16, padding: "14px 16px",
+                borderTop: idx > 0 ? "1px solid var(--gv-color-neutral-100)" : "none",
+              }}>
+                <span style={{ flex: 1, fontSize: 13, color: "var(--gv-color-neutral-700)" }}>{item.label}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <input
+                    type="range"
+                    min={1} max={item.max}
+                    value={limits[item.key as keyof typeof limits]}
+                    onChange={e => setLimits(prev => ({ ...prev, [item.key]: +e.target.value }))}
+                    style={{ width: 100, accentColor: "var(--gv-color-primary-500)" }}
+                  />
+                  <span style={{
+                    fontFamily: "var(--gv-font-mono)", fontSize: 12, fontWeight: 700,
+                    color: "var(--gv-color-primary-600)", width: 36, textAlign: "right",
+                  }}>
+                    {limits[item.key as keyof typeof limits]}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
+  );
+}
+
+/* ────────────────────────────────────────────
+   SETTING — Right
+──────────────────────────────────────────── */
+function SettingRight() {
+  return (
+    <div style={{ padding: "20px 20px 100px" }}>
+      {/* System status */}
+      <p style={{ fontFamily: "var(--gv-font-mono)", fontSize: 9, fontWeight: 700, color: "var(--gv-color-neutral-400)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>System Status</p>
+      <div style={{ background: "var(--gv-color-bg-surface)", border: "1px solid var(--gv-color-neutral-100)", borderRadius: "var(--gv-radius-md)", padding: "14px 16px", marginBottom: 20 }}>
+        {[
+          { label: "AI Engine",     status: "Operational" },
+          { label: "Comment Sync",  status: "Operational" },
+          { label: "Rate Limiter",  status: "Operational" },
+          { label: "Queue Worker",  status: "Idle"        },
+        ].map((s, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: i < 3 ? 10 : 0, marginBottom: i < 3 ? 10 : 0, borderBottom: i < 3 ? "1px solid var(--gv-color-neutral-100)" : "none" }}>
+            <span style={{ fontSize: 12, color: "var(--gv-color-neutral-700)" }}>{s.label}</span>
+            <span style={{
+              display: "flex", alignItems: "center", gap: 5,
+              fontFamily: "var(--gv-font-mono)", fontSize: 10, fontWeight: 700,
+              color: s.status === "Operational" ? "var(--gv-color-success-700)" : "var(--gv-color-neutral-400)",
+            }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: s.status === "Operational" ? "var(--gv-color-success-500)" : "var(--gv-color-neutral-300)", flexShrink: 0 }} />
+              {s.status}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* Platform health */}
+      <p style={{ fontFamily: "var(--gv-font-mono)", fontSize: 9, fontWeight: 700, color: "var(--gv-color-neutral-400)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>Platform Health</p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
+        {[
+          { plat: "ig", label: "Instagram",  health: 98 },
+          { plat: "tt", label: "TikTok",     health: 96 },
+        ].map(p => (
+          <div key={p.plat} style={{
+            display: "flex", alignItems: "center", gap: 12,
+            background: "var(--gv-color-bg-surface)", border: "1px solid var(--gv-color-neutral-100)",
+            borderRadius: "var(--gv-radius-md)", padding: "10px 14px",
+          }}>
+            <PlatBadge plat={p.plat} />
+            <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: "var(--gv-color-neutral-800)" }}>{p.label}</span>
+            <span style={{
+              fontFamily: "var(--gv-font-mono)", fontSize: 11, fontWeight: 800,
+              color: "var(--gv-color-success-700)",
+            }}>{p.health}%</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Quick actions */}
+      <p style={{ fontFamily: "var(--gv-font-mono)", fontSize: 9, fontWeight: 700, color: "var(--gv-color-neutral-400)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>Quick Actions</p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {[
+          { label: "Test Auto Reply",   desc: "Send a test comment trigger" },
+          { label: "Sync Comments",     desc: "Force refresh comment queue" },
+          { label: "Export Reply Log",  desc: "Download CSV of all replies" },
+          { label: "Reset Statistics",  desc: "Clear today's counters" },
+        ].map((a, i) => (
+          <button key={i} style={{
+            width: "100%", textAlign: "left", padding: "10px 14px",
+            borderRadius: "var(--gv-radius-md)", border: "1px solid var(--gv-color-neutral-200)",
+            background: "var(--gv-color-bg-surface)", cursor: "pointer",
+            transition: "all var(--gv-duration-fast)",
+          }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "var(--gv-color-primary-50)"; (e.currentTarget as HTMLElement).style.borderColor = "var(--gv-color-primary-200)"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "var(--gv-color-bg-surface)"; (e.currentTarget as HTMLElement).style.borderColor = "var(--gv-color-neutral-200)"; }}
+          >
+            <p style={{ fontSize: 12, fontWeight: 600, color: "var(--gv-color-neutral-800)", marginBottom: 2 }}>{a.label}</p>
+            <p style={{ fontSize: 11, color: "var(--gv-color-neutral-400)" }}>{a.desc}</p>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────
+   Page root
+──────────────────────────────────────────── */
+export default function AutoReplyPage() {
+  const [activeTab, setActiveTab] = useState("Manual Reply");
+
+  const centerMap: Record<string, React.ReactNode> = {
+    "Manual Reply": <ManualCenter />,
+    "Auto Reply":   <AutoCenter />,
+    "Setting":      <SettingCenter />,
+  };
+  const rightMap: Record<string, React.ReactNode> = {
+    "Manual Reply": <ManualRight />,
+    "Auto Reply":   <AutoRight />,
+    "Setting":      <SettingRight />,
+  };
+
+  return (
+    <AppShell
+      activeSubItem={activeTab}
+      onSubMenuChange={(_, tab) => setActiveTab(tab)}
+      center={centerMap[activeTab] ?? null}
+      right={rightMap[activeTab] ?? null}
+    />
   );
 }

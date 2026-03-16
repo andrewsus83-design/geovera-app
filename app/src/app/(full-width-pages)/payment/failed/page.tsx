@@ -3,44 +3,55 @@ import Link from "next/link";
 
 export default function PaymentFailedPage() {
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden shadow-sm">
-          <div className="p-10 flex flex-col items-center gap-4 text-center">
-            <div className="h-14 w-14 rounded-full bg-red-50 dark:bg-red-500/10 flex items-center justify-center">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-red-500">
-                <circle cx="12" cy="12" r="10" />
-                <line x1="15" y1="9" x2="9" y2="15" />
-                <line x1="9" y1="9" x2="15" y2="15" />
-              </svg>
+    <div style={{ minHeight: "100vh", background: "var(--gv-color-bg-base)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div style={{ width: "100%", maxWidth: 460 }}>
+        <div style={{ background: "var(--gv-color-bg-surface)", border: "1.5px solid var(--gv-color-neutral-200)", borderRadius: "var(--gv-radius-xl)", overflow: "hidden", boxShadow: "var(--gv7-depth-2)", textAlign: "center" }}>
+          {/* Hero */}
+          <div style={{ padding: "40px 32px 32px", background: "var(--gv-color-primary-900)", position: "relative", overflow: "hidden" }}>
+            <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at 50% 0%, rgba(239,68,68,0.12) 0%, transparent 70%)" }} />
+            <div style={{ width: 72, height: 72, borderRadius: "50%", margin: "0 auto 16px", position: "relative", zIndex: 1, background: "rgba(239,68,68,0.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ width: 44, height: 44, borderRadius: "50%", background: "var(--gv-color-danger-500)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 20px rgba(239,68,68,0.4)" }}>
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path d="M5 5l10 10M15 5L5 15" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+                </svg>
+              </div>
             </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900 dark:text-white" style={{ fontFamily: "Georgia, serif" }}>
-                Payment Failed
-              </h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                Your payment could not be completed. No charges were made.
-              </p>
+            <div style={{ fontFamily: "var(--gv-font-heading)", fontSize: 24, fontWeight: 900, color: "var(--gv-color-bg-surface)", letterSpacing: "-0.04em", marginBottom: 6, position: "relative", zIndex: 1 }}>
+              Pembayaran Gagal
             </div>
-            <div className="w-full space-y-2">
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", lineHeight: 1.6, position: "relative", zIndex: 1 }}>
+              Pembayaran tidak dapat diselesaikan
+            </div>
+          </div>
+
+          {/* Body */}
+          <div style={{ padding: "24px 32px" }}>
+            <p style={{ fontSize: 14, color: "var(--gv-color-neutral-500)", fontFamily: "var(--gv-font-body)", marginBottom: 24, lineHeight: 1.6 }}>
+              Terjadi kesalahan saat memproses pembayaran kamu. Silakan coba lagi atau hubungi tim support kami.
+            </p>
+            <div style={{ display: "flex", gap: 10 }}>
               <Link
-                href="/"
-                className="w-full rounded-xl bg-brand-500 px-4 py-3 text-sm font-semibold text-white hover:bg-brand-600 transition-colors text-center block"
+                href="/pricing"
+                style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--gv-gradient-primary)", color: "white", borderRadius: "var(--gv-radius-sm)", padding: "11px 20px", fontSize: 13, fontWeight: 700, textDecoration: "none", fontFamily: "var(--gv-font-body)", boxShadow: "0 3px 12px rgba(95,143,139,0.3)" }}
               >
-                Try Again
+                Coba Lagi
               </Link>
               <Link
-                href="/"
-                className="w-full rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-center block"
+                href="/analytics"
+                style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--gv-color-bg-surface)", color: "var(--gv-color-neutral-700)", border: "1.5px solid var(--gv-color-neutral-200)", borderRadius: "var(--gv-radius-sm)", padding: "11px 20px", fontSize: 13, fontWeight: 700, textDecoration: "none", fontFamily: "var(--gv-font-body)" }}
               >
-                Return to Dashboard
+                Dashboard
               </Link>
             </div>
           </div>
+
+          {/* Footer */}
+          <div style={{ padding: "12px 24px", borderTop: "1px solid var(--gv-color-neutral-100)", background: "var(--gv-color-bg-surface-elevated)", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+            <span style={{ fontSize: 11, color: "var(--gv-color-neutral-400)", fontFamily: "var(--gv-font-body)" }}>
+              Butuh bantuan? <strong style={{ color: "var(--gv-color-neutral-600)" }}>support@geovera.xyz</strong>
+            </span>
+          </div>
         </div>
-        <p className="text-center text-xs text-gray-400 mt-4">
-          Need help? Contact us at <span className="font-medium">support@geovera.xyz</span>
-        </p>
       </div>
     </div>
   );
