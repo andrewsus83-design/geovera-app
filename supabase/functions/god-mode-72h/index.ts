@@ -8,7 +8,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // ════════════════════════════════════════════════
 
 // ── TYPES ──
-type PersonaId = "ceo"|"cbo"|"research"|"finance"|"content"|"authority"|"ops";
+type PersonaId = "ceo"|"cbo"|"research"|"finance"|"content"|"authority"|"ops"|"cmo";
 type Tier = "go"|"pro"|"enterprise";
 interface ODRIPScore {
   objective: string;
@@ -36,6 +36,7 @@ const PERSONA_META: Record<PersonaId, { icon: string; label: string; platform: s
   content:   { icon:"\ud83c\udfa8", label:"Content Strategist",     platform:"gpt4o" },
   authority: { icon:"\ud83c\udfc6", label:"Authority & SEO",        platform:"gemini" },
   ops:       { icon:"\u26a1",       label:"Ops & Automation",       platform:"claude_sonnet" },
+  cmo:       { icon:"\ud83d\udce3",       label:"CMO / Ads Optimizer",    platform:"claude_sonnet" },
 };
 
 // ── WA SEND ──
@@ -127,13 +128,18 @@ const PERSONA_SYSTEMS: Record<PersonaId,string> = {
   content: `Content Strategist: Hook First. Brand DNA + trending = konten yang stop scroll.${ODRIP_SUFFIX}`,
   authority: `Authority/SEO: entity clarity, topical authority ladder, AI citation optimization.${ODRIP_SUFFIX}`,
   ops: `Ops Engineer: setiap tugas manual = kegagalan imajinasi. Workflow: Trigger→Condition→Action→Fallback.${ODRIP_SUFFIX}`,
+  cmo: `CMO / Ads Optimizer: analisa campaign performance cross-platform (Meta, TikTok, Google). Identifikasi: (1) konten organik dengan ad potential tinggi, (2) campaign underperforming yang perlu fix, (3) budget reallocation opportunity, (4) audience expansion. Gunakan ROAS, CTR, CPC sebagai north star metrics. Platform-specific: Meta=lookalike+retarget, TikTok=trend+UGC, Google=intent+keyword.${ODRIP_SUFFIX}`,
 };
 function buildPersonaPrompt(params: {
   personaId: PersonaId; brandName: string; category: string;
   geoScore: number; priority: string; ragContext: string; brandDNA: string;
+  adsContext?: string;
 }): { system: string; user: string } {
-  const system = `${PERSONA_SYSTEMS[params.personaId]}\n\nBrand: ${params.brandName} | Category: ${params.category} | GEO: ${params.geoScore}/100 | Priority: ${params.priority} | DNA: ${params.brandDNA}${params.ragContext ? `\n\nCONTEXT:\n${params.ragContext}` : ""}`;
-  const user = `Analisa brand intelligence untuk ${params.brandName} (GEO: ${params.geoScore}/100). Berikan 1 insight ODRIP. Return ONLY valid JSON.`;
+  const adsBlock = params.personaId === "cmo" && params.adsContext ? `\n\nADS PERFORMANCE DATA:\n${params.adsContext}` : "";
+  const system = `${PERSONA_SYSTEMS[params.personaId]}\n\nBrand: ${params.brandName} | Category: ${params.category} | GEO: ${params.geoScore}/100 | Priority: ${params.priority} | DNA: ${params.brandDNA}${params.ragContext ? `\n\nCONTEXT:\n${params.ragContext}` : ""}${adsBlock}`;
+  const user = params.personaId === "cmo"
+    ? `Analisa ads performance untuk ${params.brandName}. Identifikasi 1 ODRIP insight untuk optimasi campaign. Pillar: gunakan "Visibility" untuk awareness, "Discovery" untuk traffic, "Authority" untuk conversions, "Trust" untuk retargeting. Return ONLY valid JSON.`
+    : `Analisa brand intelligence untuk ${params.brandName} (GEO: ${params.geoScore}/100). Berikan 1 insight ODRIP. Return ONLY valid JSON.`;
   return { system, user };
 }
 
@@ -237,6 +243,23 @@ async function run72H(
     ? (directive.persona_priorities as {persona_id:PersonaId;rank:number}[]).filter(p=>p.rank>0&&p.rank<=3).sort((a,b)=>a.rank-b.rank).map(p=>p.persona_id)
     : ranked;
 
+  // ── CMO ADS CONTEXT (loaded only when CMO is in active personas) ──
+  let adsContext = "";
+  if (activePersonas.includes("cmo")) {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0];
+    const [adPerfRes, adAlertsRes, adPicksRes] = await Promise.allSettled([
+      env.supabase.from("gv_ad_performance").select("platform, spend_usd, roas, ctr, impressions, clicks").eq("brand_id", brand.id).gte("snapshot_date", sevenDaysAgo).limit(20),
+      env.supabase.from("gv_ad_analysis").select("analysis_type, summary, score").eq("brand_id", brand.id).gte("created_at", new Date(Date.now() - 3 * 86400000).toISOString()).limit(5),
+      env.supabase.from("gv_ad_content_picks").select("platform, ad_potential_score, status").eq("brand_id", brand.id).eq("status", "candidate").limit(5),
+    ]);
+    const adPerf = adPerfRes.status === "fulfilled" ? (adPerfRes.value.data ?? []) : [];
+    const adAlerts = adAlertsRes.status === "fulfilled" ? (adAlertsRes.value.data ?? []) : [];
+    const adPicks = adPicksRes.status === "fulfilled" ? (adPicksRes.value.data ?? []) : [];
+    const totalSpend = adPerf.reduce((s: number, p: any) => s + Number(p.spend_usd || 0), 0);
+    const avgRoas = adPerf.filter((p: any) => p.roas).reduce((s: number, p: any, _: number, a: any[]) => s + Number(p.roas) / a.length, 0);
+    adsContext = `7D Spend: $${totalSpend.toFixed(2)} | Avg ROAS: ${avgRoas.toFixed(2)}x | Campaigns: ${adPerf.length} snapshots\nAlerts: ${adAlerts.length} | Pending Picks: ${adPicks.length}\n${adAlerts.map((a: any) => `[${a.analysis_type}] ${a.summary}`).join("\n")}`;
+  }
+
   const personaResults = await Promise.allSettled(
     activePersonas.map(async (personaId) => {
       const rank = ranked.indexOf(personaId)+1;
@@ -245,6 +268,7 @@ async function run72H(
         personaId, brandName: brand.name,
         category: (dna as {category?:string}|null)?.category??"General",
         geoScore, priority: priorityLabel, ragContext, brandDNA,
+        adsContext: personaId === "cmo" ? adsContext : undefined,
       });
       let insight: PersonaInsight|null = null;
       let fromCache = false;
@@ -300,6 +324,51 @@ async function run72H(
   }
 
   await env.supabase.from("tasks").update({status:"expired",expired_at:new Date().toISOString()}).eq("brand_id",brand.id).eq("status","active").lt("deadline",new Date().toISOString());
+
+  // ── CMO Ads Tasks: auto-generate from ads system state ──
+  if (activePersonas.includes("cmo")) {
+    const { data: adsCandidates } = await env.supabase.from("gv_ads_task_candidates").select("*").eq("brand_id", brand.id).limit(1).maybeSingle();
+    if (adsCandidates) {
+      const cmoIcon = PERSONA_META.cmo.icon;
+      if (adsCandidates.pending_picks > 0) {
+        taskInserts.push({
+          brand_id: brand.id, persona_id: "cmo", persona_icon: cmoIcon, persona_label: "CMO / Ads Optimizer",
+          priority: "P1", action_text: `Review & approve ${adsCandidates.pending_picks} content pick untuk ads campaign`,
+          odrip: { objective: "Approve ad picks", depth: { score: 6, reason: "Content picks ready", sources: 1, freshness: "HOT" },
+            risk_reward: { risk: 1, reward: 4, net: 3, risk_note: "Low budget risk", reward_note: "Boost organic winners" },
+            impact: { pillar: "Visibility", delta: "+5 reach", timeframe: "3d", confidence: "B" },
+            priority: { rank: "P1", effort: 2, owner: "cmo", kill_criterion: "picks expired" } },
+          status: "active", priority_score: 18, pillar: "Visibility", ads_function: "ads-pick-content",
+          deadline: new Date(Date.now() + 3 * 86400000).toISOString(),
+        });
+      }
+      if (adsCandidates.pending_budgets > 0) {
+        taskInserts.push({
+          brand_id: brand.id, persona_id: "cmo", persona_icon: cmoIcon, persona_label: "CMO / Ads Optimizer",
+          priority: "P1", action_text: `Approve budget plan ads ($${adsCandidates.pending_budgets} plans pending)`,
+          odrip: { objective: "Approve budget", depth: { score: 7, reason: "Budget waiting", sources: 1, freshness: "HOT" },
+            risk_reward: { risk: 2, reward: 5, net: 3, risk_note: "Budget commitment", reward_note: "Campaign execution" },
+            impact: { pillar: "Visibility", delta: "+10 impressions", timeframe: "7d", confidence: "B" },
+            priority: { rank: "P1", effort: 1, owner: "cmo", kill_criterion: "period expired" } },
+          status: "active", priority_score: 21, pillar: "Visibility", ads_function: "ads-set-budget",
+          deadline: new Date(Date.now() + 2 * 86400000).toISOString(),
+        });
+      }
+      if (adsCandidates.underperforming_campaigns > 0) {
+        taskInserts.push({
+          brand_id: brand.id, persona_id: "cmo", persona_icon: cmoIcon, persona_label: "CMO / Ads Optimizer",
+          priority: "P2", action_text: `Diagnosa & fix ${adsCandidates.underperforming_campaigns} campaign underperforming (ROAS < 1)`,
+          odrip: { objective: "Fix campaigns", depth: { score: 8, reason: "Underperformers detected", sources: 1, freshness: "HOT" },
+            risk_reward: { risk: 1, reward: 6, net: 5, risk_note: "Stop bleeding budget", reward_note: "Recover ROAS" },
+            impact: { pillar: "Authority", delta: "+15 ROAS", timeframe: "7d", confidence: "B" },
+            priority: { rank: "P2", effort: 3, owner: "cmo", kill_criterion: "no improvement 7d" } },
+          status: "active", priority_score: 25, pillar: "Authority", ads_function: "ads-find-fix",
+          deadline: new Date(Date.now() + 5 * 86400000).toISOString(),
+        });
+      }
+    }
+  }
+
   if (taskInserts.length>0) await env.supabase.from("tasks").insert(taskInserts);
 
   const healthScore = await computeHealth(brand.id, env.supabase);

@@ -8,7 +8,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // → produces 14D directive + strategic WA
 // ════════════════════════════════════════════════
 
-type PersonaId = "ceo"|"cbo"|"research"|"finance"|"content"|"authority"|"ops";
+type PersonaId = "ceo"|"cbo"|"research"|"finance"|"content"|"authority"|"ops"|"cmo";
 // FIX: Use correct tier names matching DB (go/pro/enterprise)
 type Tier = "go"|"pro"|"enterprise";
 
@@ -21,6 +21,7 @@ const PERSONA_META: Record<PersonaId,{icon:string;label:string}> = {
   content:   {icon:"\ud83c\udfa8", label:"Content Strategist"},
   authority: {icon:"\ud83c\udfc6", label:"Authority & SEO"},
   ops:       {icon:"\u26a1",       label:"Ops & Automation"},
+  cmo:       {icon:"\ud83d\udce3",       label:"CMO / Ads Optimizer"},
 };
 
 async function sendWA(p:{to:string;message:string;token:string}) {
@@ -151,7 +152,7 @@ async function run14D(
   const parsed = await callOpus(opusSystem, opusUser, env.ANTHROPIC_KEY);
 
   // Enforce client priorities
-  const allPersonas: PersonaId[] = ["ceo","cbo","research","finance","content","authority","ops"];
+  const allPersonas: PersonaId[] = ["ceo","cbo","research","finance","content","authority","ops","cmo"];
   const parsedPriorities = (parsed.persona_priorities as Record<string,unknown>[]|undefined)??[];
   const qaTotal = TIER_QA[brand.tier]??50; const qaP1=Math.round(qaTotal*0.40); const qaP2=Math.round(qaTotal*0.35); const qaP3=qaTotal-qaP1-qaP2;
   const priorities2 = allPersonas.map(pid=>{

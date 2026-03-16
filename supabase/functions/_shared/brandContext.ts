@@ -49,6 +49,19 @@ export interface BrandInfo {
   subscription_tier: string | null;
 }
 
+/** Maps DB column names to BrandInfo field names */
+function mapBrandRow(row: any): BrandInfo {
+  return {
+    id: row.id,
+    brand_name: row.name || row.brand_name || "Unknown Brand",
+    brand_category: row.category || row.brand_category || null,
+    brand_country: row.country || row.brand_country || "Indonesia",
+    brand_website: row.website || row.brand_website || null,
+    brand_description: row.description || row.brand_description || null,
+    subscription_tier: row.tier || row.subscription_tier || null,
+  };
+}
+
 export interface BrandContext {
   brand: BrandInfo;
   dna: BrandDNA | null;
@@ -70,8 +83,8 @@ export async function getBrandContext(
 ): Promise<BrandContext> {
   const [brandRes, dnaRes, voiceRes, chronicleRes, connectionsRes] = await Promise.all([
     supabase
-      .from("gv_brands")
-      .select("id, brand_name, brand_category, brand_country, brand_website, brand_description, subscription_tier")
+      .from("brands")
+      .select("id, name, category, website, tier")
       .eq("id", brand_id)
       .maybeSingle(),
 
@@ -96,21 +109,23 @@ export async function getBrandContext(
       .maybeSingle(),
 
     supabase
-      .from("gv_connections")
+      .from("platform_connections")
       .select("platform, status")
       .eq("brand_id", brand_id)
       .eq("status", "connected"),
   ]);
 
-  const brand: BrandInfo = brandRes.data ?? {
-    id: brand_id,
-    brand_name: "Unknown Brand",
-    brand_category: null,
-    brand_country: "Indonesia",
-    brand_website: null,
-    brand_description: null,
-    subscription_tier: null,
-  };
+  const brand: BrandInfo = brandRes.data
+    ? mapBrandRow(brandRes.data)
+    : {
+        id: brand_id,
+        brand_name: "Unknown Brand",
+        brand_category: null,
+        brand_country: "Indonesia",
+        brand_website: null,
+        brand_description: null,
+        subscription_tier: null,
+      };
 
   return {
     brand,
