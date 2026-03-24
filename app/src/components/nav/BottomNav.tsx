@@ -67,7 +67,7 @@ export default function BottomNav() {
       background: "rgba(8,13,11,0.92)",
       backdropFilter: "blur(20px)",
       WebkitBackdropFilter: "blur(20px)",
-      borderTop: "1px solid rgba(95,122,107,0.14)",
+      borderTop: "1px solid var(--border-default)",
       paddingBottom: "env(safe-area-inset-bottom)",
     }}>
       <div style={{
@@ -85,14 +85,14 @@ export default function BottomNav() {
               justifyContent: "center",
               gap: "3px",
               textDecoration: "none",
-              color: active ? "#5f7a6b" : "#3d4f44",
+              color: active ? "var(--accent)" : "var(--text-disabled)",
               transition: "color 150ms",
               WebkitTapHighlightColor: "transparent",
             }}>
               {icon(active)}
               <span style={{
                 fontSize: "10px",
-                fontFamily: "Inter, system-ui, sans-serif",
+                fontFamily: "var(--font-body)",
                 fontWeight: active ? 600 : 400,
                 letterSpacing: "0.02em",
                 lineHeight: 1,

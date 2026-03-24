@@ -30,8 +30,8 @@ export default function UserAvatar() {
       {waNumber && (
         <span style={{
           fontSize: "11px",
-          color: "#3d4f44",
-          fontFamily: "Inter, system-ui, sans-serif",
+          color: "var(--text-disabled)",
+          fontFamily: "var(--font-body)",
           maxWidth: "100px",
           overflow: "hidden",
           textOverflow: "ellipsis",
@@ -44,8 +44,8 @@ export default function UserAvatar() {
         width: "34px",
         height: "34px",
         borderRadius: "50%",
-        background: "rgba(95,122,107,0.18)",
-        border: "1.5px solid rgba(95,122,107,0.3)",
+        background: "var(--border-strong)",
+        border: "1.5px solid var(--border-strong)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -54,8 +54,8 @@ export default function UserAvatar() {
         <span style={{
           fontSize: "12px",
           fontWeight: 700,
-          color: "#5f7a6b",
-          fontFamily: "Manrope, system-ui, sans-serif",
+          color: "var(--accent)",
+          fontFamily: "var(--font-heading)",
           letterSpacing: "0.02em",
           lineHeight: 1,
         }}>

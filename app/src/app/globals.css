@@ -181,6 +181,91 @@
   If we ever want to remove these styles, we need to add an explicit border
   color utility to any element that depends on these defaults.
 */
+/* ═══════ GeoVera Design System — Active Tokens (source: gv_design_tokens) ═══════ */
+:root {
+  /* ── Backgrounds ── */
+  --bg-void:        #050808;
+  --bg-primary:     #080d0b;
+  --bg-secondary:   #0f1a14;
+  --bg-tertiary:    #162019;
+  --bg-elevated:    #1c2b22;
+  --bg-recessed:    #0a100d;
+
+  /* ── Text ── */
+  --text-primary:   #e8ede9;
+  --text-secondary: #a3b5a9;
+  --text-muted:     #6b7f72;
+  --text-disabled:  #3d4f44;
+  --text-inverse:   #080d0b;
+
+  /* ── Accent / Sage ── */
+  --accent:         #5f7a6b;
+  --accent-hover:   #6d8c7b;
+  --accent-active:  #52694d;
+  --accent-subtle:  rgba(95,122,107,0.12);
+  --accent-ghost:   rgba(95,122,107,0.06);
+
+  /* ── Borders ── */
+  --border-subtle:  rgba(95,122,107,0.08);
+  --border-default: rgba(95,122,107,0.14);
+  --border-strong:  rgba(95,122,107,0.22);
+  --border-accent:  #5f7a6b;
+
+  /* ── Glass ── */
+  --glass-bg-subtle:   rgba(95,122,107,0.04);
+  --glass-bg-medium:   rgba(95,122,107,0.08);
+  --glass-bg-strong:   rgba(95,122,107,0.14);
+  --glass-bg-frosted:  rgba(232,237,233,0.05);
+  --glass-border:      rgba(95,122,107,0.10);
+
+  /* ── Semantic ── */
+  --success:         #4ade80;
+  --success-subtle:  rgba(74,222,128,0.12);
+  --warning:         #fbbf24;
+  --warning-subtle:  rgba(251,191,36,0.12);
+  --danger:          #f87171;
+  --danger-subtle:   rgba(248,113,113,0.12);
+  --info:            #60a5fa;
+  --info-subtle:     rgba(96,165,250,0.12);
+
+  /* ── ODRIP Pillars ── */
+  --pillar-visibility:         #5f7a6b;
+  --pillar-visibility-subtle:  rgba(95,122,107,0.12);
+  --pillar-discovery:          #7a6b5f;
+  --pillar-discovery-subtle:   rgba(122,107,95,0.12);
+  --pillar-authority:          #6b5f7a;
+  --pillar-authority-subtle:   rgba(107,95,122,0.12);
+  --pillar-trust:              #5f6b7a;
+  --pillar-trust-subtle:       rgba(95,107,122,0.12);
+
+  /* ── Shadows ── */
+  --shadow-xs:            0 1px 2px rgba(0,0,0,0.3);
+  --shadow-sm:            0 2px 6px rgba(0,0,0,0.35);
+  --shadow-md:            0 4px 12px rgba(0,0,0,0.4);
+  --shadow-lg:            0 8px 24px rgba(0,0,0,0.5);
+  --shadow-xl:            0 16px 48px rgba(0,0,0,0.6);
+  --shadow-glow-sage:     0 0 20px rgba(95,122,107,0.3);
+  --shadow-glow-danger:   0 0 20px rgba(248,113,113,0.3);
+  --shadow-inner:         inset 0 2px 4px rgba(0,0,0,0.3);
+
+  /* ── Radius ── */
+  --radius-xs:   4px;
+  --radius-sm:   6px;
+  --radius-md:   10px;
+  --radius-lg:   14px;
+  --radius-xl:   20px;
+  --radius-2xl:  28px;
+  --radius-full: 9999px;
+
+  /* ── Layout ── */
+  --bottomnav-h: 64px;
+
+  /* ── Fonts ── */
+  --font-heading: Manrope, system-ui, -apple-system, sans-serif;
+  --font-body:    Inter, system-ui, -apple-system, sans-serif;
+  --font-mono:    'JetBrains Mono', Fira Code, Consolas, monospace;
+}
+
 /* ═══════ GeoVera Design System v5 — CSS Custom Properties ═══════ */
 :root {
   /* Colors */

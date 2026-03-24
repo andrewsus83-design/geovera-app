@@ -68,37 +68,37 @@ const CHRONICLE = [
 ];
 
 const statusColor: Record<string, string> = {
-  done:     "#22C55E",
-  pending:  "#F59E0B",
-  upcoming: "#3d4f44",
+  done:     "var(--success)",
+  pending:  "var(--warning)",
+  upcoming: "var(--text-disabled)",
 };
 
 export default function HomePage() {
   return (
     <div style={{
       minHeight: "100svh",
-      background: "#080d0b",
-      color: "#e8ede9",
-      fontFamily: "Inter, system-ui, sans-serif",
+      background: "var(--bg-primary)",
+      color: "var(--text-primary)",
+      fontFamily: "var(--font-body)",
       padding: "28px 16px 24px",
     }}>
 
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
         <div>
-          <p style={{ color: "#3d4f44", fontSize: "11px", margin: "0 0 1px", fontWeight: 500, letterSpacing: "0.07em", textTransform: "uppercase" }}>
+          <p style={{ color: "var(--text-disabled)", fontSize: "11px", margin: "0 0 1px", fontWeight: 500, letterSpacing: "0.07em", textTransform: "uppercase" }}>
             Selamat datang
           </p>
           <h1 style={{
-            fontFamily: "Manrope, system-ui, sans-serif",
+            fontFamily: "var(--font-heading)",
             fontSize: "24px",
             fontWeight: 800,
-            color: "#e8ede9",
+            color: "var(--text-primary)",
             margin: 0,
             letterSpacing: "-0.02em",
             lineHeight: 1.2,
           }}>
-            Geo<em style={{ fontStyle: "normal", color: "#22C55E" }}>Vera</em>
+            Geo<em style={{ fontStyle: "normal", color: "var(--success)" }}>Vera</em>
           </h1>
         </div>
         {/* Header right: logged in + setting + help */}
@@ -106,10 +106,10 @@ export default function HomePage() {
           <UserAvatar />
           <Link href="/home/settings" style={{
             width: "34px", height: "34px", borderRadius: "50%",
-            background: "#0a100d",
-            border: "1px solid rgba(95,122,107,0.18)",
+            background: "var(--bg-recessed)",
+            border: "1px solid var(--border-strong)",
             display: "flex", alignItems: "center", justifyContent: "center",
-            color: "#3d4f44", textDecoration: "none",
+            color: "var(--text-disabled)", textDecoration: "none",
             WebkitTapHighlightColor: "transparent",
           }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -119,10 +119,10 @@ export default function HomePage() {
           </Link>
           <Link href="/home/help" style={{
             width: "34px", height: "34px", borderRadius: "50%",
-            background: "#0a100d",
-            border: "1px solid rgba(95,122,107,0.18)",
+            background: "var(--bg-recessed)",
+            border: "1px solid var(--border-strong)",
             display: "flex", alignItems: "center", justifyContent: "center",
-            color: "#3d4f44", textDecoration: "none",
+            color: "var(--text-disabled)", textDecoration: "none",
             WebkitTapHighlightColor: "transparent",
           }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -149,8 +149,8 @@ export default function HomePage() {
             alignItems: "center",
             gap: "8px",
             padding: "14px 8px",
-            background: "#0a100d",
-            border: "1px solid rgba(95,122,107,0.13)",
+            background: "var(--bg-recessed)",
+            border: "1px solid var(--border-subtle)",
             borderRadius: "12px",
             textDecoration: "none",
             color: "inherit",
@@ -160,19 +160,19 @@ export default function HomePage() {
               width: "36px",
               height: "36px",
               borderRadius: "9px",
-              background: "rgba(95,122,107,0.11)",
+              background: "var(--border-subtle)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: "#5f7a6b",
+              color: "var(--accent)",
             }}>
               {icon}
             </div>
             <span style={{
-              fontFamily: "Manrope, system-ui, sans-serif",
+              fontFamily: "var(--font-heading)",
               fontWeight: 600,
               fontSize: "11px",
-              color: "#a3b5a9",
+              color: "var(--text-secondary)",
               letterSpacing: "0.01em",
               textAlign: "center",
               lineHeight: 1.2,
@@ -187,10 +187,10 @@ export default function HomePage() {
       <div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
           <h2 style={{
-            fontFamily: "Manrope, system-ui, sans-serif",
+            fontFamily: "var(--font-heading)",
             fontSize: "15px",
             fontWeight: 700,
-            color: "#e8ede9",
+            color: "var(--text-primary)",
             margin: 0,
             letterSpacing: "-0.01em",
           }}>
@@ -198,7 +198,7 @@ export default function HomePage() {
           </h2>
           <Link href="/home/chronicle" style={{
             fontSize: "11px",
-            color: "#5f7a6b",
+            color: "var(--accent)",
             textDecoration: "none",
             fontWeight: 500,
           }}>
@@ -215,7 +215,7 @@ export default function HomePage() {
             top: "6px",
             bottom: "6px",
             width: "1px",
-            background: "rgba(95,122,107,0.18)",
+            background: "var(--border-strong)",
           }} />
 
           <div style={{ display: "flex", flexDirection: "column", gap: "0" }}>
@@ -233,23 +233,23 @@ export default function HomePage() {
                   height: "9px",
                   borderRadius: "50%",
                   background: statusColor[item.status],
-                  border: `2px solid #080d0b`,
+                  border: `2px solid var(--bg-primary)`,
                   boxShadow: item.status === "done" ? `0 0 6px ${statusColor[item.status]}60` : "none",
                 }} />
 
                 {/* Content */}
                 <div style={{
-                  background: "#0a100d",
-                  border: "1px solid rgba(95,122,107,0.12)",
+                  background: "var(--bg-recessed)",
+                  border: "1px solid var(--accent-subtle)",
                   borderRadius: "10px",
                   padding: "12px 14px",
                 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
                     <span style={{
-                      fontFamily: "Manrope, system-ui, sans-serif",
+                      fontFamily: "var(--font-heading)",
                       fontWeight: 700,
                       fontSize: "13px",
-                      color: item.status === "upcoming" ? "#3d4f44" : "#e8ede9",
+                      color: item.status === "upcoming" ? "var(--text-disabled)" : "var(--text-primary)",
                       letterSpacing: "-0.01em",
                     }}>
                       {item.title}
@@ -266,7 +266,7 @@ export default function HomePage() {
                   <p style={{
                     margin: 0,
                     fontSize: "12px",
-                    color: item.status === "upcoming" ? "#2a3a2e" : "#6b7f72",
+                    color: item.status === "upcoming" ? "var(--text-disabled)" : "var(--text-muted)",
                     lineHeight: 1.5,
                   }}>
                     {item.desc}

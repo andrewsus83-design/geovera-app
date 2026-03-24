@@ -93,8 +93,8 @@ const PLATFORMS = [
     id: "web",
     name: "Web URL",
     desc: "Website & blog brand",
-    color: "#5f7a6b",
-    accent: "#22C55E",
+    color: "var(--accent)",
+    accent: "var(--success)",
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="10"/>
@@ -111,24 +111,24 @@ export default function ConnectPage() {
   return (
     <div style={{
       minHeight: "100svh",
-      background: "#080d0b",
-      color: "#e8ede9",
-      fontFamily: "Inter, system-ui, sans-serif",
+      background: "var(--bg-primary)",
+      color: "var(--text-primary)",
+      fontFamily: "var(--font-body)",
     }}>
       {/* Header */}
       <div style={{
         padding: "20px 16px 16px",
-        borderBottom: "1px solid rgba(95,122,107,0.1)",
+        borderBottom: "1px solid var(--glass-border)",
         display: "flex",
         alignItems: "center",
         gap: "12px",
       }}>
         <Link href="/home" style={{
           width: "34px", height: "34px", borderRadius: "50%",
-          background: "#0a100d",
-          border: "1px solid rgba(95,122,107,0.18)",
+          background: "var(--bg-recessed)",
+          border: "1px solid var(--border-strong)",
           display: "flex", alignItems: "center", justifyContent: "center",
-          color: "#5f7a6b", textDecoration: "none",
+          color: "var(--accent)", textDecoration: "none",
           WebkitTapHighlightColor: "transparent",
           flexShrink: 0,
         }}>
@@ -138,13 +138,13 @@ export default function ConnectPage() {
         </Link>
         <div>
           <h1 style={{
-            fontFamily: "Manrope, system-ui, sans-serif",
-            fontSize: "18px", fontWeight: 800, color: "#e8ede9",
+            fontFamily: "var(--font-heading)",
+            fontSize: "18px", fontWeight: 800, color: "var(--text-primary)",
             margin: 0, letterSpacing: "-0.02em",
           }}>
             Connect Platform
           </h1>
-          <p style={{ margin: 0, fontSize: "12px", color: "#3d4f44", marginTop: "1px" }}>
+          <p style={{ margin: 0, fontSize: "12px", color: "var(--text-disabled)", marginTop: "1px" }}>
             Hubungkan akun untuk data performa real-time
           </p>
         </div>
@@ -154,11 +154,11 @@ export default function ConnectPage() {
       <div style={{
         margin: "12px 16px",
         padding: "10px 14px",
-        background: "rgba(95,122,107,0.08)",
-        border: "1px solid rgba(95,122,107,0.2)",
+        background: "var(--border-subtle)",
+        border: "1px solid var(--border-strong)",
         borderRadius: "10px",
         fontSize: "12px",
-        color: "#5f7a6b",
+        color: "var(--accent)",
         lineHeight: 1.5,
         display: "flex",
         gap: "8px",
@@ -180,16 +180,16 @@ export default function ConnectPage() {
               alignItems: "center",
               gap: "12px",
               padding: "14px",
-              background: "#0a100d",
-              border: `1px solid ${isConnected ? "rgba(34,197,94,0.2)" : "rgba(95,122,107,0.13)"}`,
+              background: "var(--bg-recessed)",
+              border: `1px solid ${isConnected ? "var(--success-subtle)" : "var(--border-subtle)"}`,
               borderRadius: "12px",
             }}>
               {/* Icon */}
               <div style={{
                 width: "42px", height: "42px", borderRadius: "10px",
-                background: isConnected ? `${p.accent}18` : "rgba(95,122,107,0.08)",
+                background: isConnected ? `${p.accent}18` : "var(--border-subtle)",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                color: isConnected ? p.accent : "#3d4f44",
+                color: isConnected ? p.accent : "var(--text-disabled)",
                 flexShrink: 0,
               }}>
                 {p.icon}
@@ -198,15 +198,15 @@ export default function ConnectPage() {
               {/* Info */}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{
-                  fontFamily: "Manrope, system-ui, sans-serif",
-                  fontWeight: 700, fontSize: "14px", color: "#e8ede9",
+                  fontFamily: "var(--font-heading)",
+                  fontWeight: 700, fontSize: "14px", color: "var(--text-primary)",
                   letterSpacing: "-0.01em",
                 }}>
                   {p.name}
                 </div>
-                <div style={{ fontSize: "11px", color: "#3d4f44", marginTop: "1px" }}>
+                <div style={{ fontSize: "11px", color: "var(--text-disabled)", marginTop: "1px" }}>
                   {isConnected ? (
-                    <span style={{ color: "#22C55E" }}>● Terhubung</span>
+                    <span style={{ color: "var(--success)" }}>● Terhubung</span>
                   ) : p.desc}
                 </div>
               </div>
@@ -219,13 +219,13 @@ export default function ConnectPage() {
                   padding: "0 14px",
                   borderRadius: "8px",
                   border: isConnected
-                    ? "1px solid rgba(248,113,113,0.3)"
-                    : "1px solid rgba(95,122,107,0.3)",
-                  background: isConnected ? "rgba(248,113,113,0.08)" : "rgba(95,122,107,0.1)",
-                  color: isConnected ? "#f87171" : "#5f7a6b",
+                    ? "1px solid var(--danger-subtle)"
+                    : "1px solid var(--border-strong)",
+                  background: isConnected ? "var(--danger-subtle)" : "var(--glass-border)",
+                  color: isConnected ? "var(--danger)" : "var(--accent)",
                   fontSize: "12px",
                   fontWeight: 600,
-                  fontFamily: "Inter, system-ui, sans-serif",
+                  fontFamily: "var(--font-body)",
                   cursor: "pointer",
                   flexShrink: 0,
                   WebkitTapHighlightColor: "transparent",

@@ -7,25 +7,25 @@ type Step = "credentials" | "otp";
 
 // ─── Design tokens (from gv_design_tokens) ───────────────────────────────────
 const T = {
-  bgPrimary:     "#080d0b",
-  bgRecessed:    "#0a100d",
-  accent:        "#5f7a6b",
+  bgPrimary:     "var(--bg-primary)",
+  bgRecessed:    "var(--bg-recessed)",
+  accent:        "var(--accent)",
   accentHover:   "#6d8c7b",
   accentActive:  "#52694d",
-  accentSubtle:  "rgba(95,122,107,0.12)",
-  textPrimary:   "#e8ede9",
-  textSecondary: "#a3b5a9",
-  textMuted:     "#6b7f72",
-  textDisabled:  "#3d4f44",
-  borderDefault: "rgba(95,122,107,0.14)",
-  borderStrong:  "rgba(95,122,107,0.22)",
-  danger:        "#f87171",
-  dangerSubtle:  "rgba(248,113,113,0.12)",
+  accentSubtle:  "var(--accent-subtle)",
+  textPrimary:   "var(--text-primary)",
+  textSecondary: "var(--text-secondary)",
+  textMuted:     "var(--text-muted)",
+  textDisabled:  "var(--text-disabled)",
+  borderDefault: "var(--border-default)",
+  borderStrong:  "var(--border-strong)",
+  danger:        "var(--danger)",
+  dangerSubtle:  "var(--danger-subtle)",
   success:       "#4ade80",
   successSubtle: "rgba(74,222,128,0.10)",
   // typography
-  fontHeading:   "Manrope, system-ui, -apple-system, sans-serif",
-  fontBody:      "Inter, system-ui, -apple-system, sans-serif",
+  fontHeading:   "var(--font-heading)",
+  fontBody:      "var(--font-body)",
   fontMono:      "'JetBrains Mono', 'Fira Code', Consolas, monospace",
   // spacing
   space2: "8px", space3: "12px", space4: "16px", space5: "20px",
@@ -130,7 +130,7 @@ export default function SignInForm() {
               lineHeight: 1,
               color: T.textPrimary,
             }}>
-              Geo<em style={{ fontStyle: "normal", color: "#22C55E" }}>Vera</em>
+              Geo<em style={{ fontStyle: "normal", color: "var(--success)" }}>Vera</em>
             </span>
           </a>
         </div>
@@ -298,9 +298,9 @@ const labelStyle: React.CSSProperties = {
   display: "block",
   fontSize: "13px",
   fontWeight: 600,
-  color: "#a3b5a9",
+  color: "var(--text-secondary)",
   marginBottom: "6px",
-  fontFamily: "Inter, system-ui, sans-serif",
+  fontFamily: "var(--font-body)",
   letterSpacing: "0.01em",
 };
 
@@ -308,12 +308,12 @@ const inputStyle: React.CSSProperties = {
   width: "100%",
   height: "48px",
   padding: "0 16px",
-  border: "1px solid rgba(95,122,107,0.22)",
+  border: "1px solid var(--border-strong)",
   borderRadius: "10px",
   fontSize: "16px",
-  fontFamily: "Inter, system-ui, sans-serif",
-  color: "#e8ede9",
-  background: "#0a100d",
+  fontFamily: "var(--font-body)",
+  color: "var(--text-primary)",
+  background: "var(--bg-recessed)",
   outline: "none",
   boxSizing: "border-box",
   transition: "border-color 150ms",
@@ -333,11 +333,11 @@ function Field({ label, value, onChange, placeholder, type = "text", hint }: {
         placeholder={placeholder}
         required
         style={inputStyle}
-        onFocus={e => (e.target.style.borderColor = "#5f7a6b")}
-        onBlur={e => (e.target.style.borderColor = "rgba(95,122,107,0.22)")}
+        onFocus={e => (e.target.style.borderColor = "var(--accent)")}
+        onBlur={e => (e.target.style.borderColor = "var(--border-strong)")}
       />
       {hint && (
-        <p style={{ margin: "6px 0 0", fontSize: "12px", color: "#3d4f44", fontFamily: "Inter, sans-serif", lineHeight: 1.5 }}>
+        <p style={{ margin: "6px 0 0", fontSize: "12px", color: "var(--text-disabled)", fontFamily: "var(--font-body)", lineHeight: 1.5 }}>
           {hint}
         </p>
       )}
@@ -353,14 +353,14 @@ function SubmitBtn({ loading, label, loadingLabel }: { loading: boolean; label: 
       style={{
         width: "100%",
         height: "48px",
-        background: loading ? "#52694d" : "#5f7a6b",
+        background: loading ? "#52694d" : "var(--accent)",
         border: "none",
         borderRadius: "10px",
         fontSize: "15px",
         fontWeight: 600,
-        color: "#e8ede9",
+        color: "var(--text-primary)",
         cursor: loading ? "not-allowed" : "pointer",
-        fontFamily: "Inter, system-ui, sans-serif",
+        fontFamily: "var(--font-body)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -375,7 +375,7 @@ function SubmitBtn({ loading, label, loadingLabel }: { loading: boolean; label: 
           width: 16, height: 16,
           borderRadius: "50%",
           border: "2px solid rgba(232,237,233,0.3)",
-          borderTopColor: "#e8ede9",
+          borderTopColor: "var(--text-primary)",
           animation: "spin 0.8s linear infinite",
         }} />
       )}

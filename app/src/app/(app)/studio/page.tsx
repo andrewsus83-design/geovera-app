@@ -57,19 +57,19 @@ const PLATFORMS: { id: string; label: string; type: string; accent: string; layo
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none"/></svg> },
   { id: "facebook",    label: "Facebook",          type: "image",   accent: "#1877F2", layout: "grid3",
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073C24 5.404 18.627 0 12 0S0 5.404 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.792-4.697 4.533-4.697 1.312 0 2.686.235 2.686.235v2.97h-1.513c-1.491 0-1.956.93-1.956 1.886v2.254h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/></svg> },
-  { id: "threads",     label: "Threads",           type: "text",    accent: "#e8ede9", layout: "list",
+  { id: "threads",     label: "Threads",           type: "text",    accent: "var(--text-primary)", layout: "list",
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12.186 24h-.007c-3.581-.024-6.334-1.205-8.184-3.509C2.35 18.44 1.5 15.586 1.472 12.01v-.017c.03-3.579.879-6.43 2.525-8.482C5.845 1.205 8.6.024 12.18 0h.014c2.746.02 5.043.725 6.826 2.098 1.677 1.29 2.858 3.13 3.509 5.467l-2.04.569c-1.104-3.96-3.898-5.984-8.304-6.015-2.91.022-5.11.936-6.54 2.717C4.307 6.504 3.616 8.914 3.589 12c.027 3.086.718 5.496 2.057 7.164 1.43 1.783 3.631 2.698 6.54 2.717 2.623-.02 4.358-.631 5.8-2.045 1.647-1.613 1.618-3.593 1.09-4.798-.31-.71-.873-1.3-1.634-1.75-.192 1.352-.622 2.446-1.284 3.272-.886 1.102-2.14 1.704-3.73 1.79-1.202.065-2.361-.218-3.259-.801-1.063-.689-1.685-1.74-1.752-2.964-.065-1.19.408-2.285 1.33-3.082.88-.76 2.119-1.207 3.583-1.291a13.853 13.853 0 012.2.068c-.068-.263-.15-.5-.247-.715-.358-.807-.977-1.245-1.928-1.271-1.123-.032-1.955.424-2.48 1.353l-1.71-1.18c.805-1.355 2.16-2.107 3.908-2.107.1 0 .2.002.3.007 1.904.058 3.233.878 3.948 2.435.257.56.436 1.184.535 1.875.71.198 1.36.495 1.937.884.995.677 1.738 1.578 2.164 2.608.716 1.73.64 4.546-1.673 6.797-1.904 1.841-4.168 2.627-7.4 2.649z"/></svg> },
   { id: "yt-video",    label: "YouTube Video",     type: "video",   accent: "#FF0000", layout: "grid3",
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg> },
   { id: "yt-shorts",   label: "YouTube Shorts",    type: "video",   accent: "#FF0000", layout: "masonry",
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/><path d="M19 3l-3 3 3 3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg> },
-  { id: "twitter",     label: "X / Twitter",       type: "text",    accent: "#e8ede9", layout: "list",
+  { id: "twitter",     label: "X / Twitter",       type: "text",    accent: "var(--text-primary)", layout: "list",
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.261 5.635L18.243 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg> },
   { id: "linkedin",    label: "LinkedIn",          type: "image",   accent: "#0A66C2", layout: "grid3",
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg> },
-  { id: "artikel-img", label: "Artikel + Gambar",  type: "artikel", accent: "#22C55E", layout: "grid3",
+  { id: "artikel-img", label: "Artikel + Gambar",  type: "artikel", accent: "var(--success)", layout: "grid3",
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> },
-  { id: "artikel",     label: "Artikel",           type: "artikel", accent: "#22C55E", layout: "list",
+  { id: "artikel",     label: "Artikel",           type: "artikel", accent: "var(--success)", layout: "list",
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> },
 ];
 
@@ -88,14 +88,14 @@ export default function StudioPage() {
   const activeLayout: Layout = selectedPlatform?.layout ?? "list";
 
   return (
-    <div style={{ minHeight: "100svh", background: "#080d0b", color: "#e8ede9", fontFamily: "Inter, system-ui, sans-serif" }}>
+    <div style={{ minHeight: "100svh", background: "var(--bg-primary)", color: "var(--text-primary)", fontFamily: "var(--font-body)" }}>
 
       {/* Header */}
       <div style={{ padding: "24px 16px 0", display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
         <div>
           <h1 style={{
-            fontFamily: "Manrope, system-ui, sans-serif",
-            fontSize: "22px", fontWeight: 800, color: "#e8ede9",
+            fontFamily: "var(--font-heading)",
+            fontSize: "22px", fontWeight: 800, color: "var(--text-primary)",
             margin: 0, letterSpacing: "-0.02em",
           }}>Studio</h1>
           {/* Platform chip */}
@@ -106,7 +106,7 @@ export default function StudioPage() {
               </span>
               <button onClick={() => setSelectedPlatform(null)} style={{
                 background: "none", border: "none", padding: 0, cursor: "pointer",
-                color: "#3d4f44", display: "flex", alignItems: "center",
+                color: "var(--text-disabled)", display: "flex", alignItems: "center",
                 WebkitTapHighlightColor: "transparent",
               }}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
@@ -115,7 +115,7 @@ export default function StudioPage() {
               </button>
             </div>
           ) : (
-            <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#3d4f44" }}>Konten via WhatsApp</p>
+            <p style={{ margin: "2px 0 0", fontSize: "12px", color: "var(--text-disabled)" }}>Konten via WhatsApp</p>
           )}
         </div>
 
@@ -124,9 +124,9 @@ export default function StudioPage() {
           {/* Artikel */}
           <button onClick={() => setType("artikel")} title="Artikel" style={{
             width: "34px", height: "34px", minWidth: "34px", minHeight: "34px", borderRadius: "50%",
-            border: type === "artikel" ? "1px solid rgba(95,122,107,0.5)" : "1px solid rgba(95,122,107,0.18)",
-            background: type === "artikel" ? "rgba(95,122,107,0.2)" : "#0a100d",
-            color: type === "artikel" ? "#a3c4b5" : "#3d4f44",
+            border: type === "artikel" ? "1px solid rgba(95,122,107,0.5)" : "1px solid var(--border-strong)",
+            background: type === "artikel" ? "var(--border-strong)" : "var(--bg-recessed)",
+            color: type === "artikel" ? "#a3c4b5" : "var(--text-disabled)",
             display: "flex", alignItems: "center", justifyContent: "center",
             cursor: "pointer", WebkitTapHighlightColor: "transparent", flexShrink: 0,
           }}>
@@ -140,9 +140,9 @@ export default function StudioPage() {
           {/* Image */}
           <button onClick={() => setType("image")} title="Image" style={{
             width: "34px", height: "34px", minWidth: "34px", minHeight: "34px", borderRadius: "50%",
-            border: type === "image" ? "1px solid rgba(95,122,107,0.5)" : "1px solid rgba(95,122,107,0.18)",
-            background: type === "image" ? "rgba(95,122,107,0.2)" : "#0a100d",
-            color: type === "image" ? "#a3c4b5" : "#3d4f44",
+            border: type === "image" ? "1px solid rgba(95,122,107,0.5)" : "1px solid var(--border-strong)",
+            background: type === "image" ? "var(--border-strong)" : "var(--bg-recessed)",
+            color: type === "image" ? "#a3c4b5" : "var(--text-disabled)",
             display: "flex", alignItems: "center", justifyContent: "center",
             cursor: "pointer", WebkitTapHighlightColor: "transparent", flexShrink: 0,
           }}>
@@ -155,9 +155,9 @@ export default function StudioPage() {
           {/* Video */}
           <button onClick={() => setType("video")} title="Video" style={{
             width: "34px", height: "34px", minWidth: "34px", minHeight: "34px", borderRadius: "50%",
-            border: type === "video" ? "1px solid rgba(95,122,107,0.5)" : "1px solid rgba(95,122,107,0.18)",
-            background: type === "video" ? "rgba(95,122,107,0.2)" : "#0a100d",
-            color: type === "video" ? "#a3c4b5" : "#3d4f44",
+            border: type === "video" ? "1px solid rgba(95,122,107,0.5)" : "1px solid var(--border-strong)",
+            background: type === "video" ? "var(--border-strong)" : "var(--bg-recessed)",
+            color: type === "video" ? "#a3c4b5" : "var(--text-disabled)",
             display: "flex", alignItems: "center", justifyContent: "center",
             cursor: "pointer", WebkitTapHighlightColor: "transparent", flexShrink: 0,
           }}>
@@ -171,7 +171,7 @@ export default function StudioPage() {
 
       {/* Count label */}
       <div style={{ padding: "10px 16px 4px" }}>
-        <span style={{ fontSize: "11px", color: "#3d4f44", fontWeight: 500 }}>
+        <span style={{ fontSize: "11px", color: "var(--text-disabled)", fontWeight: 500 }}>
           {activeLayout === "list"    && `${LIST_ITEMS.length} konten`}
           {activeLayout === "grid3"   && `${IMAGE_ITEMS.length} konten`}
           {activeLayout === "masonry" && `${VIDEO_ITEMS.length} konten`}
@@ -183,29 +183,29 @@ export default function StudioPage() {
         <div style={{ padding: "4px 16px 24px", display: "flex", flexDirection: "column", gap: "8px" }}>
           {LIST_ITEMS.map((a) => (
             <div key={a.id} style={{
-              background: "#0a100d", border: "1px solid rgba(95,122,107,0.13)",
+              background: "var(--bg-recessed)", border: "1px solid var(--border-subtle)",
               borderRadius: "12px", padding: "14px 14px",
               cursor: "pointer",
             }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "6px" }}>
                 <h3 style={{
-                  margin: 0, fontFamily: "Manrope, sans-serif", fontWeight: 700,
-                  fontSize: "13px", color: "#e8ede9", letterSpacing: "-0.01em",
+                  margin: 0, fontFamily: "var(--font-heading)", fontWeight: 700,
+                  fontSize: "13px", color: "var(--text-primary)", letterSpacing: "-0.01em",
                   lineHeight: 1.4, flex: 1, paddingRight: "8px",
                 }}>{a.title}</h3>
-                <span style={{ fontSize: "10px", color: "#3d4f44", flexShrink: 0 }}>{a.date}</span>
+                <span style={{ fontSize: "10px", color: "var(--text-disabled)", flexShrink: 0 }}>{a.date}</span>
               </div>
-              <p style={{ margin: "0 0 10px", fontSize: "12px", color: "#6b7f72", lineHeight: 1.6,
+              <p style={{ margin: "0 0 10px", fontSize: "12px", color: "var(--text-muted)", lineHeight: 1.6,
                 display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
               } as React.CSSProperties}>{a.body}</p>
               <div style={{ display: "flex", gap: "8px" }}>
                 <span style={{
                   fontSize: "10px", fontWeight: 600, padding: "2px 8px", borderRadius: "20px",
-                  background: "rgba(95,122,107,0.12)", color: "#5f7a6b",
+                  background: "var(--accent-subtle)", color: "var(--accent)",
                 }}>{a.words} kata</span>
                 <span style={{
                   fontSize: "10px", fontWeight: 600, padding: "2px 8px", borderRadius: "20px",
-                  background: "rgba(34,197,94,0.1)", color: "#22C55E",
+                  background: "var(--success-subtle)", color: "var(--success)",
                 }}>Selesai</span>
               </div>
             </div>
@@ -237,7 +237,7 @@ export default function StudioPage() {
                 {/* Title */}
                 <p style={{
                   margin: 0, fontSize: "9px", fontWeight: 600,
-                  color: "#e8ede9", lineHeight: 1.4,
+                  color: "var(--text-primary)", lineHeight: 1.4,
                   display: "-webkit-box", WebkitLineClamp: 4,
                   WebkitBoxOrient: "vertical", overflow: "hidden",
                   flex: 1,
@@ -285,7 +285,7 @@ export default function StudioPage() {
                 {/* Gradient overlay */}
                 <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "50%", background: "linear-gradient(transparent, rgba(0,0,0,0.7))" }} />
                 <div style={{ position: "relative", zIndex: 1 }}>
-                  <p style={{ margin: 0, fontSize: "10px", color: "#e8ede9", lineHeight: 1.3, fontWeight: 500,
+                  <p style={{ margin: 0, fontSize: "10px", color: "var(--text-primary)", lineHeight: 1.3, fontWeight: 500,
                     display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
                   } as React.CSSProperties}>{img.prompt}</p>
                   <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px" }}>
@@ -351,7 +351,7 @@ export default function StudioPage() {
                 <div style={{ display: "flex", justifyContent: "flex-end" }}>
                   <span style={{
                     fontSize: "10px", fontWeight: 700,
-                    background: "rgba(0,0,0,0.5)", color: "#e8ede9",
+                    background: "rgba(0,0,0,0.5)", color: "var(--text-primary)",
                     padding: "2px 6px", borderRadius: "4px",
                   }}>{vid.duration}</span>
                 </div>
@@ -359,15 +359,15 @@ export default function StudioPage() {
                 <div>
                   <p style={{
                     margin: "0 0 3px", fontSize: "11px", fontWeight: 700,
-                    color: "#e8ede9", lineHeight: 1.3,
+                    color: "var(--text-primary)", lineHeight: 1.3,
                     display: "-webkit-box", WebkitLineClamp: 2,
                     WebkitBoxOrient: "vertical", overflow: "hidden",
                   } as React.CSSProperties}>{vid.title}</p>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <span style={{
                       fontSize: "9px", fontWeight: 600, padding: "2px 6px", borderRadius: "4px",
-                      background: vid.status === "processing" ? "rgba(245,158,11,0.2)" : "rgba(34,197,94,0.15)",
-                      color: vid.status === "processing" ? "#F59E0B" : "#22C55E",
+                      background: vid.status === "processing" ? "var(--warning-subtle)" : "var(--success-subtle)",
+                      color: vid.status === "processing" ? "var(--warning)" : "var(--success)",
                     }}>
                       {vid.status === "processing" ? "Proses..." : "Selesai"}
                     </span>
@@ -386,10 +386,10 @@ export default function StudioPage() {
         bottom: `calc(60px + env(safe-area-inset-bottom) + 14px)`,
         zIndex: 30,
         width: "48px", height: "48px", borderRadius: "50%",
-        background: "#5f7a6b", border: "none",
+        background: "var(--accent)", border: "none",
         boxShadow: "0 4px 16px rgba(0,0,0,0.4), 0 0 0 1px rgba(95,122,107,0.4)",
         display: "flex", alignItems: "center", justifyContent: "center",
-        color: "#e8ede9", cursor: "pointer",
+        color: "var(--text-primary)", cursor: "pointer",
         WebkitTapHighlightColor: "transparent",
       }}>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -407,21 +407,21 @@ export default function StudioPage() {
           <div style={{
             position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 50,
             background: "#0d1510",
-            border: "1px solid rgba(95,122,107,0.2)",
+            border: "1px solid var(--border-strong)",
             borderRadius: "20px 20px 0 0",
             paddingBottom: "calc(60px + env(safe-area-inset-bottom) + 8px)",
           }}>
             {/* Handle */}
             <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 0" }}>
-              <div style={{ width: "36px", height: "4px", borderRadius: "2px", background: "rgba(95,122,107,0.3)" }} />
+              <div style={{ width: "36px", height: "4px", borderRadius: "2px", background: "var(--border-strong)" }} />
             </div>
             {/* Title */}
             <div style={{ padding: "12px 16px 10px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ fontFamily: "Manrope, sans-serif", fontWeight: 700, fontSize: "15px", color: "#e8ede9" }}>
+              <span style={{ fontFamily: "var(--font-heading)", fontWeight: 700, fontSize: "15px", color: "var(--text-primary)" }}>
                 Konten
               </span>
               <button onClick={() => setShowFab(false)} style={{
-                background: "none", border: "none", color: "#3d4f44", cursor: "pointer",
+                background: "none", border: "none", color: "var(--text-disabled)", cursor: "pointer",
                 padding: "4px", WebkitTapHighlightColor: "transparent",
               }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -436,7 +436,7 @@ export default function StudioPage() {
                   display: "flex", flexDirection: "column", alignItems: "center", gap: "7px",
                   padding: "12px 6px",
                   background: "transparent",
-                  border: "1px solid rgba(95,122,107,0.1)",
+                  border: "1px solid var(--glass-border)",
                   borderRadius: "12px",
                   cursor: "pointer",
                   WebkitTapHighlightColor: "transparent",
@@ -450,8 +450,8 @@ export default function StudioPage() {
                     {p.icon}
                   </div>
                   <span style={{
-                    fontFamily: "Manrope, sans-serif", fontWeight: 600,
-                    fontSize: "10px", color: "#a3b5a9",
+                    fontFamily: "var(--font-heading)", fontWeight: 600,
+                    fontSize: "10px", color: "var(--text-secondary)",
                     textAlign: "center", lineHeight: 1.3,
                   }}>
                     {p.label}
