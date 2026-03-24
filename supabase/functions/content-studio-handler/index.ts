@@ -9,6 +9,7 @@ const corsHeaders = {
 const KIE_API_KEY = Deno.env.get("KIE_API_KEY") ?? "";
 const KIE_BASE = "https://api.kie.ai/api/v1";
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") ?? "";
+const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const HEYGEN_API_KEY = Deno.env.get("HEYGEN_API_KEY") ?? "";
 const HEYGEN_BASE = "https://api.heygen.com";
 
@@ -198,6 +199,46 @@ async function openAIChat(systemPrompt: string, userPrompt: string, maxTokens = 
   if (!res.ok) throw new Error(`OpenAI error ${res.status}`);
   const data = await res.json();
   return data.choices?.[0]?.message?.content?.trim() ?? "";
+}
+
+// Claude Haiku — fast, cheap orchestrator for prompt optimization
+async function claudeHaiku(systemPrompt: string, userPrompt: string, maxTokens = 300): Promise<string> {
+  if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY not configured");
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: maxTokens,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userPrompt }],
+    }),
+  });
+  if (!res.ok) throw new Error(`Claude Haiku error ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  return data.content?.[0]?.text?.trim() ?? "";
+}
+
+// WA callback — sends result directly to WA group when background task completes
+async function sendWACallback(waCallback: string, waToken: string, message: string): Promise<void> {
+  if (!waCallback || !waToken) return;
+  try {
+    const isGroup = waCallback.includes('@g.us') || waCallback.includes('-');
+    const params: Record<string, string> = { target: waCallback, message, delay: '0' };
+    if (!isGroup) params.countryCode = '62';
+    await fetch('https://api.fonnte.com/send', {
+      method: 'POST',
+      headers: { Authorization: waToken, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(params).toString(),
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch (e) {
+    console.error('[sendWACallback] failed:', (e as Error).message);
+  }
 }
 
 // Cloudflare Llama — for training prompt engineering + smart looping learning
@@ -535,115 +576,139 @@ Return ONLY a valid JSON array of ${count} prompt strings. No explanation, no ma
       });
     }
 
-    // ── GENERATE IMAGE ───────────────────────────────────────────────────────
+    // ── GENERATE IMAGE (background task — 400s wall clock) ───────────────────
     if (action === "generate_image") {
       const { prompt, aspect_ratio = "1:1" } = data;
+      const waCallback = String(data.wa_callback ?? "");
+      const waToken    = String(data.wa_token ?? "");
       if (!prompt) return json({ error: "prompt is required" }, 400);
 
-      let finalImageUrl: string | null = null;
-      let provider = "kie-flux2-pro";
-
-      // Primary: KIE Flux 2 Pro (cheapest, task-based async)
-      // Endpoint: POST /api/v1/jobs/createTask → GET /api/v1/jobs/recordInfo?taskId=
-      if (KIE_API_KEY) {
-        try {
-          const createRes = await kiePost("/jobs/createTask", {
-            model: "flux-2/pro-text-to-image",
-            input: { prompt, aspect_ratio, resolution: "1K" },
-          });
-          const taskId: string | null = createRes.data?.taskId ?? createRes.taskId ?? null;
-          if (taskId) {
-            console.log(`[generate_image] KIE task created: ${taskId}`);
-            // Poll up to 12x with 5s delay = 60s max (states: waiting/queuing/generating/success/fail)
-            for (let i = 0; i < 12; i++) {
-              await new Promise((r) => setTimeout(r, 5000));
-              const pollRes = await fetch(`${KIE_BASE}/jobs/recordInfo?taskId=${taskId}`, { headers: kieHeaders() });
-              if (!pollRes.ok) { console.error("[generate_image] KIE poll error:", pollRes.status); break; }
-              const pollData = await pollRes.json();
-              const state: string = pollData.data?.state ?? pollData.state ?? "waiting";
-              const progress = pollData.data?.progress ?? 0;
-              console.log(`[generate_image] KIE poll #${i + 1} state:${state} progress:${progress}% failMsg:${pollData.data?.failMsg ?? ''}`);
-              if (state === "success") {
-                const resultJson = pollData.data?.resultJson ?? null;
-                let resultUrls: string[] = [];
-                if (resultJson) {
-                  try { resultUrls = JSON.parse(resultJson).resultUrls ?? []; } catch { /* */ }
-                }
-                const kieUrl = resultUrls[0] ?? null;
-                if (kieUrl) {
-                  const r2Key = `images/${brand_id}/${Date.now()}.jpg`;
-                  const r2Url = await proxyToR2(kieUrl, r2Key, "image/jpeg");
-                  finalImageUrl = r2Url ?? kieUrl;
-                  console.log(`[generate_image] KIE Flux 2 Pro ✓ → R2: ${finalImageUrl}`);
-                }
-                break;
-              }
-              if (state === "fail") {
-                console.error("[generate_image] KIE task failed:", pollData.data?.failMsg, pollData.data?.failCode);
-                break;
-              }
-            }
-          }
-        } catch (e) {
-          console.error("[generate_image] KIE Flux 2 Pro failed:", (e as Error).message);
-        }
-      }
-
-      // Fallback: DALL-E 3 via OpenAI
-      if (!finalImageUrl) {
-        provider = "dall-e-3";
-        const OPENAI_KEY = Deno.env.get("OPENAI_API_KEY") || "";
-        if (OPENAI_KEY) {
-          try {
-            const sizeMap: Record<string, string> = { "1:1": "1024x1024", "16:9": "1792x1024", "9:16": "1024x1792" };
-            const dalleRes = await fetch("https://api.openai.com/v1/images/generations", {
-              method: "POST",
-              headers: { "Content-Type": "application/json", "Authorization": `Bearer ${OPENAI_KEY}` },
-              body: JSON.stringify({ model: "dall-e-3", prompt, n: 1, size: sizeMap[aspect_ratio] ?? "1024x1024", response_format: "url" }),
-              signal: AbortSignal.timeout(60_000),
-            });
-            if (dalleRes.ok) {
-              const dalleData = await dalleRes.json();
-              const dalleUrl: string | null = dalleData.data?.[0]?.url ?? null;
-              if (dalleUrl) {
-                const r2Key = `images/${brand_id}/${Date.now()}.png`;
-                const r2Url = await proxyToR2(dalleUrl, r2Key, "image/png");
-                finalImageUrl = r2Url ?? dalleUrl;
-                console.log(`[generate_image] DALL-E 3 fallback → R2: ${finalImageUrl}`);
-              }
-            } else {
-              console.error("[generate_image] DALL-E 3 error:", dalleRes.status, await dalleRes.text());
-            }
-          } catch (e) {
-            console.error("[generate_image] DALL-E 3 failed:", e);
-          }
-        }
-      }
-
-      if (!finalImageUrl) return json({ error: "Image generation failed — all providers unavailable" }, 500);
-
-      const { data: inserted, error: insertErr } = await supabase.from("gv_image_generations").insert({
+      // Insert placeholder immediately — DB record exists before generation starts
+      const { data: inserted } = await supabase.from("gv_image_generations").insert({
         brand_id,
-        prompt_text: prompt,
+        prompt_text: String(prompt),
         aspect_ratio,
-        ai_provider: provider,
-        ai_model: provider === "dall-e-3" ? "dall-e-3" : "flux-2-pro",
-        image_url: finalImageUrl,
-        status: "completed",
-        target_platform: data.platform ?? "instagram",
-        metadata: { prompt, aspect_ratio, provider },
+        status: "processing",
+        ai_provider: "processing",
+        ai_model: "processing",
+        target_platform: String(data.platform ?? "instagram"),
+        metadata: { prompt, aspect_ratio },
       }).select("id").single();
-      if (insertErr) console.error("generate_image DB insert failed:", insertErr.message);
+      const dbId: string | null = inserted?.id ?? null;
 
-      return json({
-        ok: true,
-        success: true,
-        url: finalImageUrl,
-        image_url: finalImageUrl,
-        images: [{ url: finalImageUrl }],
-        status: "completed",
-        db_id: inserted?.id ?? null,
-      });
+      // Background task: Haiku optimize → KIE (5min poll) → DALL-E fallback → DB update → WA callback
+      const bgTask = (async () => {
+        // Step 1: Optimize prompt with Claude Haiku
+        let optimizedPrompt = String(prompt);
+        if (ANTHROPIC_API_KEY) {
+          try {
+            optimizedPrompt = await claudeHaiku(
+              `You are an expert AI image prompt engineer specializing in Flux image generation.
+Take the user's simple description and expand it into a detailed, professional image generation prompt.
+Include: subject details, lighting (e.g. soft studio light, golden hour), composition (e.g. centered, rule of thirds),
+style (e.g. professional photography, cinematic), quality descriptors (e.g. sharp focus, high resolution, 8K).
+Keep under 150 words. Return ONLY the optimized prompt, no explanation, no quotes.`,
+              `Original description: ${prompt}`,
+              200,
+            );
+            console.log(`[generate_image] optimized: "${String(prompt).slice(0, 60)}" → "${optimizedPrompt.slice(0, 60)}"`);
+          } catch (e) {
+            console.warn("[generate_image] prompt optimization failed:", (e as Error).message);
+          }
+        }
+
+        let finalImageUrl: string | null = null;
+        let provider = "kie-flux2-pro";
+
+        // Step 2: KIE Flux 2 Pro — poll up to 60× 5s = 5 minutes (background allows full wait)
+        if (KIE_API_KEY) {
+          try {
+            const createRes = await kiePost("/jobs/createTask", {
+              model: "flux-2/pro-text-to-image",
+              input: { prompt: optimizedPrompt, aspect_ratio, resolution: "1K" },
+            });
+            const taskId: string | null = createRes.data?.taskId ?? createRes.taskId ?? null;
+            if (taskId) {
+              console.log(`[generate_image] KIE task: ${taskId}`);
+              for (let i = 0; i < 60; i++) {
+                await new Promise((r) => setTimeout(r, 5000));
+                const pollRes = await fetch(`${KIE_BASE}/jobs/recordInfo?taskId=${taskId}`, { headers: kieHeaders() });
+                if (!pollRes.ok) { console.error("[generate_image] KIE poll error:", pollRes.status); break; }
+                const pollData = await pollRes.json();
+                const state: string = pollData.data?.state ?? pollData.state ?? "waiting";
+                console.log(`[generate_image] KIE #${i + 1} state:${state} progress:${pollData.data?.progress ?? 0}%`);
+                if (state === "success") {
+                  const resultJson = pollData.data?.resultJson ?? null;
+                  let resultUrls: string[] = [];
+                  if (resultJson) try { resultUrls = JSON.parse(resultJson).resultUrls ?? []; } catch { /* */ }
+                  const kieUrl = resultUrls[0] ?? null;
+                  if (kieUrl) {
+                    const r2Key = `images/${brand_id}/${Date.now()}.jpg`;
+                    finalImageUrl = await proxyToR2(kieUrl, r2Key, "image/jpeg") ?? kieUrl;
+                    console.log(`[generate_image] KIE Flux 2 Pro ✓ → ${finalImageUrl}`);
+                  }
+                  break;
+                }
+                if (state === "fail") { console.error("[generate_image] KIE failed:", pollData.data?.failMsg); break; }
+              }
+            }
+          } catch (e) { console.error("[generate_image] KIE error:", (e as Error).message); }
+        }
+
+        // Step 3: Fallback — DALL-E 3
+        if (!finalImageUrl) {
+          provider = "dall-e-3";
+          const OPENAI_KEY = Deno.env.get("OPENAI_API_KEY") || "";
+          if (OPENAI_KEY) {
+            try {
+              const sizeMap: Record<string, string> = { "1:1": "1024x1024", "16:9": "1792x1024", "9:16": "1024x1792" };
+              const dalleRes = await fetch("https://api.openai.com/v1/images/generations", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${OPENAI_KEY}` },
+                body: JSON.stringify({ model: "dall-e-3", prompt: optimizedPrompt, n: 1, size: sizeMap[aspect_ratio] ?? "1024x1024", response_format: "url" }),
+                signal: AbortSignal.timeout(60_000),
+              });
+              if (dalleRes.ok) {
+                const dalleData = await dalleRes.json();
+                const dalleUrl: string | null = dalleData.data?.[0]?.url ?? null;
+                if (dalleUrl) {
+                  const r2Key = `images/${brand_id}/${Date.now()}.png`;
+                  finalImageUrl = await proxyToR2(dalleUrl, r2Key, "image/png") ?? dalleUrl;
+                  console.log(`[generate_image] DALL-E 3 → ${finalImageUrl}`);
+                }
+              } else { console.error("[generate_image] DALL-E 3 error:", dalleRes.status); }
+            } catch (e) { console.error("[generate_image] DALL-E 3 failed:", e); }
+          }
+        }
+
+        // Step 4: Update DB record with final result
+        if (dbId) {
+          if (finalImageUrl) {
+            await supabase.from("gv_image_generations").update({
+              status: "completed", image_url: finalImageUrl,
+              ai_provider: provider, ai_model: provider === "dall-e-3" ? "dall-e-3" : "flux-2-pro",
+              metadata: { prompt, optimized_prompt: optimizedPrompt, aspect_ratio, provider },
+            }).eq("id", dbId);
+          } else {
+            await supabase.from("gv_image_generations").update({ status: "failed" }).eq("id", dbId);
+          }
+        }
+
+        // Step 5: Send WA callback with result
+        if (waCallback && waToken) {
+          if (finalImageUrl) {
+            await sendWACallback(waCallback, waToken, `🎨 *Gambar berhasil di-generate!*\n\n🖼️ ${finalImageUrl}`);
+          } else {
+            await sendWACallback(waCallback, waToken, `❌ Gagal generate gambar — KIE Flux 2 Pro & DALL-E 3 tidak tersedia. Coba lagi nanti.`);
+          }
+        }
+      })();
+
+      // EdgeRuntime.waitUntil → 400s wall clock (Supabase Pro)
+      // @ts-ignore
+      if (typeof EdgeRuntime !== "undefined") { EdgeRuntime.waitUntil(bgTask); } else { await bgTask; }
+
+      return json({ ok: true, success: true, status: "background", db_id: dbId });
     }
 
     // ── GENERATE VIDEO ───────────────────────────────────────────────────────
@@ -1002,10 +1067,11 @@ Return ONLY a valid JSON array of ${count} prompt strings. No explanation, no ma
       return json({ success: true, feedback, db_id });
     }
 
-    // ── GENERATE ARTICLE ─────────────────────────────────────────────────────
+    // ── GENERATE ARTICLE (background task — 400s wall clock) ─────────────────
     if (action === "generate_article" || action === "update_article") {
-      const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
       if (!ANTHROPIC_API_KEY) return json({ error: "ANTHROPIC_API_KEY not configured" }, 500);
+      const waCallback = String(data.wa_callback ?? "");
+      const waToken    = String(data.wa_token ?? "");
 
       // Accept 'topic' (UI) or 'prompt' (WA bot) interchangeably
       const topic = String(data.topic || data.prompt || "");
@@ -1096,118 +1162,114 @@ Return ONLY valid JSON:
       }
       userContent.push({ type: "text", text: userMsg });
 
-      const claudeResp = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-6",
-          max_tokens: 8192,
-          system: systemMsg,
-          messages: [{ role: "user", content: uploadedImgUrls.length > 0 ? userContent : userMsg }],
-        }),
-      });
-
-      if (!claudeResp.ok) {
-        return json({ success: false, error: `Article generation failed (${claudeResp.status})` }, 502);
-      }
-
-      const claudeData = await claudeResp.json();
-      const rawText = (claudeData.content?.[0]?.text ?? "").trim();
-      let articleData: Record<string, unknown> = {};
-      try {
-        const match = rawText.match(/\{[\s\S]*\}/);
-        if (match) articleData = JSON.parse(match[0]);
-      } catch { articleData = { article: rawText }; }
-
-      const articleContent = String(articleData.article ?? "");
-      const isVeryLong = length === "very_long";
-
-      // Save to gv_article_generations
-      const { data: stored, error: storeError } = await supabase.from("gv_article_generations").insert({
-        brand_id,
-        topic: enrichedTopic,
-        objective,
-        length,
-        content: isVeryLong ? null : articleContent,
-        content_very_long: isVeryLong ? articleContent : null,
-        description: description || null,
+      // Insert placeholder immediately — respond before Claude starts
+      const { data: placeholder } = await supabase.from("gv_article_generations").insert({
+        brand_id, topic: enrichedTopic, objective, length,
+        description: description || null, requested_by: requested_by || null, status: "processing",
+        image_count, image_size, include_script, include_hashtags, include_music,
         uploaded_images: uploadedImgUrls.length > 0 ? uploadedImgUrls : null,
-        image_count,
-        image_size,
-        include_script,
-        include_hashtags,
-        include_music,
-        meta_title: String(articleData.meta_title ?? ""),
-        meta_description: String(articleData.meta_description ?? ""),
-        focus_keywords: (articleData.focus_keywords as string[]) ?? [],
-        social: (articleData.social as Record<string, unknown>) ?? {},
-        geo: (articleData.geo as Record<string, unknown>) ?? {},
-        hashtag_list: include_hashtags ? ((articleData.hashtags as string[]) ?? []) : null,
-        script_content: include_script ? String(articleData.script ?? "") : null,
-        music_suggestion: include_music ? String(articleData.music_suggestion ?? "") : null,
-        requested_by: requested_by || null,
-        status: "done",
       }).select("id").single();
+      const articlePlaceholderId: string | null = placeholder?.id ?? null;
 
-      if (storeError) console.error("[generate_article] DB error:", storeError.message);
-
-      const articleId = stored?.id ?? `temp-${Date.now()}`;
-      const DASHBOARD_URL = Deno.env.get("DASHBOARD_URL") || "https://app.geovera.xyz";
-
-      // Generate HMAC access token — binds URL to brand+article, prevents public guessing
-      async function genAccessToken(bId: string, aId: string): Promise<string> {
-        const secret = Deno.env.get("CONTENT_URL_SECRET") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "dev";
-        const enc = new TextEncoder();
-        const key = await crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-        const sig = await crypto.subtle.sign("HMAC", key, enc.encode(`${bId}:${aId}`));
-        return btoa(String.fromCharCode(...new Uint8Array(sig))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "").slice(0, 16);
-      }
-      const accessToken = stored?.id ? await genAccessToken(brand_id, stored.id) : "";
-      let article_url = `${DASHBOARD_URL}/articles/${articleId}${accessToken ? `?t=${accessToken}` : ""}`;
-
-      // Optional R2 CDN upload
-      const R2_ACCOUNT_ID      = Deno.env.get("R2_ACCOUNT_ID") || Deno.env.get("CLOUDFLARE_ACCOUNT_ID") || "";
-      const R2_ACCESS_KEY_ID   = Deno.env.get("R2_ACCESS_KEY_ID") ?? "";
-      const R2_SECRET_ACCESS_KEY = Deno.env.get("R2_SECRET_ACCESS_KEY") ?? "";
-      const R2_BUCKET_NAME     = Deno.env.get("R2_BUCKET_NAME") || Deno.env.get("R2_BUCKET") || "";
-      const R2_PUBLIC_URL      = Deno.env.get("R2_PUBLIC_URL") ?? "";
-
-      if (R2_ACCOUNT_ID && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY && R2_BUCKET_NAME && R2_PUBLIC_URL && stored?.id) {
+      // Background: Claude → parse → DB update → R2 → WA callback (400s wall clock)
+      const bgTask = (async () => {
         try {
-          const r2Key = `articles/${brand_id}/${stored.id}.html`;
-          const htmlContent = `<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${String(articleData.meta_title ?? enrichedTopic).replace(/</g,"&lt;")}</title><meta name="description" content="${String(articleData.meta_description ?? "").replace(/"/g,"&quot;")}"></head><body><article><h1>${String(articleData.meta_title ?? enrichedTopic).replace(/</g,"&lt;")}</h1>${articleContent}</article></body></html>`;
-          await uploadToR2(R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, r2Key, htmlContent, "text/html; charset=utf-8");
-          const r2CdnUrl = `${R2_PUBLIC_URL}/${r2Key}`;
-          // Keep article_url as viewer page URL (app.geovera.xyz/articles/[id]?t=...) — never overwrite with raw R2 URL
-          await supabase.from("gv_article_generations").update({ article_url, r2_key: r2Key }).eq("id", stored.id);
-          console.log(`[generate_article] Uploaded to R2: ${r2CdnUrl} | viewer: ${article_url}`);
-        } catch (r2Err) {
-          console.error("[generate_article] R2 upload failed:", r2Err);
-          await supabase.from("gv_article_generations").update({ article_url }).eq("id", articleId).then(() => {});
+          const claudeResp = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+            body: JSON.stringify({
+              model: "claude-sonnet-4-6",
+              max_tokens: 8192,
+              system: systemMsg,
+              messages: [{ role: "user", content: uploadedImgUrls.length > 0 ? userContent : userMsg }],
+            }),
+          });
+
+          if (!claudeResp.ok) {
+            console.error(`[generate_article] Claude error ${claudeResp.status}`);
+            if (articlePlaceholderId) await supabase.from("gv_article_generations").update({ status: "failed" }).eq("id", articlePlaceholderId);
+            if (waCallback && waToken) await sendWACallback(waCallback, waToken, `❌ Gagal generate artikel — Claude API error (${claudeResp.status})`);
+            return;
+          }
+
+          const claudeData = await claudeResp.json();
+          const rawText = (claudeData.content?.[0]?.text ?? "").trim();
+          let articleData: Record<string, unknown> = {};
+          try { const match = rawText.match(/\{[\s\S]*\}/); if (match) articleData = JSON.parse(match[0]); }
+          catch { articleData = { article: rawText }; }
+
+          const articleContent = String(articleData.article ?? "");
+          const isVeryLong = length === "very_long";
+          const DASHBOARD_URL = Deno.env.get("DASHBOARD_URL") || "https://app.geovera.xyz";
+
+          // Update placeholder with full content
+          const { data: stored } = await supabase.from("gv_article_generations").update({
+            status: "done",
+            content: isVeryLong ? null : articleContent,
+            content_very_long: isVeryLong ? articleContent : null,
+            meta_title: String(articleData.meta_title ?? ""),
+            meta_description: String(articleData.meta_description ?? ""),
+            focus_keywords: (articleData.focus_keywords as string[]) ?? [],
+            social: (articleData.social as Record<string, unknown>) ?? {},
+            geo: (articleData.geo as Record<string, unknown>) ?? {},
+            hashtag_list: include_hashtags ? ((articleData.hashtags as string[]) ?? []) : null,
+            script_content: include_script ? String(articleData.script ?? "") : null,
+            music_suggestion: include_music ? String(articleData.music_suggestion ?? "") : null,
+          }).eq("id", articlePlaceholderId ?? "").select("id").single();
+
+          const articleId = stored?.id ?? articlePlaceholderId ?? `temp-${Date.now()}`;
+
+          // HMAC access token
+          async function genAccessToken(bId: string, aId: string): Promise<string> {
+            const secret = Deno.env.get("CONTENT_URL_SECRET") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "dev";
+            const enc = new TextEncoder();
+            const key = await crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+            const sig = await crypto.subtle.sign("HMAC", key, enc.encode(`${bId}:${aId}`));
+            return btoa(String.fromCharCode(...new Uint8Array(sig))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "").slice(0, 16);
+          }
+          const accessToken = await genAccessToken(brand_id, articleId);
+          let article_url = `${DASHBOARD_URL}/articles/${articleId}?t=${accessToken}`;
+
+          // R2 CDN upload
+          const R2_ACCOUNT_ID        = Deno.env.get("R2_ACCOUNT_ID") || Deno.env.get("CLOUDFLARE_ACCOUNT_ID") || "";
+          const R2_ACCESS_KEY_ID     = Deno.env.get("R2_ACCESS_KEY_ID") ?? "";
+          const R2_SECRET_ACCESS_KEY = Deno.env.get("R2_SECRET_ACCESS_KEY") ?? "";
+          const R2_BUCKET_NAME       = Deno.env.get("R2_BUCKET_NAME") || Deno.env.get("R2_BUCKET") || "";
+          const R2_PUBLIC_URL        = Deno.env.get("R2_PUBLIC_URL") ?? "";
+
+          if (R2_ACCOUNT_ID && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY && R2_BUCKET_NAME && R2_PUBLIC_URL) {
+            try {
+              const r2Key = `articles/${brand_id}/${articleId}.html`;
+              const htmlContent = `<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${String(articleData.meta_title ?? enrichedTopic).replace(/</g, "&lt;")}</title><meta name="description" content="${String(articleData.meta_description ?? "").replace(/"/g, "&quot;")}"></head><body><article><h1>${String(articleData.meta_title ?? enrichedTopic).replace(/</g, "&lt;")}</h1>${articleContent}</article></body></html>`;
+              await uploadToR2(R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, r2Key, htmlContent, "text/html; charset=utf-8");
+              await supabase.from("gv_article_generations").update({ article_url, r2_key: r2Key }).eq("id", articleId);
+              console.log(`[generate_article] R2 ✓ | viewer: ${article_url}`);
+            } catch (r2Err) {
+              console.error("[generate_article] R2 upload failed:", r2Err);
+              await supabase.from("gv_article_generations").update({ article_url }).eq("id", articleId);
+            }
+          } else {
+            await supabase.from("gv_article_generations").update({ article_url }).eq("id", articleId);
+          }
+
+          console.log(`[generate_article] Done: ${articleId} → ${article_url}`);
+
+          // Send WA callback with article URL
+          if (waCallback && waToken) {
+            await sendWACallback(waCallback, waToken, `📝 *Artikel berhasil di-generate!*\n\n🔗 ${article_url}`);
+          }
+        } catch (bgErr) {
+          console.error("[generate_article] bg error:", bgErr);
+          if (articlePlaceholderId) await supabase.from("gv_article_generations").update({ status: "failed" }).eq("id", articlePlaceholderId);
+          if (waCallback && waToken) await sendWACallback(waCallback, waToken, `❌ Gagal generate artikel — error internal`);
         }
-      } else if (stored?.id) {
-        await supabase.from("gv_article_generations").update({ article_url }).eq("id", stored.id);
-      }
+      })();
 
-      console.log(`[generate_article] Done: ${articleId} → ${article_url}`);
+      // EdgeRuntime.waitUntil → 400s wall clock (Supabase Pro)
+      // @ts-ignore
+      if (typeof EdgeRuntime !== "undefined") { EdgeRuntime.waitUntil(bgTask); } else { await bgTask; }
 
-      return json({
-        ok: true,
-        success: true,
-        article_url,
-        article: {
-          id: articleId,
-          topic: enrichedTopic,
-          objective,
-          length,
-          content: articleContent,
-          meta_title: String(articleData.meta_title ?? ""),
-          meta_description: String(articleData.meta_description ?? ""),
-          focus_keywords: (articleData.focus_keywords as string[]) ?? [],
-          social: (articleData.social as Record<string, unknown>) ?? {},
-          geo: (articleData.geo as Record<string, unknown>) ?? {},
-        },
-      });
+      return json({ ok: true, success: true, status: "background", db_id: articlePlaceholderId });
     }
 
     return json({ error: "Invalid action" }, 400);
