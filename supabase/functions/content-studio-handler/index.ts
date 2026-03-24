@@ -7,8 +7,9 @@ const corsHeaders = {
 };
 
 const KIE_API_KEY = Deno.env.get("KIE_API_KEY") ?? "";
-const KIE_BASE = "https://api.kie.ai/v1";
+const KIE_BASE = "https://api.kie.ai/api/v1";
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") ?? "";
+const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const HEYGEN_API_KEY = Deno.env.get("HEYGEN_API_KEY") ?? "";
 const HEYGEN_BASE = "https://api.heygen.com";
 
@@ -20,6 +21,83 @@ const CF_WORKERS_AI = Deno.env.get("CF_AI_GATEWAY_WORKERS_AI")
   || (CF_AI_GATEWAY_BASE ? `${CF_AI_GATEWAY_BASE}/workers-ai` : "");
 const LLAMA_FAST  = "@cf/meta/llama-3.1-8b-instruct";
 const LLAMA_HEAVY = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+
+// ── R2 CDN Upload (AWS SigV4) ─────────────────────────────────────────────────
+
+async function _hmacSHA256(key: ArrayBuffer | Uint8Array, data: string): Promise<ArrayBuffer> {
+  const cryptoKey = await crypto.subtle.importKey("raw", key, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return crypto.subtle.sign("HMAC", cryptoKey, new TextEncoder().encode(data));
+}
+
+async function _sha256hex(data: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(data));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function _sha256hexBin(data: Uint8Array): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+// Upload text (HTML/JSON) or binary (image/video) to R2
+async function uploadToR2(
+  accountId: string, accessKeyId: string, secretAccessKey: string,
+  bucket: string, key: string, body: string | Uint8Array, contentType: string,
+): Promise<boolean> {
+  const host = `${accountId}.r2.cloudflarestorage.com`;
+  const now = new Date();
+  const dateStamp = now.toISOString().slice(0, 10).replace(/-/g, "");
+  const amzDate = now.toISOString().replace(/[-:]/g, "").slice(0, 15) + "Z";
+  const enc = new TextEncoder();
+  const bodyBytes = typeof body === "string" ? enc.encode(body) : body;
+  const payloadHash = await _sha256hexBin(bodyBytes);
+  const canonicalHeaders = `content-type:${contentType}\nhost:${host}\nx-amz-content-sha256:${payloadHash}\nx-amz-date:${amzDate}\n`;
+  const signedHeaders = "content-type;host;x-amz-content-sha256;x-amz-date";
+  const canonicalRequest = ["PUT", `/${bucket}/${key}`, "", canonicalHeaders, signedHeaders, payloadHash].join("\n");
+  const credentialScope = `${dateStamp}/auto/s3/aws4_request`;
+  const stringToSign = ["AWS4-HMAC-SHA256", amzDate, credentialScope, await _sha256hex(canonicalRequest)].join("\n");
+  const kDate    = await _hmacSHA256(enc.encode(`AWS4${secretAccessKey}`), dateStamp);
+  const kRegion  = await _hmacSHA256(kDate, "auto");
+  const kService = await _hmacSHA256(kRegion, "s3");
+  const kSigning = await _hmacSHA256(kService, "aws4_request");
+  const sigBuf   = await _hmacSHA256(kSigning, stringToSign);
+  const signature = Array.from(new Uint8Array(sigBuf)).map(b => b.toString(16).padStart(2, "0")).join("");
+  const authorization = `AWS4-HMAC-SHA256 Credential=${accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+  const res = await fetch(`https://${host}/${bucket}/${key}`, {
+    method: "PUT",
+    headers: { "Content-Type": contentType, "x-amz-content-sha256": payloadHash, "x-amz-date": amzDate, "Authorization": authorization },
+    body: bodyBytes,
+  });
+  if (!res.ok) throw new Error(`R2 upload failed (${res.status}): ${await res.text()}`);
+  return true;
+}
+
+// Helper: get R2 env vars — returns null if any missing
+function getR2Config(): { accountId: string; accessKeyId: string; secretKey: string; bucket: string; publicUrl: string } | null {
+  const accountId  = Deno.env.get("R2_ACCOUNT_ID") || Deno.env.get("CLOUDFLARE_ACCOUNT_ID") || "";
+  const accessKeyId = Deno.env.get("R2_ACCESS_KEY_ID") ?? "";
+  const secretKey  = Deno.env.get("R2_SECRET_ACCESS_KEY") ?? "";
+  const bucket     = Deno.env.get("R2_BUCKET_NAME") || Deno.env.get("R2_BUCKET") || "";
+  const publicUrl  = Deno.env.get("R2_PUBLIC_URL") ?? "";
+  if (!accountId || !accessKeyId || !secretKey || !bucket || !publicUrl) return null;
+  return { accountId, accessKeyId, secretKey, bucket, publicUrl };
+}
+
+// Download URL and upload to R2, return public CDN URL or null on failure
+async function proxyToR2(sourceUrl: string, r2Key: string, contentType: string): Promise<string | null> {
+  const r2 = getR2Config();
+  if (!r2) return null;
+  try {
+    const dlRes = await fetch(sourceUrl, { signal: AbortSignal.timeout(30_000) });
+    if (!dlRes.ok) return null;
+    const bytes = new Uint8Array(await dlRes.arrayBuffer());
+    await uploadToR2(r2.accountId, r2.accessKeyId, r2.secretKey, r2.bucket, r2Key, bytes, contentType);
+    return `${r2.publicUrl}/${r2Key}`;
+  } catch (e) {
+    console.error("[R2 proxy] failed:", e);
+    return null;
+  }
+}
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -41,30 +119,42 @@ async function kieGet(path: string) {
   return res.json();
 }
 
-// OpenAI Sora-2 — video generation for long durations (> 10s)
-async function openAISoraGenerate(prompt: string, duration: number, aspectRatio: string): Promise<{ job_id: string; status: string }> {
-  if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY not configured");
-  const sizeMap: Record<string, string> = { "9:16": "1080x1920", "16:9": "1920x1080", "1:1": "1080x1080" };
-  const size = sizeMap[aspectRatio] ?? "1080x1920";
-  const res = await fetch("https://api.openai.com/v1/video/generations", {
-    method: "POST",
-    headers: { "Authorization": `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: "sora-2", prompt, n: 1, size, quality: "high", duration }),
+// KIE API — Runway Gen4 Turbo image-to-video (5s clip)
+async function kieRunwayImageToVideo(imageUrl: string, prompt: string, aspectRatio: string): Promise<{ task_id: string; status: string }> {
+  const res = await kiePost("/jobs/createTask", {
+    model: "runway/gen4-turbo-image-to-video",
+    image_url: imageUrl,
+    prompt,
+    aspect_ratio: aspectRatio,
+    duration: 5,
   });
-  if (!res.ok) throw new Error(`OpenAI Sora error ${res.status}: ${await res.text()}`);
-  const data = await res.json();
-  return { job_id: data.id, status: data.status ?? "queued" };
+  const taskId = res.data?.task_id ?? res.task_id ?? res.id ?? null;
+  if (!taskId) throw new Error("KIE Runway image-to-video: no task_id in response");
+  return { task_id: taskId, status: res.data?.state ?? "processing" };
 }
 
-async function openAISoraPoll(jobId: string): Promise<{ status: string; video_url: string | null }> {
-  if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY not configured");
-  const res = await fetch(`https://api.openai.com/v1/video/generations/${jobId}`, {
-    headers: { "Authorization": `Bearer ${OPENAI_API_KEY}` },
-  });
-  if (!res.ok) throw new Error(`OpenAI Sora poll error ${res.status}`);
-  const data = await res.json();
-  const video_url = data.generations?.[0]?.url ?? data.result?.url ?? null;
-  return { status: data.status ?? "processing", video_url };
+// Poll a KIE task until done or timeout (maxWaitMs)
+async function kieWaitForTask(taskId: string, maxWaitMs = 240_000): Promise<{ video_url: string | null; image_url: string | null; status: string }> {
+  const interval = 6000;
+  const maxTries = Math.ceil(maxWaitMs / interval);
+  for (let i = 0; i < maxTries; i++) {
+    await new Promise(r => setTimeout(r, interval));
+    const res = await kieGet(`/jobs/recordInfo?taskId=${taskId}`);
+    const state: string = res.data?.state ?? res.status ?? "waiting";
+    if (state === "success" || state === "DONE" || state === "completed") {
+      const resultJson = res.data?.resultJson ? JSON.parse(res.data.resultJson) : null;
+      const resultUrls: string[] = resultJson?.resultUrls ?? [];
+      return {
+        video_url: res.data?.video_url ?? resultUrls.find((u: string) => u.includes(".mp4")) ?? null,
+        image_url: resultUrls.find((u: string) => !u.includes(".mp4")) ?? resultUrls[0] ?? null,
+        status: "completed",
+      };
+    }
+    if (state === "fail" || state === "failed" || state === "error") {
+      return { video_url: null, image_url: null, status: "failed" };
+    }
+  }
+  return { video_url: null, image_url: null, status: "timeout" };
 }
 
 // HeyGen — avatar video generation (up to 3 minutes, YouTube format)
@@ -121,6 +211,46 @@ async function openAIChat(systemPrompt: string, userPrompt: string, maxTokens = 
   if (!res.ok) throw new Error(`OpenAI error ${res.status}`);
   const data = await res.json();
   return data.choices?.[0]?.message?.content?.trim() ?? "";
+}
+
+// Claude Haiku — fast, cheap orchestrator for prompt optimization
+async function claudeHaiku(systemPrompt: string, userPrompt: string, maxTokens = 300): Promise<string> {
+  if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY not configured");
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: maxTokens,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userPrompt }],
+    }),
+  });
+  if (!res.ok) throw new Error(`Claude Haiku error ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  return data.content?.[0]?.text?.trim() ?? "";
+}
+
+// WA callback — sends result directly to WA group when background task completes
+async function sendWACallback(waCallback: string, waToken: string, message: string): Promise<void> {
+  if (!waCallback || !waToken) return;
+  try {
+    const isGroup = waCallback.includes('@g.us') || waCallback.includes('-');
+    const params: Record<string, string> = { target: waCallback, message, delay: '0' };
+    if (!isGroup) params.countryCode = '62';
+    await fetch('https://api.fonnte.com/send', {
+      method: 'POST',
+      headers: { Authorization: waToken, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(params).toString(),
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch (e) {
+    console.error('[sendWACallback] failed:', (e as Error).message);
+  }
 }
 
 // Cloudflare Llama — for training prompt engineering + smart looping learning
@@ -181,7 +311,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const noKieActions = ["check_daily_usage", "generate_smart_prompt", "submit_feedback"];
+    const noKieActions = ["check_daily_usage", "generate_smart_prompt", "submit_feedback", "generate_article", "update_article"];
     if (!KIE_API_KEY && !noKieActions.includes(action)) {
       return new Response(JSON.stringify({ error: "KIE_API_KEY not configured" }), {
         status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -458,86 +588,480 @@ Return ONLY a valid JSON array of ${count} prompt strings. No explanation, no ma
       });
     }
 
-    // ── GENERATE IMAGE ───────────────────────────────────────────────────────
+    // ── GENERATE IMAGE (background task — 400s wall clock) ───────────────────
     if (action === "generate_image") {
-      const { prompt, aspect_ratio = "1:1", model = "kie-flux", negative_prompt = "", lora_model = "" } = data;
+      const { prompt, aspect_ratio = "1:1" } = data;
+      const waCallback = String(data.wa_callback ?? "");
+      const waToken    = String(data.wa_token ?? "");
       if (!prompt) return json({ error: "prompt is required" }, 400);
 
-      const payload: Record<string, unknown> = { prompt, negative_prompt, aspect_ratio, model, num_images: 1 };
-      if (lora_model) payload.lora_model = lora_model;
-
-      const kieRes = await kiePost("/image/generate", payload);
-
-      const { data: inserted, error: insertErr } = await supabase.from("gv_image_generations").insert({
+      // Insert placeholder immediately — DB record exists before generation starts
+      const { data: inserted } = await supabase.from("gv_image_generations").insert({
         brand_id,
-        prompt_text: prompt,
-        negative_prompt,
+        prompt_text: String(prompt),
         aspect_ratio,
-        ai_provider: "kie",
-        ai_model: kieRes.model ?? model,
-        image_url: kieRes.image_url ?? kieRes.url ?? null,
-        thumbnail_url: kieRes.thumbnail_url ?? null,
-        status: kieRes.status ?? "completed",
-        target_platform: data.platform ?? "instagram",
-        style_preset: lora_model || null,
+        status: "processing",
+        ai_provider: "processing",
+        ai_model: "processing",
+        target_platform: String(data.platform ?? "instagram"),
+        metadata: { prompt, aspect_ratio },
       }).select("id").single();
-      if (insertErr) console.error("generate_image DB insert failed:", insertErr.message);
+      const dbId: string | null = inserted?.id ?? null;
 
-      return json({
-        success: true,
-        task_id: kieRes.task_id ?? kieRes.id ?? null,
-        image_url: kieRes.image_url ?? kieRes.url ?? null,
-        status: kieRes.status ?? "completed",
-        db_id: inserted?.id ?? null,
-        raw: kieRes,
-      });
+      // Background task: Haiku optimize → KIE (5min poll) → DALL-E fallback → DB update → WA callback
+      const bgTask = (async () => {
+        // Step 1: Optimize prompt with Claude Haiku
+        let optimizedPrompt = String(prompt);
+        if (ANTHROPIC_API_KEY) {
+          try {
+            optimizedPrompt = await claudeHaiku(
+              `You are an expert AI image prompt engineer specializing in Flux image generation.
+Take the user's simple description and expand it into a detailed, professional image generation prompt.
+Include: subject details, lighting (e.g. soft studio light, golden hour), composition (e.g. centered, rule of thirds),
+style (e.g. professional photography, cinematic), quality descriptors (e.g. sharp focus, high resolution, 8K).
+Keep under 150 words. Return ONLY the optimized prompt, no explanation, no quotes.`,
+              `Original description: ${prompt}`,
+              200,
+            );
+            console.log(`[generate_image] optimized: "${String(prompt).slice(0, 60)}" → "${optimizedPrompt.slice(0, 60)}"`);
+          } catch (e) {
+            console.warn("[generate_image] prompt optimization failed:", (e as Error).message);
+          }
+        }
+
+        let finalImageUrl: string | null = null;
+        let provider = "kie-flux2-pro";
+
+        // Step 2: KIE Flux 2 Pro — poll up to 60× 5s = 5 minutes (background allows full wait)
+        if (KIE_API_KEY) {
+          try {
+            const createRes = await kiePost("/jobs/createTask", {
+              model: "flux-2/pro-text-to-image",
+              input: { prompt: optimizedPrompt, aspect_ratio, resolution: "1K" },
+            });
+            const taskId: string | null = createRes.data?.taskId ?? createRes.taskId ?? null;
+            if (taskId) {
+              console.log(`[generate_image] KIE task: ${taskId}`);
+              for (let i = 0; i < 60; i++) {
+                await new Promise((r) => setTimeout(r, 5000));
+                const pollRes = await fetch(`${KIE_BASE}/jobs/recordInfo?taskId=${taskId}`, { headers: kieHeaders() });
+                if (!pollRes.ok) { console.error("[generate_image] KIE poll error:", pollRes.status); break; }
+                const pollData = await pollRes.json();
+                const state: string = pollData.data?.state ?? pollData.state ?? "waiting";
+                console.log(`[generate_image] KIE #${i + 1} state:${state} progress:${pollData.data?.progress ?? 0}%`);
+                if (state === "success") {
+                  const resultJson = pollData.data?.resultJson ?? null;
+                  let resultUrls: string[] = [];
+                  if (resultJson) try { resultUrls = JSON.parse(resultJson).resultUrls ?? []; } catch { /* */ }
+                  const kieUrl = resultUrls[0] ?? null;
+                  if (kieUrl) {
+                    const r2Key = `images/${brand_id}/${Date.now()}.jpg`;
+                    finalImageUrl = await proxyToR2(kieUrl, r2Key, "image/jpeg") ?? kieUrl;
+                    console.log(`[generate_image] KIE Flux 2 Pro ✓ → ${finalImageUrl}`);
+                  }
+                  break;
+                }
+                if (state === "fail") { console.error("[generate_image] KIE failed:", pollData.data?.failMsg); break; }
+              }
+            }
+          } catch (e) { console.error("[generate_image] KIE error:", (e as Error).message); }
+        }
+
+        // Step 3: Fallback — DALL-E 3
+        if (!finalImageUrl) {
+          provider = "dall-e-3";
+          const OPENAI_KEY = Deno.env.get("OPENAI_API_KEY") || "";
+          if (OPENAI_KEY) {
+            try {
+              const sizeMap: Record<string, string> = { "1:1": "1024x1024", "16:9": "1792x1024", "9:16": "1024x1792" };
+              const dalleRes = await fetch("https://api.openai.com/v1/images/generations", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${OPENAI_KEY}` },
+                body: JSON.stringify({ model: "dall-e-3", prompt: optimizedPrompt, n: 1, size: sizeMap[aspect_ratio] ?? "1024x1024", response_format: "url" }),
+                signal: AbortSignal.timeout(60_000),
+              });
+              if (dalleRes.ok) {
+                const dalleData = await dalleRes.json();
+                const dalleUrl: string | null = dalleData.data?.[0]?.url ?? null;
+                if (dalleUrl) {
+                  const r2Key = `images/${brand_id}/${Date.now()}.png`;
+                  finalImageUrl = await proxyToR2(dalleUrl, r2Key, "image/png") ?? dalleUrl;
+                  console.log(`[generate_image] DALL-E 3 → ${finalImageUrl}`);
+                }
+              } else { console.error("[generate_image] DALL-E 3 error:", dalleRes.status); }
+            } catch (e) { console.error("[generate_image] DALL-E 3 failed:", e); }
+          }
+        }
+
+        // Step 4: Update DB record with final result
+        if (dbId) {
+          if (finalImageUrl) {
+            await supabase.from("gv_image_generations").update({
+              status: "completed", image_url: finalImageUrl,
+              ai_provider: provider, ai_model: provider === "dall-e-3" ? "dall-e-3" : "flux-2-pro",
+              metadata: { prompt, optimized_prompt: optimizedPrompt, aspect_ratio, provider },
+            }).eq("id", dbId);
+          } else {
+            await supabase.from("gv_image_generations").update({ status: "failed" }).eq("id", dbId);
+          }
+        }
+
+        // Step 5: Send WA callback with result
+        if (waCallback && waToken) {
+          if (finalImageUrl) {
+            await sendWACallback(waCallback, waToken, `🎨 *Gambar berhasil di-generate!*\n\n🖼️ ${finalImageUrl}`);
+          } else {
+            await sendWACallback(waCallback, waToken, `❌ Gagal generate gambar — KIE Flux 2 Pro & DALL-E 3 tidak tersedia. Coba lagi nanti.`);
+          }
+        }
+      })();
+
+      // EdgeRuntime.waitUntil → 400s wall clock (Supabase Pro)
+      // @ts-ignore
+      if (typeof EdgeRuntime !== "undefined") { EdgeRuntime.waitUntil(bgTask); } else { await bgTask; }
+
+      return json({ ok: true, success: true, status: "background", db_id: dbId });
     }
 
-    // ── GENERATE VIDEO ───────────────────────────────────────────────────────
-    // Routing: duration > 10s → OpenAI Sora-2, otherwise → Kie API
+    // ── GENERATE VIDEO (5-phase pipeline) ───────────────────────────────────
+    // 5-Phase Video Pipeline (resumable via generation_id):
+    // Phase 1: KIE Flux 2 Pro → 12 images
+    // Phase 2: Claude Sonnet continuity scoring → pick top 6 (score >0.8)
+    // Phase 3: KIE Runway Gen4 Turbo → 6 × 5s clips (sequence-aware prompts)
+    // Phase 4: Modal FFmpeg smart loop per-clip → each 5s → 8-10s (saves after each)
+    // Phase 5: Modal FFmpeg stitch all 6 extended clips → final ~54-60s
     if (action === "generate_video") {
-      const { prompt, duration = 8, aspect_ratio = "9:16", model = "kling-v1", image_url = "" } = data;
+      const { prompt, aspect_ratio = "9:16", generation_id } = data;
+      const waCallback = String(data.wa_callback ?? "");
+      const waToken    = String(data.wa_token ?? "");
       if (!prompt) return json({ error: "prompt is required" }, 400);
 
-      const useOpenAI = Number(duration) > 10;
-      let task_id: string | null = null;
-      let video_url: string | null = null;
-      let status = "processing";
-      let ai_model = model;
-
-      if (useOpenAI) {
-        // OpenAI Sora-2 for long-duration videos (11–25s)
-        const soraRes = await openAISoraGenerate(prompt, Number(duration), aspect_ratio);
-        task_id = soraRes.job_id;
-        status = soraRes.status;
-        ai_model = "sora-2";
-      } else {
-        // Kie API for short videos (≤ 10s)
-        const payload: Record<string, unknown> = { prompt, duration, aspect_ratio, model, mode: data.mode ?? "standard" };
-        if (image_url) payload.image_url = image_url;
-        const kieRes = await kiePost("/video/generate", payload);
-        task_id = kieRes.task_id ?? kieRes.id ?? null;
-        video_url = kieRes.video_url ?? null;
-        status = kieRes.status ?? "processing";
-        ai_model = kieRes.model ?? model;
+      // Load existing job for resumability
+      let existingRow: Record<string, unknown> | null = null;
+      if (generation_id) {
+        const { data: row } = await supabase.from("gv_video_generations")
+          .select("id, pipeline_step, pipeline_data, video_status")
+          .eq("id", String(generation_id)).eq("brand_id", brand_id).maybeSingle();
+        existingRow = row as Record<string, unknown> | null;
       }
 
-      const { data: inserted, error: insertErr } = await supabase.from("gv_video_generations").insert({
-        brand_id,
-        target_platform: data.platform ?? "tiktok",
-        hook: prompt,
-        ai_model,
-        status,
-        generation_mode: useOpenAI ? "openai" : "kie",
-        runway_task_id: task_id,
-        video_url,
-        video_thumbnail_url: null,
-        video_aspect_ratio: aspect_ratio,
-        video_status: status,
-      }).select("id").single();
-      if (insertErr) console.error("generate_video DB insert failed:", insertErr.message);
+      // In-memory pipeline data cache (merged with DB on each save)
+      const pipelineCache: Record<string, unknown> = (existingRow?.pipeline_data as Record<string, unknown>) ?? {};
+      let dbId: string | null = existingRow ? String(existingRow.id) : null;
 
-      return json({ success: true, task_id, video_url, status, db_id: inserted?.id ?? null });
+      // savePhaseData: updates pipeline_step + merges phaseData into pipeline_data JSONB
+      const savePhaseData = async (phase: number, note: string, phaseData?: Record<string, unknown>) => {
+        if (!dbId) return;
+        if (phaseData) Object.assign(pipelineCache, phaseData);
+        await supabase.from("gv_video_generations").update({
+          pipeline_step: phase,
+          status: "processing",
+          video_status: "processing",
+          pipeline_data: { ...pipelineCache },
+        }).eq("id", dbId);
+        console.log(`[gen_video] Phase ${phase}: ${note}`);
+      };
+
+      // Insert new record only if not resuming an existing job
+      if (!dbId) {
+        const { data: inserted } = await supabase.from("gv_video_generations").insert({
+          brand_id,
+          target_platform: data.platform ?? "tiktok",
+          hook: prompt,
+          ai_model: "flux2pro+runway-gen4-turbo",
+          status: "processing",
+          generation_mode: "kie",
+          runway_task_id: null,
+          video_url: null,
+          video_thumbnail_url: null,
+          video_aspect_ratio: aspect_ratio,
+          video_status: "processing",
+          pipeline_step: 0,
+          pipeline_data: {},
+        }).select("id").single();
+        dbId = inserted?.id ?? null;
+      }
+
+      const bgTask = (async () => {
+        try {
+          // ── PHASE 1: Generate 12 images via KIE Flux 2 Pro ─────────────
+          let imageUrls: string[] = ((pipelineCache.phase1 as { image_urls?: string[] })?.image_urls) ?? [];
+
+          if (imageUrls.length < 6) {
+            await savePhaseData(1, "generating 12 Flux 2 Pro images");
+            const imageTaskIds: string[] = [];
+            for (let b = 0; b < 3; b++) {
+              const batchResults = await Promise.allSettled(
+                Array.from({ length: 4 }, () =>
+                  kiePost("/jobs/createTask", {
+                    model: "flux-2/pro-text-to-image",
+                    input: { prompt: String(prompt), aspect_ratio, resolution: "1K" },
+                  })
+                )
+              );
+              for (const r of batchResults) {
+                if (r.status === "fulfilled") {
+                  const tid = r.value?.data?.taskId ?? r.value?.taskId ?? null;
+                  if (tid) imageTaskIds.push(String(tid));
+                }
+              }
+            }
+            await Promise.allSettled(
+              imageTaskIds.map(async (tid) => {
+                const result = await kieWaitForTask(tid, 300_000);
+                if (result.image_url && result.status === "completed") imageUrls.push(result.image_url);
+              })
+            );
+            console.log(`[gen_video] Phase 1 done: ${imageUrls.length}/12 images`);
+            if (imageUrls.length === 0) throw new Error("Phase 1 failed: no images generated");
+            await savePhaseData(1, `${imageUrls.length} images ready`, { phase1: { image_urls: imageUrls } });
+          } else {
+            console.log(`[gen_video] Phase 1 resumed: ${imageUrls.length} images from cache`);
+          }
+
+          // ── PHASE 2: Claude Sonnet continuity scoring → top 6 ──────────
+          // PRIORITY #1: visual continuity & consistency across all selected images
+          let selectedImages: string[] = ((pipelineCache.phase2 as { selected_images?: string[] })?.selected_images) ?? [];
+
+          if (selectedImages.length < 6) {
+            await savePhaseData(2, `scoring ${imageUrls.length} images for continuity`);
+            selectedImages = imageUrls.slice(0, 6); // default fallback
+
+            if (ANTHROPIC_API_KEY && imageUrls.length > 1) {
+              try {
+                type CItem = { type: "text"; text: string } | { type: "image"; source: { type: "url"; url: string } };
+                const content: CItem[] = imageUrls.slice(0, 12).flatMap((url, i) => ([
+                  { type: "image" as const, source: { type: "url" as const, url } },
+                  { type: "text" as const, text: `[Image ${i + 1}] ${url}` },
+                ]));
+                content.push({
+                  type: "text",
+                  text: `You are a professional video director selecting 6 frames for a cinematic brand video sequence.
+
+PRIORITY #1 — CONTINUITY & CONSISTENCY (non-negotiable):
+• All 6 selected images MUST share the same visual world: matching color palette, lighting direction, mood, and aesthetic style
+• They must work as a coherent visual sequence — no jarring jumps between cuts
+• Prefer a cohesive group of 6 over 6 individually brilliant but visually mismatched images
+
+Scoring per image (0.0–1.0):
+1. Visual continuity fit (30%) — matches color palette, lighting, mood of the group
+2. Sequence logic (25%) — works as a sequential frame in a video story
+3. Lighting & color consistency (20%) — same light direction and quality as group
+4. Technical quality (15%) — sharp, clean, no artifacts
+5. Motion-readiness (10%) — suitable for 5s video clip generation
+
+Select exactly TOP 6 images prioritizing the most visually coherent group.
+Return ONLY valid JSON: {"selected":["url1","url2","url3","url4","url5","url6"],"scores":{"url1":0.92,...},"continuity_note":"one line on what visual element ties them together"}`,
+                });
+
+                const claudeResp = await fetch("https://api.anthropic.com/v1/messages", {
+                  method: "POST",
+                  headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+                  body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 1024, messages: [{ role: "user", content }] }),
+                });
+                if (claudeResp.ok) {
+                  const cd = await claudeResp.json();
+                  const match = (cd.content?.[0]?.text ?? "").match(/\{[\s\S]*\}/);
+                  if (match) {
+                    const parsed = JSON.parse(match[0]);
+                    if (Array.isArray(parsed.selected) && parsed.selected.length > 0) {
+                      const scored = parsed.selected.slice(0, 6);
+                      // Pad to 6 if fewer returned
+                      if (scored.length < 6) {
+                        const scoredSet = new Set(scored);
+                        const remaining = imageUrls.filter(u => !scoredSet.has(u));
+                        selectedImages = [...scored, ...remaining].slice(0, 6);
+                      } else {
+                        selectedImages = scored;
+                      }
+                    }
+                  }
+                }
+              } catch (e) {
+                console.warn("[gen_video] Phase 2 Claude failed, using top 6:", (e as Error).message);
+                selectedImages = imageUrls.slice(0, 6);
+              }
+            }
+            console.log(`[gen_video] Phase 2 done: ${selectedImages.length} images selected`);
+            await savePhaseData(2, `${selectedImages.length} images selected`, { phase2: { selected_images: selectedImages } });
+          } else {
+            console.log(`[gen_video] Phase 2 resumed: ${selectedImages.length} images from cache`);
+          }
+
+          // ── PHASE 3: KIE Runway Gen4 Turbo → 6 × 5s clips ─────────────
+          // Sequence-aware prompts maintain continuity: each clip knows its position in the story
+          let clipUrls: string[] = ((pipelineCache.phase3 as { clip_urls?: string[] })?.clip_urls) ?? [];
+
+          if (clipUrls.length < selectedImages.length) {
+            await savePhaseData(3, `generating ${selectedImages.length} × 5s clips with sequence continuity`);
+            const sceneLabels = [
+              "opening establishing shot — introduce the scene",
+              "build-up — develop the visual story",
+              "mid-sequence — continuation with forward momentum",
+              "peak moment — visual climax of the story",
+              "resolution — wind down, emotional payoff",
+              "closing outro — final impression, brand statement",
+            ];
+            const clipTaskIds: string[] = [];
+
+            for (let i = 0; i < selectedImages.length; i++) {
+              const sceneLabel = sceneLabels[i] ?? `scene ${i + 1} of ${selectedImages.length}`;
+              const sequencePrompt = `${String(prompt)} — Scene ${i + 1}/${selectedImages.length}: ${sceneLabel}. Maintain exact visual continuity: same color grade, lighting direction, and atmosphere as the previous scene. Smooth cinematic motion, professional brand video quality. No abrupt cuts or visual discontinuity.`;
+              try {
+                const r = await kieRunwayImageToVideo(selectedImages[i], sequencePrompt, aspect_ratio);
+                clipTaskIds.push(r.task_id);
+              } catch (e) {
+                console.warn(`[gen_video] Phase 3 clip ${i + 1} task failed:`, (e as Error).message);
+              }
+            }
+
+            // Poll all clip tasks in parallel (max 4 min each)
+            await Promise.allSettled(
+              clipTaskIds.map(async (tid) => {
+                const result = await kieWaitForTask(tid, 240_000);
+                if (result.video_url && result.status === "completed") clipUrls.push(result.video_url);
+              })
+            );
+            console.log(`[gen_video] Phase 3 done: ${clipUrls.length}/${selectedImages.length} clips ready`);
+            if (clipUrls.length === 0) throw new Error("Phase 3 failed: no clips generated");
+            await savePhaseData(3, `${clipUrls.length} clips ready`, { phase3: { clip_urls: clipUrls } });
+          } else {
+            console.log(`[gen_video] Phase 3 resumed: ${clipUrls.length} clips from cache`);
+          }
+
+          // ── PHASE 4: Per-clip FFmpeg smart loop → each 5s → 8-10s ──────
+          // Each clip extended individually — progress saved after EACH clip
+          // so a crash at clip 4 resumes from clip 4, not from scratch
+          let extendedClipUrls: string[] = ((pipelineCache.phase4 as { extended_clip_urls?: string[] })?.extended_clip_urls) ?? [];
+          const MODAL_FFMPEG = Deno.env.get("MODAL_FFMPEG_URL") ?? "";
+
+          if (extendedClipUrls.length < clipUrls.length) {
+            const startIdx = extendedClipUrls.length;
+            await savePhaseData(4, `extending clips ${startIdx + 1}–${clipUrls.length} to 8-10s each`);
+
+            for (let i = startIdx; i < clipUrls.length; i++) {
+              let extendedUrl: string = clipUrls[i]; // fallback to original
+              if (MODAL_FFMPEG) {
+                try {
+                  const loopRes = await fetch(MODAL_FFMPEG, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      clip_urls: [clipUrls[i]],
+                      target_duration: 9,   // 8-10s midpoint
+                      aspect_ratio,
+                      smart_loop: true,
+                      mode: "loop",
+                    }),
+                    signal: AbortSignal.timeout(90_000),
+                  });
+                  if (loopRes.ok) {
+                    const d = await loopRes.json();
+                    extendedUrl = d.video_url ?? d.output_url ?? extendedUrl;
+                    console.log(`[gen_video] Phase 4 clip ${i + 1}/${clipUrls.length} → ${extendedUrl}`);
+                  } else {
+                    console.error(`[gen_video] Phase 4 clip ${i + 1} FFmpeg error: ${loopRes.status} — using original`);
+                  }
+                } catch (e) {
+                  console.error(`[gen_video] Phase 4 clip ${i + 1} failed:`, (e as Error).message, "— using original");
+                }
+              }
+              extendedClipUrls.push(extendedUrl);
+              // Save after EVERY clip — crash recovery resumes from next clip
+              await savePhaseData(4, `clip ${i + 1}/${clipUrls.length} extended`, {
+                phase4: { extended_clip_urls: [...extendedClipUrls] },
+              });
+            }
+            console.log(`[gen_video] Phase 4 done: ${extendedClipUrls.length} clips extended to 8-10s`);
+          } else {
+            console.log(`[gen_video] Phase 4 resumed: ${extendedClipUrls.length} extended clips from cache`);
+          }
+
+          // ── PHASE 5: Stitch all extended clips → final ~54-60s ──────────
+          let finalVideoUrl: string | null = ((pipelineCache.phase5 as { video_url?: string })?.video_url) ?? null;
+
+          if (!finalVideoUrl) {
+            await savePhaseData(5, `stitching ${extendedClipUrls.length} extended clips → final video`);
+            let stitchedUrl: string | null = extendedClipUrls[0] ?? null;
+
+            if (MODAL_FFMPEG && extendedClipUrls.length > 0) {
+              try {
+                const stitchRes = await fetch(MODAL_FFMPEG, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    clip_urls: extendedClipUrls,
+                    aspect_ratio,
+                    smart_loop: false,
+                    transition: "crossfade",
+                    mode: "stitch",
+                  }),
+                  signal: AbortSignal.timeout(120_000),
+                });
+                if (stitchRes.ok) {
+                  const d = await stitchRes.json();
+                  stitchedUrl = d.video_url ?? d.output_url ?? stitchedUrl;
+                  console.log(`[gen_video] Phase 5 done: ${stitchedUrl}`);
+                } else {
+                  console.error("[gen_video] Phase 5 FFmpeg stitch error:", stitchRes.status);
+                }
+              } catch (e) {
+                console.error("[gen_video] Phase 5 stitch failed:", (e as Error).message);
+              }
+            }
+            finalVideoUrl = stitchedUrl;
+            if (finalVideoUrl) {
+              await savePhaseData(5, "stitch complete", { phase5: { video_url: finalVideoUrl } });
+            }
+          } else {
+            console.log(`[gen_video] Phase 5 resumed: final video from cache`);
+          }
+
+          // Upload final video to R2 CDN
+          if (finalVideoUrl) {
+            const r2Key = `videos/${brand_id}/${dbId ?? Date.now()}.mp4`;
+            const r2Url = await proxyToR2(finalVideoUrl, r2Key, "video/mp4");
+            if (r2Url) finalVideoUrl = r2Url;
+          }
+
+          // Final DB update
+          if (dbId) {
+            await supabase.from("gv_video_generations").update({
+              video_status: finalVideoUrl ? "completed" : "failed",
+              status: finalVideoUrl ? "completed" : "failed",
+              video_url: finalVideoUrl,
+              pipeline_step: 5,
+              pipeline_data: { ...pipelineCache },
+            }).eq("id", dbId);
+          }
+
+          // WA callback
+          if (waCallback && waToken) {
+            if (finalVideoUrl) {
+              await sendWACallback(waCallback, waToken, `🎬 *Video berhasil di-generate!* (~54-60s, 6 scenes)\n\n🎥 ${finalVideoUrl}`);
+            } else {
+              await sendWACallback(waCallback, waToken, `❌ Gagal generate video — pipeline error.\n\nResume dengan generation_id: ${dbId}`);
+            }
+          }
+        } catch (e) {
+          console.error("[gen_video] pipeline error:", (e as Error).message);
+          if (dbId) {
+            await supabase.from("gv_video_generations").update({
+              video_status: "failed",
+              status: "failed",
+              pipeline_data: { ...pipelineCache, last_error: (e as Error).message },
+            }).eq("id", dbId);
+          }
+          if (waCallback && waToken) {
+            await sendWACallback(waCallback, waToken, `❌ Gagal generate video — ${(e as Error).message}\n\nResume dengan generation_id: ${dbId}`);
+          }
+        }
+      })();
+
+      // @ts-ignore
+      if (typeof EdgeRuntime !== "undefined") { EdgeRuntime.waitUntil(bgTask); } else { await bgTask; }
+
+      return json({ ok: true, success: true, status: "background", db_id: dbId, resumable: true });
     }
 
     // ── LIST HEYGEN AVATARS ───────────────────────────────────────────────────
@@ -644,24 +1168,20 @@ Return ONLY a valid JSON array of ${count} prompt strings. No explanation, no ma
       let video_url: string | null = null;
       let thumbnail_url: string | null = null;
 
-      if (generation_mode === "openai") {
-        const pollRes = await openAISoraPoll(String(task_id));
-        status = pollRes.status;
-        video_url = pollRes.video_url;
-        // Normalize OpenAI statuses
-        if (status === "succeeded") status = "completed";
-        if (status === "failed") status = "failed";
-      } else if (generation_mode === "heygen") {
+      if (generation_mode === "heygen") {
         const pollRes = await heygenPoll(String(task_id));
         status = pollRes.status;
         video_url = pollRes.video_url;
         thumbnail_url = pollRes.thumbnail_url;
         if (status === "completed") status = "completed";
       } else {
-        const kieRes = await kieGet(`/task/${task_id}`);
-        status = kieRes.status ?? "processing";
-        image_url = kieRes.image_url ?? kieRes.result?.image_url ?? null;
-        video_url = kieRes.video_url ?? kieRes.result?.video_url ?? null;
+        const kieRes = await kieGet(`/jobs/recordInfo?taskId=${task_id}`);
+        const kState = kieRes.data?.state ?? kieRes.status ?? "processing";
+        status = (kState === "DONE" || kState === "success" || kState === "completed") ? "completed" : kState === "failed" ? "failed" : "processing";
+        const resultJson = kieRes.data?.resultJson ? JSON.parse(kieRes.data.resultJson) : null;
+        const resultUrls: string[] = resultJson?.resultUrls ?? [];
+        image_url = resultUrls[0] ?? kieRes.data?.image_url ?? null;
+        video_url = kieRes.data?.video_url ?? null;
         thumbnail_url = kieRes.thumbnail_url ?? null;
       }
 
@@ -673,15 +1193,36 @@ Return ONLY a valid JSON array of ${count} prompt strings. No explanation, no ma
             thumbnail_url,
           }).eq("id", db_id);
         } else if (task_type === "video") {
+          // Proxy completed video to R2 CDN
+          let finalVideoUrl = video_url;
+          if (video_url) {
+            const r2VideoKey = `videos/${brand_id}/${db_id}.mp4`;
+            const r2Url = await proxyToR2(video_url, r2VideoKey, "video/mp4");
+            if (r2Url) { finalVideoUrl = r2Url; console.log(`[check_task video] R2: ${r2Url}`); }
+          }
           await supabase.from("gv_video_generations").update({
             video_status: "completed",
-            video_url,
+            video_url: finalVideoUrl,
             video_thumbnail_url: thumbnail_url,
           }).eq("id", db_id);
+          video_url = finalVideoUrl;
         }
       }
 
-      return json({ success: true, status, image_url, video_url });
+      // Proxy completed image to R2 if not yet done
+      if (task_type === "image" && image_url && db_id) {
+        const ext = image_url.split("?")[0].split(".").pop()?.toLowerCase() ?? "jpg";
+        const mime = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
+        const r2ImageKey = `images/${brand_id}/${db_id}.${ext}`;
+        const r2Url = await proxyToR2(image_url, r2ImageKey, mime);
+        if (r2Url) {
+          image_url = r2Url;
+          await supabase.from("gv_image_generations").update({ image_url: r2Url }).eq("id", db_id);
+          console.log(`[check_task image] R2: ${r2Url}`);
+        }
+      }
+
+      return json({ ok: true, success: true, status, image_url, video_url, url: image_url || video_url });
     }
 
     // ── TRAIN PRODUCT / CHARACTER ────────────────────────────────────────────
@@ -807,6 +1348,213 @@ Return ONLY a valid JSON array of ${count} prompt strings. No explanation, no ma
 
       if (dbError) return json({ error: `Failed to save feedback: ${dbError}` }, 500);
       return json({ success: true, feedback, db_id });
+    }
+
+    // ── GENERATE ARTICLE (background task — 400s wall clock) ─────────────────
+    if (action === "generate_article" || action === "update_article") {
+      if (!ANTHROPIC_API_KEY) return json({ error: "ANTHROPIC_API_KEY not configured" }, 500);
+      const waCallback = String(data.wa_callback ?? "");
+      const waToken    = String(data.wa_token ?? "");
+
+      // Accept 'topic' (UI) or 'prompt' (WA bot) interchangeably
+      const topic = String(data.topic || data.prompt || "");
+      const objective = String(data.objective || "random");
+      const length = String(data.length || "medium");
+      const description = data.description as string | undefined;
+      const requested_by = data.requested_by as string | undefined;
+      const uploadedImgUrls = ((data.uploaded_images || data.image_urls) as string[] | undefined) ?? [];
+      const image_count = Number(data.image_count ?? 0);
+      const image_size = String(data.image_size ?? "1:1");
+      const include_script = Boolean(data.include_script);
+      const include_hashtags = Boolean(data.include_hashtags);
+      const include_music = Boolean(data.include_music);
+
+      // Fetch brand profile + brands for context
+      const [{ data: bp }, { data: brand }] = await Promise.all([
+        supabase.from("brand_profiles").select("brand_name, country, brand_dna, source_of_truth").eq("id", brand_id).maybeSingle(),
+        supabase.from("brands").select("name, category").eq("id", brand_id).maybeSingle(),
+      ]);
+
+      const brandName = bp?.brand_name ?? brand?.name ?? "Brand";
+      const country = bp?.country ?? "Indonesia";
+      const dna = (bp?.brand_dna ?? {}) as Record<string, unknown>;
+      const sot = (bp?.source_of_truth ?? {}) as Record<string, unknown>;
+      const kwi = sot.keyword_intelligence as Record<string, unknown> | null;
+      const rankingKws = (kwi?.ranking_keywords as string[] ?? []).slice(0, 5).join(", ");
+
+      const objectiveLabels: Record<string, string> = {
+        faq: "FAQ format", trend: "Trend article", educational: "Educational",
+        tips: "Tips & Tricks", tips_tricks: "Tips & Tricks", new_product: "Product launch",
+        seasonal_greetings: "Seasonal Greetings", newsletter: "Newsletter",
+        updates: "Brand updates", multi_product: "Multi Product Catalog",
+        ads: "Ads copy", tutorial: "Tutorial", review: "Review & Testimonial",
+        random: "AI-recommended content",
+      };
+      const objLabel = objectiveLabels[objective] ?? "konten brand relevan";
+
+      const wordCounts: Record<string, number> = { short: 80, medium: 800, long: 1500, very_long: 3000 };
+      const targetWords = wordCounts[length] ?? 800;
+      const isShort = length === 'short';
+      const enrichedTopic = topic ? `${topic}` : `${objLabel} untuk ${brandName}`;
+
+      const extraJsonFields = [
+        include_hashtags ? `  "hashtags": ["#tag1","#tag2","#tag3","#tag4","#tag5","#tag6","#tag7","#tag8","#tag9","#tag10"],` : "",
+        include_script   ? `  "script": "Full narration script for video/reel (60-90 seconds)",` : "",
+        include_music    ? `  "music_suggestion": "Recommended background music style",` : "",
+        image_count > 0  ? `  "image_prompts": [${Array.from({length: image_count}, (_, i) => `"Image prompt ${i+1} (${image_size})"`).join(",")}],` : "",
+      ].filter(Boolean).join("\n");
+
+      const systemMsg = `You are an expert content writer and SEO specialist for ${brandName}, a ${brand?.category ?? "brand"} in ${country}. Write high-quality, engaging content in Indonesian (Bahasa Indonesia). Always respond with valid JSON.`;
+
+      const userMsg = `Write a ${isShort ? 'short social media post (max 500 characters total, suitable for X/Twitter and LinkedIn)' : `${targetWords}-word article`}:
+
+Brand: ${brandName}
+Positioning: ${String(dna.positioning ?? "premium brand")}
+USP: ${String(dna.usp ?? "")}
+Keywords: ${rankingKws || "brand-related keywords"}
+Topic: ${enrichedTopic}
+Format: ${objLabel}
+${description ? `Brief: ${description}` : ""}
+${uploadedImgUrls.length > 0 ? `Reference images: ${uploadedImgUrls.length} provided` : ""}
+${include_script ? "Include: narration script" : ""}
+${include_hashtags ? "Include: 10 hashtags" : ""}
+
+Return ONLY valid JSON:
+{
+  "article": "${isShort ? 'short post text (max 500 chars, plain text or minimal HTML, no headings)' : `full article HTML (~${targetWords} words, use <h2><h3><p><ul><li> tags)`}",
+  "meta_title": "SEO title (50-60 chars)",
+  "meta_description": "SEO description (150-160 chars)",
+  "focus_keywords": ["keyword1", "keyword2", "keyword3"],
+  "social": {
+    "instagram": "Instagram caption max 150 chars + 5 hashtags",
+    "linkedin": "LinkedIn post professional max 200 chars",
+    "tiktok": "TikTok hook punchy max 100 chars"
+  },
+  "geo": {
+    "faq": [
+      {"question": "Q1?", "answer": "A1."},
+      {"question": "Q2?", "answer": "A2."},
+      {"question": "Q3?", "answer": "A3."}
+    ]
+  }${extraJsonFields ? `,\n${extraJsonFields}` : ""}
+}`;
+
+      type ClaudeContent = { type: "text"; text: string } | { type: "image"; source: { type: "url"; url: string } };
+      const userContent: ClaudeContent[] = [];
+      for (const imgUrl of uploadedImgUrls.slice(0, 8)) {
+        userContent.push({ type: "image", source: { type: "url", url: String(imgUrl) } });
+      }
+      userContent.push({ type: "text", text: userMsg });
+
+      // Insert placeholder immediately — respond before Claude starts
+      const { data: placeholder } = await supabase.from("gv_article_generations").insert({
+        brand_id, topic: enrichedTopic, objective, length,
+        description: description || null, requested_by: requested_by || null, status: "processing",
+        image_count, image_size, include_script, include_hashtags, include_music,
+        uploaded_images: uploadedImgUrls.length > 0 ? uploadedImgUrls : null,
+      }).select("id").single();
+      const articlePlaceholderId: string | null = placeholder?.id ?? null;
+
+      // Background: Claude → parse → DB update → R2 → WA callback (400s wall clock)
+      const bgTask = (async () => {
+        try {
+          const claudeResp = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+            body: JSON.stringify({
+              model: "claude-sonnet-4-6",
+              max_tokens: 8192,
+              system: systemMsg,
+              messages: [{ role: "user", content: uploadedImgUrls.length > 0 ? userContent : userMsg }],
+            }),
+          });
+
+          if (!claudeResp.ok) {
+            console.error(`[generate_article] Claude error ${claudeResp.status}`);
+            if (articlePlaceholderId) await supabase.from("gv_article_generations").update({ status: "failed" }).eq("id", articlePlaceholderId);
+            if (waCallback && waToken) await sendWACallback(waCallback, waToken, `❌ Gagal generate artikel — Claude API error (${claudeResp.status})`);
+            return;
+          }
+
+          const claudeData = await claudeResp.json();
+          const rawText = (claudeData.content?.[0]?.text ?? "").trim();
+          let articleData: Record<string, unknown> = {};
+          try { const match = rawText.match(/\{[\s\S]*\}/); if (match) articleData = JSON.parse(match[0]); }
+          catch { articleData = { article: rawText }; }
+
+          const articleContent = String(articleData.article ?? "");
+          const isVeryLong = length === "very_long";
+          const brandSlug = (brand?.name ?? brandName).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+          const DASHBOARD_URL = Deno.env.get("DASHBOARD_URL") || `https://${brandSlug}.geovera.xyz`;
+
+          // Update placeholder with full content
+          const { data: stored } = await supabase.from("gv_article_generations").update({
+            status: "done",
+            content: isVeryLong ? null : articleContent,
+            content_very_long: isVeryLong ? articleContent : null,
+            meta_title: String(articleData.meta_title ?? ""),
+            meta_description: String(articleData.meta_description ?? ""),
+            focus_keywords: (articleData.focus_keywords as string[]) ?? [],
+            social: (articleData.social as Record<string, unknown>) ?? {},
+            geo: (articleData.geo as Record<string, unknown>) ?? {},
+            hashtag_list: include_hashtags ? ((articleData.hashtags as string[]) ?? []) : null,
+            script_content: include_script ? String(articleData.script ?? "") : null,
+            music_suggestion: include_music ? String(articleData.music_suggestion ?? "") : null,
+          }).eq("id", articlePlaceholderId ?? "").select("id").single();
+
+          const articleId = stored?.id ?? articlePlaceholderId ?? `temp-${Date.now()}`;
+
+          // HMAC access token
+          async function genAccessToken(bId: string, aId: string): Promise<string> {
+            const secret = Deno.env.get("CONTENT_URL_SECRET") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "dev";
+            const enc = new TextEncoder();
+            const key = await crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+            const sig = await crypto.subtle.sign("HMAC", key, enc.encode(`${bId}:${aId}`));
+            return btoa(String.fromCharCode(...new Uint8Array(sig))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "").slice(0, 16);
+          }
+          const accessToken = await genAccessToken(brand_id, articleId);
+          let article_url = `${DASHBOARD_URL}/articles/${articleId}?t=${accessToken}`;
+
+          // R2 CDN upload
+          const R2_ACCOUNT_ID        = Deno.env.get("R2_ACCOUNT_ID") || Deno.env.get("CLOUDFLARE_ACCOUNT_ID") || "";
+          const R2_ACCESS_KEY_ID     = Deno.env.get("R2_ACCESS_KEY_ID") ?? "";
+          const R2_SECRET_ACCESS_KEY = Deno.env.get("R2_SECRET_ACCESS_KEY") ?? "";
+          const R2_BUCKET_NAME       = Deno.env.get("R2_BUCKET_NAME") || Deno.env.get("R2_BUCKET") || "";
+          const R2_PUBLIC_URL        = Deno.env.get("R2_PUBLIC_URL") ?? "";
+
+          if (R2_ACCOUNT_ID && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY && R2_BUCKET_NAME && R2_PUBLIC_URL) {
+            try {
+              const r2Key = `articles/${brand_id}/${articleId}.html`;
+              const htmlContent = `<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${String(articleData.meta_title ?? enrichedTopic).replace(/</g, "&lt;")}</title><meta name="description" content="${String(articleData.meta_description ?? "").replace(/"/g, "&quot;")}"></head><body><article><h1>${String(articleData.meta_title ?? enrichedTopic).replace(/</g, "&lt;")}</h1>${articleContent}</article></body></html>`;
+              await uploadToR2(R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, r2Key, htmlContent, "text/html; charset=utf-8");
+              await supabase.from("gv_article_generations").update({ article_url, r2_key: r2Key }).eq("id", articleId);
+              console.log(`[generate_article] R2 ✓ | viewer: ${article_url}`);
+            } catch (r2Err) {
+              console.error("[generate_article] R2 upload failed:", r2Err);
+              await supabase.from("gv_article_generations").update({ article_url }).eq("id", articleId);
+            }
+          } else {
+            await supabase.from("gv_article_generations").update({ article_url }).eq("id", articleId);
+          }
+
+          console.log(`[generate_article] Done: ${articleId} → ${article_url}`);
+
+          // Send WA callback with article URL
+          if (waCallback && waToken) {
+            await sendWACallback(waCallback, waToken, `📝 *Artikel berhasil di-generate!*\n\n🔗 ${article_url}`);
+          }
+        } catch (bgErr) {
+          console.error("[generate_article] bg error:", bgErr);
+          if (articlePlaceholderId) await supabase.from("gv_article_generations").update({ status: "failed" }).eq("id", articlePlaceholderId);
+          if (waCallback && waToken) await sendWACallback(waCallback, waToken, `❌ Gagal generate artikel — error internal`);
+        }
+      })();
+
+      // EdgeRuntime.waitUntil → 400s wall clock (Supabase Pro)
+      // @ts-ignore
+      if (typeof EdgeRuntime !== "undefined") { EdgeRuntime.waitUntil(bgTask); } else { await bgTask; }
+
+      return json({ ok: true, success: true, status: "background", db_id: articlePlaceholderId });
     }
 
     return json({ error: "Invalid action" }, 400);

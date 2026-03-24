@@ -1655,7 +1655,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { brand_name, country, email, industry, description } = await req.json();
+    const { brand_name, country, email, industry, description, brand_id, brand_profile_id } = await req.json();
 
     if (!brand_name) {
       throw new Error('brand_name is required');
@@ -1665,35 +1665,88 @@ Deno.serve(async (req) => {
       throw new Error('country is required');
     }
 
+    // Init Supabase admin client for saving research data
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+    const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseAdmin = (await import('https://esm.sh/@supabase/supabase-js@2')).createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+
+    // Helper: save partial progress to brand_profiles
+    const saveToProfile = async (fields: Record<string, unknown>) => {
+      if (!brand_profile_id) return;
+      const { error } = await supabaseAdmin
+        .from('brand_profiles')
+        .update({ ...fields, updated_at: new Date().toISOString() })
+        .eq('id', brand_profile_id);
+      if (error) console.error('[onboarding] brand_profiles update error:', error.message);
+    };
+
+    // Helper: update brand onboarding step
+    const updateBrandStep = async (step: number, done = false) => {
+      if (!brand_id) return;
+      const { error } = await supabaseAdmin
+        .from('brands')
+        .update({ onboarding_step: step, ...(done ? { onboarding_done: true } : {}) })
+        .eq('id', brand_id);
+      if (error) console.error('[onboarding] brands update error:', error.message);
+    };
+
     const brandWithCountry = `${brand_name} (${country})`;
-    console.log(`\n🚀 Starting PERPLEXITY-FIRST 5-step workflow for: ${brandWithCountry}\n`);
+    console.log(`\n🚀 Starting research workflow for: ${brandWithCountry}\n`);
 
-    // Step 0: Perplexity Discovery (NEW - Find verified data first)
-    console.log('🔍 Step 0: Perplexity Deep Discovery...');
+    // Step 0 (internal): Perplexity Discovery — verified brand facts
+    console.log('🔍 Step 0: Perplexity Discovery...');
     const step0Data = await step0_perplexity_discovery(brand_name, country);
-    console.log('✅ Step 0 Complete - Verified data discovered\n');
+    console.log('✅ Step 0 Complete\n');
 
-    // Step 1: Gemini Indexing (Using verified Perplexity data)
-    console.log('📍 Step 1: Gemini Brand Indexing (with verified data)...');
+    // Step 1: Gemini Indexing — uses Step 0 verified data as foundation
+    console.log('📍 Step 1: Gemini Brand Indexing...');
     const step1Data = await step1_gemini(brand_name, country, step0Data);
     console.log('✅ Step 1 Complete\n');
 
-    // Step 2: Perplexity Deep Research
-    console.log('🔍 Step 2: Perplexity Deep Market Research...');
+    // Save Step 1 immediately → brand_profiles.research_data
+    await saveToProfile({
+      research_data: {
+        gemini: step1Data,
+        perplexity_discovery: step0Data,
+        indexed_at: new Date().toISOString(),
+      },
+    });
+    await updateBrandStep(1);
+
+    // Step 2: Perplexity Deep Research — uses Step 1 as context
+    console.log('🔍 Step 2: Perplexity Deep Research...');
     const step2Data = await step2_perplexity(brand_name, step1Data);
     console.log('✅ Step 2 Complete\n');
 
-    // Step 3: Claude Reverse Engineering
-    console.log('🧠 Step 3: Claude Strategic Analysis...');
+    // Save Step 2 immediately → brand_profiles.perplexity_data
+    await saveToProfile({
+      perplexity_data: {
+        deep_research: step2Data,
+        researched_at: new Date().toISOString(),
+      },
+    });
+    await updateBrandStep(2);
+
+    // Step 3: Claude Reverse Engineering + Strategic Analysis
+    console.log('🧠 Step 3: Claude Reverse Engineering...');
     const step3Data = await step3_claude(brand_name, step2Data);
     console.log('✅ Step 3 Complete\n');
 
-    // Step 4: OpenAI Compelling Report
-    console.log('✍️ Step 4: OpenAI Report Generation...');
+    // Save Step 3 immediately → brand_profiles.source_of_truth
+    await saveToProfile({
+      source_of_truth: {
+        ...step3Data,
+        synthesized_at: new Date().toISOString(),
+      },
+    });
+    await updateBrandStep(3);
+
+    // Step 4: OpenAI Report Generation
+    console.log('✍️ Step 4: Report Generation...');
     const finalReport = await step4_openai(brand_name, step1Data, step2Data, step3Data);
     console.log('✅ Step 4 Complete\n');
 
-    console.log('🎉 All 5 steps completed successfully!\n');
+    console.log('🎉 All steps completed successfully!\n');
 
     // Generate slug for static file
     const slug = brand_name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
@@ -1710,6 +1763,24 @@ Deno.serve(async (req) => {
     });
 
     console.log(`✅ Static HTML generated: ${slug}.html (${staticHTML.length} bytes)\n`);
+
+    // Mark onboarding complete + save final report to brand_profiles
+    await saveToProfile({ onboarding_report: finalReport });
+    await updateBrandStep(4, true);
+
+    // Auto-trigger brand-analytics-scorer (fire-and-forget, non-blocking)
+    if (brand_profile_id) {
+      const scorerUrl = `${SUPABASE_URL}/functions/v1/brand-analytics-scorer`;
+      fetch(scorerUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ brand_profile_id, user_id: null }),
+      }).catch(e => console.error('[onboarding] scorer trigger failed (non-fatal):', e.message));
+      console.log('[onboarding] brand-analytics-scorer triggered');
+    }
 
     // Send brand intelligence email report (fire-and-forget, don't block response)
     if (email) {
