@@ -1201,7 +1201,8 @@ Return ONLY valid JSON:
 
           const articleContent = String(articleData.article ?? "");
           const isVeryLong = length === "very_long";
-          const DASHBOARD_URL = Deno.env.get("DASHBOARD_URL") || "https://app.geovera.xyz";
+          const brandSlug = (brand?.name ?? brandName).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+          const DASHBOARD_URL = Deno.env.get("DASHBOARD_URL") || `https://${brandSlug}.geovera.xyz`;
 
           // Update placeholder with full content
           const { data: stored } = await supabase.from("gv_article_generations").update({
