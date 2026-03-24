@@ -342,7 +342,7 @@ export default function CalendarPage() {
                 color: PLATFORM_COLOR[item.platform as string] || "#5f7a6b",
               }}>{item.platform as string}</span>
               <span style={{ fontSize: "10px", color: "#3d4f44", marginLeft: "auto" }}>{item.time as string}</span>
-              {item.urgent && <span style={{ fontSize: "10px", color: "#f87171", fontWeight: 600 }}>Urgent</span>}
+              {!!item.urgent && <span style={{ fontSize: "10px", color: "#f87171", fontWeight: 600 }}>Urgent</span>}
             </div>
             <div style={{ fontSize: "12px", color: "#6b7f72", marginBottom: "4px" }}>{item.user as string}</div>
             <div style={{ fontSize: "13px", color: "#e8ede9", lineHeight: 1.5, marginBottom: "10px" }}>"{item.comment as string}"</div>
@@ -432,7 +432,7 @@ export default function CalendarPage() {
                 fontSize: "10px", fontWeight: 600, padding: "2px 8px", borderRadius: "20px",
                 background: "rgba(95,122,107,0.12)", color: "#5f7a6b",
               }}>{item.type as string}</span>
-              {item.urgent && <span style={{ fontSize: "10px", color: "#f87171", fontWeight: 600 }}>Urgent</span>}
+              {!!item.urgent && <span style={{ fontSize: "10px", color: "#f87171", fontWeight: 600 }}>Urgent</span>}
               <span style={{ fontSize: "10px", color: "#3d4f44", marginLeft: "auto" }}>{item.time as string}</span>
             </div>
             <div style={{ fontFamily: "Manrope, sans-serif", fontWeight: 700, fontSize: "13px", color: "#e8ede9", marginBottom: "4px" }}>
