@@ -70,7 +70,18 @@ export async function POST(request: NextRequest) {
       .eq("is_active", true)
       .maybeSingle();
 
-    const userId = brandUser?.user_id;
+    // Also check brand owner (brands.user_id) if not found in brand_users
+    let userId = brandUser?.user_id;
+    if (!userId) {
+      const { data: brandOwner } = await supabase
+        .from("brands")
+        .select("user_id")
+        .eq("id", brand.id)
+        .eq("wa_number", wa)
+        .maybeSingle();
+      userId = brandOwner?.user_id;
+    }
+
     if (!userId) {
       return NextResponse.json({ ok: false, error: "User tidak ditemukan" }, { status: 404 });
     }
