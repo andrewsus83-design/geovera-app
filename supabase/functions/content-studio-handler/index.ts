@@ -21,6 +21,83 @@ const CF_WORKERS_AI = Deno.env.get("CF_AI_GATEWAY_WORKERS_AI")
 const LLAMA_FAST  = "@cf/meta/llama-3.1-8b-instruct";
 const LLAMA_HEAVY = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 
+// ── R2 CDN Upload (AWS SigV4) ─────────────────────────────────────────────────
+
+async function _hmacSHA256(key: ArrayBuffer | Uint8Array, data: string): Promise<ArrayBuffer> {
+  const cryptoKey = await crypto.subtle.importKey("raw", key, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return crypto.subtle.sign("HMAC", cryptoKey, new TextEncoder().encode(data));
+}
+
+async function _sha256hex(data: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(data));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function _sha256hexBin(data: Uint8Array): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+// Upload text (HTML/JSON) or binary (image/video) to R2
+async function uploadToR2(
+  accountId: string, accessKeyId: string, secretAccessKey: string,
+  bucket: string, key: string, body: string | Uint8Array, contentType: string,
+): Promise<boolean> {
+  const host = `${accountId}.r2.cloudflarestorage.com`;
+  const now = new Date();
+  const dateStamp = now.toISOString().slice(0, 10).replace(/-/g, "");
+  const amzDate = now.toISOString().replace(/[-:]/g, "").slice(0, 15) + "Z";
+  const enc = new TextEncoder();
+  const bodyBytes = typeof body === "string" ? enc.encode(body) : body;
+  const payloadHash = await _sha256hexBin(bodyBytes);
+  const canonicalHeaders = `content-type:${contentType}\nhost:${host}\nx-amz-content-sha256:${payloadHash}\nx-amz-date:${amzDate}\n`;
+  const signedHeaders = "content-type;host;x-amz-content-sha256;x-amz-date";
+  const canonicalRequest = ["PUT", `/${bucket}/${key}`, "", canonicalHeaders, signedHeaders, payloadHash].join("\n");
+  const credentialScope = `${dateStamp}/auto/s3/aws4_request`;
+  const stringToSign = ["AWS4-HMAC-SHA256", amzDate, credentialScope, await _sha256hex(canonicalRequest)].join("\n");
+  const kDate    = await _hmacSHA256(enc.encode(`AWS4${secretAccessKey}`), dateStamp);
+  const kRegion  = await _hmacSHA256(kDate, "auto");
+  const kService = await _hmacSHA256(kRegion, "s3");
+  const kSigning = await _hmacSHA256(kService, "aws4_request");
+  const sigBuf   = await _hmacSHA256(kSigning, stringToSign);
+  const signature = Array.from(new Uint8Array(sigBuf)).map(b => b.toString(16).padStart(2, "0")).join("");
+  const authorization = `AWS4-HMAC-SHA256 Credential=${accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+  const res = await fetch(`https://${host}/${bucket}/${key}`, {
+    method: "PUT",
+    headers: { "Content-Type": contentType, "x-amz-content-sha256": payloadHash, "x-amz-date": amzDate, "Authorization": authorization },
+    body: bodyBytes,
+  });
+  if (!res.ok) throw new Error(`R2 upload failed (${res.status}): ${await res.text()}`);
+  return true;
+}
+
+// Helper: get R2 env vars — returns null if any missing
+function getR2Config(): { accountId: string; accessKeyId: string; secretKey: string; bucket: string; publicUrl: string } | null {
+  const accountId  = Deno.env.get("R2_ACCOUNT_ID") || Deno.env.get("CLOUDFLARE_ACCOUNT_ID") || "";
+  const accessKeyId = Deno.env.get("R2_ACCESS_KEY_ID") ?? "";
+  const secretKey  = Deno.env.get("R2_SECRET_ACCESS_KEY") ?? "";
+  const bucket     = Deno.env.get("R2_BUCKET_NAME") || Deno.env.get("R2_BUCKET") || "";
+  const publicUrl  = Deno.env.get("R2_PUBLIC_URL") ?? "";
+  if (!accountId || !accessKeyId || !secretKey || !bucket || !publicUrl) return null;
+  return { accountId, accessKeyId, secretKey, bucket, publicUrl };
+}
+
+// Download URL and upload to R2, return public CDN URL or null on failure
+async function proxyToR2(sourceUrl: string, r2Key: string, contentType: string): Promise<string | null> {
+  const r2 = getR2Config();
+  if (!r2) return null;
+  try {
+    const dlRes = await fetch(sourceUrl, { signal: AbortSignal.timeout(30_000) });
+    if (!dlRes.ok) return null;
+    const bytes = new Uint8Array(await dlRes.arrayBuffer());
+    await uploadToR2(r2.accountId, r2.accessKeyId, r2.secretKey, r2.bucket, r2Key, bytes, contentType);
+    return `${r2.publicUrl}/${r2Key}`;
+  } catch (e) {
+    console.error("[R2 proxy] failed:", e);
+    return null;
+  }
+}
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 function kieHeaders() {
@@ -181,7 +258,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const noKieActions = ["check_daily_usage", "generate_smart_prompt", "submit_feedback"];
+    const noKieActions = ["check_daily_usage", "generate_smart_prompt", "submit_feedback", "generate_article", "update_article"];
     if (!KIE_API_KEY && !noKieActions.includes(action)) {
       return new Response(JSON.stringify({ error: "KIE_API_KEY not configured" }), {
         status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -468,6 +545,20 @@ Return ONLY a valid JSON array of ${count} prompt strings. No explanation, no ma
 
       const kieRes = await kiePost("/image/generate", payload);
 
+      const kieImageUrl = kieRes.image_url ?? kieRes.url ?? null;
+
+      // Optional: proxy image to R2 CDN
+      let finalImageUrl: string | null = kieImageUrl;
+      let r2Key: string | null = null;
+      if (kieImageUrl) {
+        const ext = kieImageUrl.split("?")[0].split(".").pop()?.toLowerCase() ?? "jpg";
+        const mimeMap: Record<string, string> = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp" };
+        const mime = mimeMap[ext] ?? "image/jpeg";
+        r2Key = `images/${brand_id}/${Date.now()}.${ext}`;
+        const r2Url = await proxyToR2(kieImageUrl, r2Key, mime);
+        if (r2Url) { finalImageUrl = r2Url; console.log(`[generate_image] R2 uploaded: ${r2Url}`); }
+      }
+
       const { data: inserted, error: insertErr } = await supabase.from("gv_image_generations").insert({
         brand_id,
         prompt_text: prompt,
@@ -475,7 +566,7 @@ Return ONLY a valid JSON array of ${count} prompt strings. No explanation, no ma
         aspect_ratio,
         ai_provider: "kie",
         ai_model: kieRes.model ?? model,
-        image_url: kieRes.image_url ?? kieRes.url ?? null,
+        image_url: finalImageUrl,
         thumbnail_url: kieRes.thumbnail_url ?? null,
         status: kieRes.status ?? "completed",
         target_platform: data.platform ?? "instagram",
@@ -484,12 +575,14 @@ Return ONLY a valid JSON array of ${count} prompt strings. No explanation, no ma
       if (insertErr) console.error("generate_image DB insert failed:", insertErr.message);
 
       return json({
+        ok: true,
         success: true,
         task_id: kieRes.task_id ?? kieRes.id ?? null,
-        image_url: kieRes.image_url ?? kieRes.url ?? null,
+        url: finalImageUrl,                           // wa-receive checks result.url
+        image_url: finalImageUrl,
+        images: finalImageUrl ? [{ url: finalImageUrl }] : [],
         status: kieRes.status ?? "completed",
         db_id: inserted?.id ?? null,
-        raw: kieRes,
       });
     }
 
@@ -522,6 +615,14 @@ Return ONLY a valid JSON array of ${count} prompt strings. No explanation, no ma
         ai_model = kieRes.model ?? model;
       }
 
+      // If video_url already available (sync response), proxy to R2
+      let finalVideoUrl = video_url;
+      if (video_url && status === "completed") {
+        const r2VideoKey = `videos/${brand_id}/${Date.now()}.mp4`;
+        const r2Url = await proxyToR2(video_url, r2VideoKey, "video/mp4");
+        if (r2Url) { finalVideoUrl = r2Url; console.log(`[generate_video] R2 uploaded: ${r2Url}`); }
+      }
+
       const { data: inserted, error: insertErr } = await supabase.from("gv_video_generations").insert({
         brand_id,
         target_platform: data.platform ?? "tiktok",
@@ -530,14 +631,22 @@ Return ONLY a valid JSON array of ${count} prompt strings. No explanation, no ma
         status,
         generation_mode: useOpenAI ? "openai" : "kie",
         runway_task_id: task_id,
-        video_url,
+        video_url: finalVideoUrl,
         video_thumbnail_url: null,
         video_aspect_ratio: aspect_ratio,
         video_status: status,
       }).select("id").single();
       if (insertErr) console.error("generate_video DB insert failed:", insertErr.message);
 
-      return json({ success: true, task_id, video_url, status, db_id: inserted?.id ?? null });
+      return json({
+        ok: true,
+        success: true,
+        task_id,
+        video_url: finalVideoUrl,
+        status,
+        db_id: inserted?.id ?? null,
+        job_id: task_id,
+      });
     }
 
     // ── LIST HEYGEN AVATARS ───────────────────────────────────────────────────
@@ -673,15 +782,36 @@ Return ONLY a valid JSON array of ${count} prompt strings. No explanation, no ma
             thumbnail_url,
           }).eq("id", db_id);
         } else if (task_type === "video") {
+          // Proxy completed video to R2 CDN
+          let finalVideoUrl = video_url;
+          if (video_url) {
+            const r2VideoKey = `videos/${brand_id}/${db_id}.mp4`;
+            const r2Url = await proxyToR2(video_url, r2VideoKey, "video/mp4");
+            if (r2Url) { finalVideoUrl = r2Url; console.log(`[check_task video] R2: ${r2Url}`); }
+          }
           await supabase.from("gv_video_generations").update({
             video_status: "completed",
-            video_url,
+            video_url: finalVideoUrl,
             video_thumbnail_url: thumbnail_url,
           }).eq("id", db_id);
+          video_url = finalVideoUrl;
         }
       }
 
-      return json({ success: true, status, image_url, video_url });
+      // Proxy completed image to R2 if not yet done
+      if (task_type === "image" && image_url && db_id) {
+        const ext = image_url.split("?")[0].split(".").pop()?.toLowerCase() ?? "jpg";
+        const mime = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
+        const r2ImageKey = `images/${brand_id}/${db_id}.${ext}`;
+        const r2Url = await proxyToR2(image_url, r2ImageKey, mime);
+        if (r2Url) {
+          image_url = r2Url;
+          await supabase.from("gv_image_generations").update({ image_url: r2Url }).eq("id", db_id);
+          console.log(`[check_task image] R2: ${r2Url}`);
+        }
+      }
+
+      return json({ ok: true, success: true, status, image_url, video_url, url: image_url || video_url });
     }
 
     // ── TRAIN PRODUCT / CHARACTER ────────────────────────────────────────────
@@ -807,6 +937,213 @@ Return ONLY a valid JSON array of ${count} prompt strings. No explanation, no ma
 
       if (dbError) return json({ error: `Failed to save feedback: ${dbError}` }, 500);
       return json({ success: true, feedback, db_id });
+    }
+
+    // ── GENERATE ARTICLE ─────────────────────────────────────────────────────
+    if (action === "generate_article" || action === "update_article") {
+      const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
+      if (!ANTHROPIC_API_KEY) return json({ error: "ANTHROPIC_API_KEY not configured" }, 500);
+
+      // Accept 'topic' (UI) or 'prompt' (WA bot) interchangeably
+      const topic = String(data.topic || data.prompt || "");
+      const objective = String(data.objective || "random");
+      const length = String(data.length || "medium");
+      const description = data.description as string | undefined;
+      const requested_by = data.requested_by as string | undefined;
+      const uploadedImgUrls = ((data.uploaded_images || data.image_urls) as string[] | undefined) ?? [];
+      const image_count = Number(data.image_count ?? 0);
+      const image_size = String(data.image_size ?? "1:1");
+      const include_script = Boolean(data.include_script);
+      const include_hashtags = Boolean(data.include_hashtags);
+      const include_music = Boolean(data.include_music);
+
+      // Fetch brand profile + brands for context
+      const [{ data: bp }, { data: brand }] = await Promise.all([
+        supabase.from("brand_profiles").select("brand_name, country, brand_dna, source_of_truth").eq("id", brand_id).maybeSingle(),
+        supabase.from("brands").select("name, category").eq("id", brand_id).maybeSingle(),
+      ]);
+
+      const brandName = bp?.brand_name ?? brand?.name ?? "Brand";
+      const country = bp?.country ?? "Indonesia";
+      const dna = (bp?.brand_dna ?? {}) as Record<string, unknown>;
+      const sot = (bp?.source_of_truth ?? {}) as Record<string, unknown>;
+      const kwi = sot.keyword_intelligence as Record<string, unknown> | null;
+      const rankingKws = (kwi?.ranking_keywords as string[] ?? []).slice(0, 5).join(", ");
+
+      const objectiveLabels: Record<string, string> = {
+        faq: "FAQ format", trend: "Trend article", educational: "Educational",
+        tips: "Tips & Tricks", tips_tricks: "Tips & Tricks", new_product: "Product launch",
+        seasonal_greetings: "Seasonal Greetings", newsletter: "Newsletter",
+        updates: "Brand updates", multi_product: "Multi Product Catalog",
+        ads: "Ads copy", tutorial: "Tutorial", review: "Review & Testimonial",
+        random: "AI-recommended content",
+      };
+      const objLabel = objectiveLabels[objective] ?? "konten brand relevan";
+
+      const wordCounts: Record<string, number> = { short: 300, medium: 800, long: 1500, very_long: 3000 };
+      const targetWords = wordCounts[length] ?? 800;
+      const enrichedTopic = topic ? `${topic}` : `${objLabel} untuk ${brandName}`;
+
+      const extraJsonFields = [
+        include_hashtags ? `  "hashtags": ["#tag1","#tag2","#tag3","#tag4","#tag5","#tag6","#tag7","#tag8","#tag9","#tag10"],` : "",
+        include_script   ? `  "script": "Full narration script for video/reel (60-90 seconds)",` : "",
+        include_music    ? `  "music_suggestion": "Recommended background music style",` : "",
+        image_count > 0  ? `  "image_prompts": [${Array.from({length: image_count}, (_, i) => `"Image prompt ${i+1} (${image_size})"`).join(",")}],` : "",
+      ].filter(Boolean).join("\n");
+
+      const systemMsg = `You are an expert content writer and SEO specialist for ${brandName}, a ${brand?.category ?? "brand"} in ${country}. Write high-quality, engaging content in Indonesian (Bahasa Indonesia). Always respond with valid JSON.`;
+
+      const userMsg = `Write a ${targetWords}-word article:
+
+Brand: ${brandName}
+Positioning: ${String(dna.positioning ?? "premium brand")}
+USP: ${String(dna.usp ?? "")}
+Keywords: ${rankingKws || "brand-related keywords"}
+Topic: ${enrichedTopic}
+Format: ${objLabel}
+${description ? `Brief: ${description}` : ""}
+${uploadedImgUrls.length > 0 ? `Reference images: ${uploadedImgUrls.length} provided` : ""}
+${include_script ? "Include: narration script" : ""}
+${include_hashtags ? "Include: 10 hashtags" : ""}
+
+Return ONLY valid JSON:
+{
+  "article": "full article HTML (~${targetWords} words, use <h2><h3><p><ul><li> tags)",
+  "meta_title": "SEO title (50-60 chars)",
+  "meta_description": "SEO description (150-160 chars)",
+  "focus_keywords": ["keyword1", "keyword2", "keyword3"],
+  "social": {
+    "instagram": "Instagram caption max 150 chars + 5 hashtags",
+    "linkedin": "LinkedIn post professional max 200 chars",
+    "tiktok": "TikTok hook punchy max 100 chars"
+  },
+  "geo": {
+    "faq": [
+      {"question": "Q1?", "answer": "A1."},
+      {"question": "Q2?", "answer": "A2."},
+      {"question": "Q3?", "answer": "A3."}
+    ]
+  }${extraJsonFields ? `,\n${extraJsonFields}` : ""}
+}`;
+
+      type ClaudeContent = { type: "text"; text: string } | { type: "image"; source: { type: "url"; url: string } };
+      const userContent: ClaudeContent[] = [];
+      for (const imgUrl of uploadedImgUrls.slice(0, 8)) {
+        userContent.push({ type: "image", source: { type: "url", url: String(imgUrl) } });
+      }
+      userContent.push({ type: "text", text: userMsg });
+
+      const claudeResp = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 8192,
+          system: systemMsg,
+          messages: [{ role: "user", content: uploadedImgUrls.length > 0 ? userContent : userMsg }],
+        }),
+      });
+
+      if (!claudeResp.ok) {
+        return json({ success: false, error: `Article generation failed (${claudeResp.status})` }, 502);
+      }
+
+      const claudeData = await claudeResp.json();
+      const rawText = (claudeData.content?.[0]?.text ?? "").trim();
+      let articleData: Record<string, unknown> = {};
+      try {
+        const match = rawText.match(/\{[\s\S]*\}/);
+        if (match) articleData = JSON.parse(match[0]);
+      } catch { articleData = { article: rawText }; }
+
+      const articleContent = String(articleData.article ?? "");
+      const isVeryLong = length === "very_long";
+
+      // Save to gv_article_generations
+      const { data: stored, error: storeError } = await supabase.from("gv_article_generations").insert({
+        brand_id,
+        topic: enrichedTopic,
+        objective,
+        length,
+        content: isVeryLong ? null : articleContent,
+        content_very_long: isVeryLong ? articleContent : null,
+        description: description || null,
+        uploaded_images: uploadedImgUrls.length > 0 ? uploadedImgUrls : null,
+        image_count,
+        image_size,
+        include_script,
+        include_hashtags,
+        include_music,
+        meta_title: String(articleData.meta_title ?? ""),
+        meta_description: String(articleData.meta_description ?? ""),
+        focus_keywords: (articleData.focus_keywords as string[]) ?? [],
+        social: (articleData.social as Record<string, unknown>) ?? {},
+        geo: (articleData.geo as Record<string, unknown>) ?? {},
+        hashtag_list: include_hashtags ? ((articleData.hashtags as string[]) ?? []) : null,
+        script_content: include_script ? String(articleData.script ?? "") : null,
+        music_suggestion: include_music ? String(articleData.music_suggestion ?? "") : null,
+        requested_by: requested_by || null,
+        status: "done",
+      }).select("id").single();
+
+      if (storeError) console.error("[generate_article] DB error:", storeError.message);
+
+      const articleId = stored?.id ?? `temp-${Date.now()}`;
+      const DASHBOARD_URL = Deno.env.get("DASHBOARD_URL") || "https://app.geovera.xyz";
+
+      // Generate HMAC access token — binds URL to brand+article, prevents public guessing
+      async function genAccessToken(bId: string, aId: string): Promise<string> {
+        const secret = Deno.env.get("CONTENT_URL_SECRET") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "dev";
+        const enc = new TextEncoder();
+        const key = await crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+        const sig = await crypto.subtle.sign("HMAC", key, enc.encode(`${bId}:${aId}`));
+        return btoa(String.fromCharCode(...new Uint8Array(sig))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "").slice(0, 16);
+      }
+      const accessToken = stored?.id ? await genAccessToken(brand_id, stored.id) : "";
+      let article_url = `${DASHBOARD_URL}/articles/${articleId}${accessToken ? `?t=${accessToken}` : ""}`;
+
+      // Optional R2 CDN upload
+      const R2_ACCOUNT_ID      = Deno.env.get("R2_ACCOUNT_ID") || Deno.env.get("CLOUDFLARE_ACCOUNT_ID") || "";
+      const R2_ACCESS_KEY_ID   = Deno.env.get("R2_ACCESS_KEY_ID") ?? "";
+      const R2_SECRET_ACCESS_KEY = Deno.env.get("R2_SECRET_ACCESS_KEY") ?? "";
+      const R2_BUCKET_NAME     = Deno.env.get("R2_BUCKET_NAME") || Deno.env.get("R2_BUCKET") || "";
+      const R2_PUBLIC_URL      = Deno.env.get("R2_PUBLIC_URL") ?? "";
+
+      if (R2_ACCOUNT_ID && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY && R2_BUCKET_NAME && R2_PUBLIC_URL && stored?.id) {
+        try {
+          const r2Key = `articles/${brand_id}/${stored.id}.html`;
+          const htmlContent = `<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${String(articleData.meta_title ?? enrichedTopic).replace(/</g,"&lt;")}</title><meta name="description" content="${String(articleData.meta_description ?? "").replace(/"/g,"&quot;")}"></head><body><article><h1>${String(articleData.meta_title ?? enrichedTopic).replace(/</g,"&lt;")}</h1>${articleContent}</article></body></html>`;
+          await uploadToR2(R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, r2Key, htmlContent, "text/html; charset=utf-8");
+          article_url = `${R2_PUBLIC_URL}/${r2Key}`;
+          await supabase.from("gv_article_generations").update({ article_url, r2_key: r2Key }).eq("id", stored.id);
+          console.log(`[generate_article] Uploaded to R2: ${article_url}`);
+        } catch (r2Err) {
+          console.error("[generate_article] R2 upload failed:", r2Err);
+          await supabase.from("gv_article_generations").update({ article_url }).eq("id", articleId).then(() => {});
+        }
+      } else if (stored?.id) {
+        await supabase.from("gv_article_generations").update({ article_url }).eq("id", stored.id);
+      }
+
+      console.log(`[generate_article] Done: ${articleId} → ${article_url}`);
+
+      return json({
+        ok: true,
+        success: true,
+        article_url,
+        article: {
+          id: articleId,
+          topic: enrichedTopic,
+          objective,
+          length,
+          content: articleContent,
+          meta_title: String(articleData.meta_title ?? ""),
+          meta_description: String(articleData.meta_description ?? ""),
+          focus_keywords: (articleData.focus_keywords as string[]) ?? [],
+          social: (articleData.social as Record<string, unknown>) ?? {},
+          geo: (articleData.geo as Record<string, unknown>) ?? {},
+        },
+      });
     }
 
     return json({ error: "Invalid action" }, 400);
