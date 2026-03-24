@@ -1109,8 +1109,9 @@ Keep under 150 words. Return ONLY the optimized prompt, no explanation, no quote
       };
       const objLabel = objectiveLabels[objective] ?? "konten brand relevan";
 
-      const wordCounts: Record<string, number> = { short: 300, medium: 800, long: 1500, very_long: 3000 };
+      const wordCounts: Record<string, number> = { short: 80, medium: 800, long: 1500, very_long: 3000 };
       const targetWords = wordCounts[length] ?? 800;
+      const isShort = length === 'short';
       const enrichedTopic = topic ? `${topic}` : `${objLabel} untuk ${brandName}`;
 
       const extraJsonFields = [
@@ -1122,7 +1123,7 @@ Keep under 150 words. Return ONLY the optimized prompt, no explanation, no quote
 
       const systemMsg = `You are an expert content writer and SEO specialist for ${brandName}, a ${brand?.category ?? "brand"} in ${country}. Write high-quality, engaging content in Indonesian (Bahasa Indonesia). Always respond with valid JSON.`;
 
-      const userMsg = `Write a ${targetWords}-word article:
+      const userMsg = `Write a ${isShort ? 'short social media post (max 500 characters total, suitable for X/Twitter and LinkedIn)' : `${targetWords}-word article`}:
 
 Brand: ${brandName}
 Positioning: ${String(dna.positioning ?? "premium brand")}
@@ -1137,7 +1138,7 @@ ${include_hashtags ? "Include: 10 hashtags" : ""}
 
 Return ONLY valid JSON:
 {
-  "article": "full article HTML (~${targetWords} words, use <h2><h3><p><ul><li> tags)",
+  "article": "${isShort ? 'short post text (max 500 chars, plain text or minimal HTML, no headings)' : `full article HTML (~${targetWords} words, use <h2><h3><p><ul><li> tags)`}",
   "meta_title": "SEO title (50-60 chars)",
   "meta_description": "SEO description (150-160 chars)",
   "focus_keywords": ["keyword1", "keyword2", "keyword3"],

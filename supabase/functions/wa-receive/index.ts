@@ -156,7 +156,7 @@ async function buildArticleMenu(supabase: ReturnType<typeof createClient>, brand
   const topicOpts: ContentOption[] = rawTopics.map(t => ({ ...t, label: `Judul artikel "${t.label}"` }));
   const defaultTopic = rawTopics[0]?.prompt || brandName;
   const lengthOpts: ContentOption[] = [
-    { label: 'Short (s/d 300 kata)', prompt: defaultTopic, length: 'short' },
+    { label: 'Short (s/d 500 karakter, cocok untuk X/LinkedIn)', prompt: defaultTopic, length: 'short' },
     { label: 'Medium (s/d 800 kata)', prompt: defaultTopic, length: 'medium' },
     { label: 'Long (s/d 1500 kata)', prompt: defaultTopic, length: 'long' },
     { label: 'Very Long (s/d 3000 kata)', prompt: defaultTopic, length: 'very_long' },
