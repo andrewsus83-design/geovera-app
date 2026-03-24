@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 const KIE_API_KEY = Deno.env.get("KIE_API_KEY") ?? "";
-const KIE_BASE = "https://api.kie.ai/v1";
+const KIE_BASE = "https://api.kie.ai/api/v1";
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") ?? "";
 const HEYGEN_API_KEY = Deno.env.get("HEYGEN_API_KEY") ?? "";
 const HEYGEN_BASE = "https://api.heygen.com";
@@ -541,45 +541,57 @@ Return ONLY a valid JSON array of ${count} prompt strings. No explanation, no ma
       if (!prompt) return json({ error: "prompt is required" }, 400);
 
       let finalImageUrl: string | null = null;
-      let provider = "unknown";
+      let provider = "kie-flux2-pro";
 
-      // Primary: Modal Flux Schnell H100 (base64 webp) — 30s timeout, skip if cold
-      const MODAL_SCHNELL_URL = Deno.env.get("MODAL_FLUX_SCHNELL_URL") || "";
-      if (MODAL_SCHNELL_URL) {
+      // Primary: KIE Flux 2 Pro (cheapest, task-based async)
+      // Endpoint: POST /api/v1/jobs/createTask → GET /api/v1/jobs/recordInfo?taskId=
+      if (KIE_API_KEY) {
         try {
-          const modalRes = await fetch(MODAL_SCHNELL_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ prompt, aspect_ratio, num_images: 1 }),
-            signal: AbortSignal.timeout(30_000),
+          const createRes = await kiePost("/jobs/createTask", {
+            model: "flux-2/pro-text-to-image",
+            input: { prompt, aspect_ratio, resolution: "1K" },
           });
-          if (modalRes.ok) {
-            const modalData = await modalRes.json();
-            const b64Url: string | null = modalData.images?.[0]?.url ?? null;
-            if (b64Url && b64Url.startsWith("data:")) {
-              const r2 = getR2Config();
-              if (r2) {
-                const commaIdx = b64Url.indexOf(",");
-                const header = b64Url.slice(0, commaIdx);
-                const b64Data = b64Url.slice(commaIdx + 1);
-                const mime = header.match(/data:([^;]+)/)?.[1] ?? "image/webp";
-                const ext = mime.split("/")[1] ?? "webp";
-                const bytes = Uint8Array.from(atob(b64Data), (c) => c.charCodeAt(0));
-                const r2Key = `images/${brand_id}/${Date.now()}.${ext}`;
-                await uploadToR2(r2.accountId, r2.accessKeyId, r2.secretKey, r2.bucket, r2Key, bytes, mime);
-                finalImageUrl = `${r2.publicUrl}/${r2Key}`;
-                provider = "flux-schnell";
-                console.log(`[generate_image] Modal Flux Schnell → R2: ${finalImageUrl}`);
+          const taskId: string | null = createRes.data?.taskId ?? createRes.taskId ?? null;
+          if (taskId) {
+            console.log(`[generate_image] KIE task created: ${taskId}`);
+            // Poll up to 12x with 5s delay = 60s max (states: waiting/queuing/generating/success/fail)
+            for (let i = 0; i < 12; i++) {
+              await new Promise((r) => setTimeout(r, 5000));
+              const pollRes = await fetch(`${KIE_BASE}/jobs/recordInfo?taskId=${taskId}`, { headers: kieHeaders() });
+              if (!pollRes.ok) { console.error("[generate_image] KIE poll error:", pollRes.status); break; }
+              const pollData = await pollRes.json();
+              const state: string = pollData.data?.state ?? pollData.state ?? "waiting";
+              const progress = pollData.data?.progress ?? 0;
+              console.log(`[generate_image] KIE poll #${i + 1} state:${state} progress:${progress}% failMsg:${pollData.data?.failMsg ?? ''}`);
+              if (state === "success") {
+                const resultJson = pollData.data?.resultJson ?? null;
+                let resultUrls: string[] = [];
+                if (resultJson) {
+                  try { resultUrls = JSON.parse(resultJson).resultUrls ?? []; } catch { /* */ }
+                }
+                const kieUrl = resultUrls[0] ?? null;
+                if (kieUrl) {
+                  const r2Key = `images/${brand_id}/${Date.now()}.jpg`;
+                  const r2Url = await proxyToR2(kieUrl, r2Key, "image/jpeg");
+                  finalImageUrl = r2Url ?? kieUrl;
+                  console.log(`[generate_image] KIE Flux 2 Pro ✓ → R2: ${finalImageUrl}`);
+                }
+                break;
+              }
+              if (state === "fail") {
+                console.error("[generate_image] KIE task failed:", pollData.data?.failMsg, pollData.data?.failCode);
+                break;
               }
             }
           }
         } catch (e) {
-          console.error("[generate_image] Modal Flux Schnell skipped (cold/timeout):", (e as Error).message);
+          console.error("[generate_image] KIE Flux 2 Pro failed:", (e as Error).message);
         }
       }
 
-      // Fallback: DALL-E 3 via OpenAI (reliable, ~5-10s)
+      // Fallback: DALL-E 3 via OpenAI
       if (!finalImageUrl) {
+        provider = "dall-e-3";
         const OPENAI_KEY = Deno.env.get("OPENAI_API_KEY") || "";
         if (OPENAI_KEY) {
           try {
@@ -597,8 +609,7 @@ Return ONLY a valid JSON array of ${count} prompt strings. No explanation, no ma
                 const r2Key = `images/${brand_id}/${Date.now()}.png`;
                 const r2Url = await proxyToR2(dalleUrl, r2Key, "image/png");
                 finalImageUrl = r2Url ?? dalleUrl;
-                provider = "dall-e-3";
-                console.log(`[generate_image] DALL-E 3 → R2: ${finalImageUrl}`);
+                console.log(`[generate_image] DALL-E 3 fallback → R2: ${finalImageUrl}`);
               }
             } else {
               console.error("[generate_image] DALL-E 3 error:", dalleRes.status, await dalleRes.text());
@@ -616,7 +627,7 @@ Return ONLY a valid JSON array of ${count} prompt strings. No explanation, no ma
         prompt_text: prompt,
         aspect_ratio,
         ai_provider: provider,
-        ai_model: provider === "flux-schnell" ? "flux-schnell-h100" : provider === "dall-e-3" ? "dall-e-3" : "kie-flux",
+        ai_model: provider === "dall-e-3" ? "dall-e-3" : "flux-2-pro",
         image_url: finalImageUrl,
         status: "completed",
         target_platform: data.platform ?? "instagram",
@@ -816,10 +827,13 @@ Return ONLY a valid JSON array of ${count} prompt strings. No explanation, no ma
         thumbnail_url = pollRes.thumbnail_url;
         if (status === "completed") status = "completed";
       } else {
-        const kieRes = await kieGet(`/task/${task_id}`);
-        status = kieRes.status ?? "processing";
-        image_url = kieRes.image_url ?? kieRes.result?.image_url ?? null;
-        video_url = kieRes.video_url ?? kieRes.result?.video_url ?? null;
+        const kieRes = await kieGet(`/jobs/recordInfo?taskId=${task_id}`);
+        const kState = kieRes.data?.state ?? kieRes.status ?? "processing";
+        status = (kState === "DONE" || kState === "success" || kState === "completed") ? "completed" : kState === "failed" ? "failed" : "processing";
+        const resultJson = kieRes.data?.resultJson ? JSON.parse(kieRes.data.resultJson) : null;
+        const resultUrls: string[] = resultJson?.resultUrls ?? [];
+        image_url = resultUrls[0] ?? kieRes.data?.image_url ?? null;
+        video_url = kieRes.data?.video_url ?? null;
         thumbnail_url = kieRes.thumbnail_url ?? null;
       }
 
