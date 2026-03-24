@@ -66,7 +66,8 @@ const SSO_TOPICS = [
 ];
 
 // ── Shared Components ─────────────────────────────────────────────────────────
-function StatCards({ stats }: { stats: typeof SEO_STATS }) {
+type StatItem = { label: string; value: string; sub: string; up: boolean | null };
+function StatCards({ stats }: { stats: StatItem[] }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "20px" }}>
       {stats.map((s) => (
