@@ -1,10 +1,39 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 
 type Step = "credentials" | "otp";
+
+// ─── Design tokens (from gv_design_tokens) ───────────────────────────────────
+const T = {
+  bgPrimary:     "#080d0b",
+  bgRecessed:    "#0a100d",
+  accent:        "#5f7a6b",
+  accentHover:   "#6d8c7b",
+  accentActive:  "#52694d",
+  accentSubtle:  "rgba(95,122,107,0.12)",
+  textPrimary:   "#e8ede9",
+  textSecondary: "#a3b5a9",
+  textMuted:     "#6b7f72",
+  textDisabled:  "#3d4f44",
+  borderDefault: "rgba(95,122,107,0.14)",
+  borderStrong:  "rgba(95,122,107,0.22)",
+  danger:        "#f87171",
+  dangerSubtle:  "rgba(248,113,113,0.12)",
+  success:       "#4ade80",
+  successSubtle: "rgba(74,222,128,0.10)",
+  // typography
+  fontHeading:   "Manrope, system-ui, -apple-system, sans-serif",
+  fontBody:      "Inter, system-ui, -apple-system, sans-serif",
+  fontMono:      "'JetBrains Mono', 'Fira Code', Consolas, monospace",
+  // spacing
+  space2: "8px", space3: "12px", space4: "16px", space5: "20px",
+  space6: "24px", space8: "32px", space10: "40px", space12: "48px",
+  space16: "64px",
+  // radius
+  radiusMd: "10px",
+};
 
 export default function SignInForm() {
   const router = useRouter();
@@ -29,7 +58,7 @@ export default function SignInForm() {
       });
       const data = await res.json();
       if (!data.ok) { setError(data.error || "Gagal kirim OTP"); return; }
-      setInfo("OTP dikirim ke WhatsApp kamu. Cek pesan masuk.");
+      setInfo("Kode OTP dikirim ke WhatsApp kamu.");
       setStep("otp");
     } catch {
       setError("Gagal terhubung ke server");
@@ -58,7 +87,7 @@ export default function SignInForm() {
       });
       if (authErr) { setError("Gagal buat sesi: " + authErr.message); return; }
 
-      router.push(data.redirect || "/analytics");
+      router.push(data.redirect || "/home");
     } catch {
       setError("Gagal terhubung ke server");
     } finally {
@@ -68,66 +97,60 @@ export default function SignInForm() {
 
   return (
     <div style={{
-      minHeight: "100vh",
+      minHeight: "100svh",
       width: "100%",
-      background: "var(--gv-color-bg-base)",
+      background: T.bgPrimary,
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      padding: "24px",
-      position: "relative",
+      padding: `max(${T.space6}, env(safe-area-inset-top)) ${T.space6} max(${T.space6}, env(safe-area-inset-bottom))`,
+      fontFamily: T.fontBody,
     }}>
-      {/* AI glow */}
-      <div style={{
-        position: "fixed",
-        inset: 0,
-        background: "var(--gv-color-ai-glow)",
-        pointerEvents: "none",
-        zIndex: 0,
-      }} />
+      <div style={{ width: "100%", maxWidth: "400px" }}>
 
-      <div style={{
-        width: "100%",
-        maxWidth: "420px",
-        background: "var(--gv-color-bg-surface)",
-        border: "1px solid var(--gv-color-neutral-200)",
-        padding: "48px 40px",
-        position: "relative",
-        zIndex: 1,
-      }}>
         {/* Logo */}
-        <div style={{ textAlign: "center", marginBottom: "40px" }}>
-          <div style={{ display: "inline-flex", alignItems: "center", gap: "10px", marginBottom: "24px" }}>
-            <Image
-              src="/images/logo/logo-icon.svg"
-              width={36}
-              height={36}
-              alt=""
-              priority
-            />
+        <div style={{ textAlign: "center", marginBottom: T.space10 }}>
+          <a href="/" style={{ display: "inline-flex", alignItems: "center", gap: "9px", textDecoration: "none" }}>
+            <svg width="28" height="28" viewBox="0 0 38 38" fill="none" aria-hidden="true">
+              <circle cx="19" cy="19" r="17.5" stroke="#16A34A" strokeWidth="1" strokeDasharray="80 30" strokeDashoffset="10"/>
+              <circle cx="19" cy="19" r="9" fill="#090D12" stroke="#1C2535" strokeWidth="1"/>
+              <circle cx="19" cy="19" r="3.5" fill="#16A34A"/>
+              <line x1="10" y1="19" x2="14.5" y2="19" stroke="#3D5070" strokeWidth="1.3" strokeLinecap="round"/>
+              <line x1="23.5" y1="19" x2="28" y2="19" stroke="#3D5070" strokeWidth="1.3" strokeLinecap="round"/>
+              <line x1="19" y1="10" x2="19" y2="14.5" stroke="#3D5070" strokeWidth="1.3" strokeLinecap="round"/>
+              <line x1="19" y1="23.5" x2="19" y2="28" stroke="#3D5070" strokeWidth="1.3" strokeLinecap="round"/>
+              <circle cx="19" cy="3.5" r="1.5" fill="#16A34A" opacity=".7"/>
+              <circle cx="34.5" cy="19" r="1.5" fill="#16A34A" opacity=".4"/>
+            </svg>
             <span style={{
-              fontFamily: "var(--gv-font-heading)",
-              fontSize: "22px",
-              fontWeight: 700,
-              color: "var(--gv-color-neutral-900)",
-              letterSpacing: "-0.4px",
+              fontFamily: T.fontHeading,
+              fontWeight: 800,
+              fontSize: "20px",
+              letterSpacing: "-0.02em",
               lineHeight: 1,
-            }}>GeoVera</span>
-          </div>
+              color: T.textPrimary,
+            }}>
+              Geo<em style={{ fontStyle: "normal", color: "#22C55E" }}>Vera</em>
+            </span>
+          </a>
+        </div>
+
+        {/* Heading */}
+        <div style={{ textAlign: "center", marginBottom: T.space8 }}>
           <h1 style={{
-            fontFamily: "var(--gv-font-heading)",
-            fontSize: "20px",
+            fontFamily: T.fontHeading,
+            fontSize: "28px",
             fontWeight: 700,
-            color: "var(--gv-color-neutral-900)",
-            margin: "0 0 8px",
-            letterSpacing: "-0.3px",
+            color: T.textPrimary,
+            margin: `0 0 ${T.space3}`,
+            letterSpacing: "-0.02em",
+            lineHeight: 1.2,
           }}>
             {step === "credentials" ? "Masuk ke GeoVera" : "Verifikasi WhatsApp"}
           </h1>
           <p style={{
-            fontSize: "14px",
-            color: "var(--gv-color-neutral-500)",
-            fontFamily: "var(--gv-font-body)",
+            fontSize: "16px",
+            color: T.textSecondary,
             margin: 0,
             lineHeight: 1.5,
           }}>
@@ -137,44 +160,44 @@ export default function SignInForm() {
           </p>
         </div>
 
-        {/* Error */}
+        {/* Alert: Error */}
         {error && (
           <div style={{
-            marginBottom: "16px",
-            padding: "10px 14px",
-            background: "var(--gv-color-danger-50)",
-            border: "1px solid #FECACA",
-            fontSize: "13px",
-            color: "var(--gv-color-danger-700)",
-            fontFamily: "var(--gv-font-body)",
+            marginBottom: T.space5,
+            padding: `${T.space3} ${T.space4}`,
+            background: T.dangerSubtle,
+            border: `1px solid rgba(248,113,113,0.25)`,
+            borderRadius: T.radiusMd,
+            fontSize: "14px",
+            color: T.danger,
             display: "flex",
             alignItems: "flex-start",
-            gap: "8px",
+            gap: T.space2,
+            lineHeight: 1.5,
           }}>
-            {/* Warning icon — WIRED style */}
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square" strokeLinejoin="miter" style={{ flexShrink: 0, marginTop: "1px" }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0, marginTop: "2px" }}>
               <path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
             </svg>
             {error}
           </div>
         )}
 
-        {/* Info */}
+        {/* Alert: Info */}
         {info && !error && (
           <div style={{
-            marginBottom: "16px",
-            padding: "10px 14px",
-            background: "var(--gv-color-success-50)",
-            border: "1px solid #A7F3D0",
-            fontSize: "13px",
-            color: "var(--gv-color-success-700)",
-            fontFamily: "var(--gv-font-body)",
+            marginBottom: T.space5,
+            padding: `${T.space3} ${T.space4}`,
+            background: T.successSubtle,
+            border: `1px solid rgba(74,222,128,0.2)`,
+            borderRadius: T.radiusMd,
+            fontSize: "14px",
+            color: T.success,
             display: "flex",
             alignItems: "flex-start",
-            gap: "8px",
+            gap: T.space2,
+            lineHeight: 1.5,
           }}>
-            {/* Check icon — WIRED style */}
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square" strokeLinejoin="miter" style={{ flexShrink: 0, marginTop: "1px" }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0, marginTop: "2px" }}>
               <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
             </svg>
             {info}
@@ -184,32 +207,11 @@ export default function SignInForm() {
         {/* Step 1: brand + WA */}
         {step === "credentials" && (
           <form onSubmit={handleSendOtp}>
-            <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-              <Field
-                label="Nama Brand"
-                value={brandSlug}
-                onChange={setBrandSlug}
-                placeholder="geovera"
-                hint="Nama brand kamu (lowercase, tanpa spasi)"
-                icon={
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square" strokeLinejoin="miter">
-                    <rect x="2" y="7" width="20" height="14" rx="0"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/>
-                  </svg>
-                }
-              />
-              <Field
-                label="Nomor WhatsApp"
-                value={waNumber}
-                onChange={setWaNumber}
-                placeholder="628xxxxxxxxx"
-                type="tel"
-                hint="Format internasional, mulai dari 62"
-                icon={
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square" strokeLinejoin="miter">
-                    <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.72 19.79 19.79 0 01.07 5.07a2 2 0 012-2.18h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 10.09a16 16 0 006 6l.41-.41a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/>
-                  </svg>
-                }
-              />
+            <div style={{ display: "flex", flexDirection: "column", gap: T.space5 }}>
+              <Field label="Nama Brand" value={brandSlug} onChange={setBrandSlug}
+                placeholder="geovera" hint="Nama brand (lowercase, tanpa spasi)" />
+              <Field label="Nomor WhatsApp" value={waNumber} onChange={setWaNumber}
+                placeholder="628xxxxxxxxx" type="tel" hint="Format internasional, mulai dari 62" />
               <SubmitBtn loading={loading} label="Kirim Kode OTP" loadingLabel="Mengirim…" />
             </div>
           </form>
@@ -218,11 +220,12 @@ export default function SignInForm() {
         {/* Step 2: OTP */}
         {step === "otp" && (
           <form onSubmit={handleVerifyOtp}>
-            <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: T.space5 }}>
               <div>
                 <label style={labelStyle}>Kode OTP (6 digit)</label>
                 <input
                   type="text"
+                  inputMode="numeric"
                   value={otp}
                   onChange={e => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
                   placeholder="123456"
@@ -232,13 +235,14 @@ export default function SignInForm() {
                   style={{
                     ...inputStyle,
                     textAlign: "center",
-                    fontSize: "24px",
-                    letterSpacing: "10px",
+                    fontSize: "28px",
+                    letterSpacing: "12px",
                     fontWeight: 700,
-                    fontFamily: "var(--gv-font-mono, monospace)",
+                    fontFamily: T.fontMono,
+                    paddingLeft: "24px",
                   }}
-                  onFocus={e => (e.target.style.borderColor = "var(--gv-color-primary-500)")}
-                  onBlur={e => (e.target.style.borderColor = "var(--gv-color-neutral-200)")}
+                  onFocus={e => (e.target.style.borderColor = T.accent)}
+                  onBlur={e => (e.target.style.borderColor = T.borderStrong)}
                 />
               </div>
               <SubmitBtn loading={loading} label="Verifikasi & Masuk" loadingLabel="Memverifikasi…" />
@@ -249,18 +253,18 @@ export default function SignInForm() {
                   background: "none",
                   border: "none",
                   cursor: "pointer",
-                  color: "var(--gv-color-primary-500)",
-                  fontSize: "13px",
-                  fontFamily: "var(--gv-font-body)",
+                  color: T.textMuted,
+                  fontSize: "14px",
+                  fontFamily: T.fontBody,
                   padding: 0,
-                  textAlign: "center",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  gap: "6px",
+                  gap: T.space2,
+                  lineHeight: 1.5,
                 }}
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square" strokeLinejoin="miter">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
                 </svg>
                 Ubah nomor / kirim ulang OTP
@@ -272,84 +276,68 @@ export default function SignInForm() {
         {/* Footer */}
         <p style={{
           textAlign: "center",
-          marginTop: "32px",
-          fontSize: "12px",
-          color: "var(--gv-color-neutral-400)",
-          fontFamily: "var(--gv-font-body)",
+          marginTop: T.space10,
+          fontSize: "13px",
+          color: T.textDisabled,
           lineHeight: 1.6,
-          borderTop: "1px solid var(--gv-color-neutral-100)",
-          paddingTop: "20px",
+          borderTop: `1px solid ${T.borderDefault}`,
+          paddingTop: T.space6,
         }}>
           Hanya pengguna terdaftar yang dapat masuk.<br />
           Hubungi admin untuk mendaftarkan nomor kamu.
         </p>
+
       </div>
     </div>
   );
 }
 
-// ─── Shared sub-components ─────────────────────────────────────────────────
+// ─── Sub-components ──────────────────────────────────────────────────────────
 
 const labelStyle: React.CSSProperties = {
   display: "block",
   fontSize: "13px",
   fontWeight: 600,
-  color: "var(--gv-color-neutral-700)",
+  color: "#a3b5a9",
   marginBottom: "6px",
-  fontFamily: "var(--gv-font-body)",
+  fontFamily: "Inter, system-ui, sans-serif",
   letterSpacing: "0.01em",
 };
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
-  height: "44px",
-  padding: "0 14px",
-  border: "1px solid var(--gv-color-neutral-200)",
-  borderRadius: 0,
-  fontSize: "14px",
-  fontFamily: "var(--gv-font-body)",
-  color: "var(--gv-color-neutral-900)",
-  background: "white",
+  height: "48px",
+  padding: "0 16px",
+  border: "1px solid rgba(95,122,107,0.22)",
+  borderRadius: "10px",
+  fontSize: "16px",
+  fontFamily: "Inter, system-ui, sans-serif",
+  color: "#e8ede9",
+  background: "#0a100d",
   outline: "none",
   boxSizing: "border-box",
   transition: "border-color 150ms",
 };
 
-function Field({ label, value, onChange, placeholder, type = "text", hint, icon }: {
+function Field({ label, value, onChange, placeholder, type = "text", hint }: {
   label: string; value: string; onChange: (v: string) => void;
-  placeholder: string; type?: string; hint?: string; icon?: React.ReactNode;
+  placeholder: string; type?: string; hint?: string;
 }) {
   return (
     <div>
       <label style={labelStyle}>{label}</label>
-      <div style={{ position: "relative" }}>
-        {icon && (
-          <div style={{
-            position: "absolute",
-            left: "12px",
-            top: "50%",
-            transform: "translateY(-50%)",
-            color: "var(--gv-color-neutral-400)",
-            display: "flex",
-            alignItems: "center",
-            pointerEvents: "none",
-          }}>
-            {icon}
-          </div>
-        )}
-        <input
-          type={type}
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          placeholder={placeholder}
-          required
-          style={{ ...inputStyle, paddingLeft: icon ? "38px" : "14px" }}
-          onFocus={e => (e.target.style.borderColor = "var(--gv-color-primary-500)")}
-          onBlur={e => (e.target.style.borderColor = "var(--gv-color-neutral-200)")}
-        />
-      </div>
+      <input
+        type={type}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        required
+        style={inputStyle}
+        onFocus={e => (e.target.style.borderColor = "#5f7a6b")}
+        onBlur={e => (e.target.style.borderColor = "rgba(95,122,107,0.22)")}
+      />
       {hint && (
-        <p style={{ margin: "4px 0 0", fontSize: "11px", color: "var(--gv-color-neutral-400)", fontFamily: "var(--gv-font-body)" }}>
+        <p style={{ margin: "6px 0 0", fontSize: "12px", color: "#3d4f44", fontFamily: "Inter, sans-serif", lineHeight: 1.5 }}>
           {hint}
         </p>
       )}
@@ -365,28 +353,30 @@ function SubmitBtn({ loading, label, loadingLabel }: { loading: boolean; label: 
       style={{
         width: "100%",
         height: "48px",
-        background: loading ? "var(--gv-color-primary-400)" : "var(--gv-color-primary-500)",
+        background: loading ? "#52694d" : "#5f7a6b",
         border: "none",
-        borderRadius: 0,
+        borderRadius: "10px",
         fontSize: "15px",
         fontWeight: 600,
-        color: "white",
+        color: "#e8ede9",
         cursor: loading ? "not-allowed" : "pointer",
-        fontFamily: "var(--gv-font-body)",
+        fontFamily: "Inter, system-ui, sans-serif",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         gap: "8px",
         letterSpacing: "0.01em",
+        transition: "background 150ms",
+        marginTop: "4px",
       }}
     >
       {loading && (
         <div style={{
           width: 16, height: 16,
           borderRadius: "50%",
-          border: "2px solid rgba(255,255,255,0.4)",
-          borderTopColor: "white",
-          animation: "gv-spin 0.8s linear infinite",
+          border: "2px solid rgba(232,237,233,0.3)",
+          borderTopColor: "#e8ede9",
+          animation: "spin 0.8s linear infinite",
         }} />
       )}
       {loading ? loadingLabel : label}

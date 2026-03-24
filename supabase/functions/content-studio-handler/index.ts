@@ -119,30 +119,42 @@ async function kieGet(path: string) {
   return res.json();
 }
 
-// OpenAI Sora-2 — video generation for long durations (> 10s)
-async function openAISoraGenerate(prompt: string, duration: number, aspectRatio: string): Promise<{ job_id: string; status: string }> {
-  if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY not configured");
-  const sizeMap: Record<string, string> = { "9:16": "1080x1920", "16:9": "1920x1080", "1:1": "1080x1080" };
-  const size = sizeMap[aspectRatio] ?? "1080x1920";
-  const res = await fetch("https://api.openai.com/v1/video/generations", {
-    method: "POST",
-    headers: { "Authorization": `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: "sora-2", prompt, n: 1, size, quality: "high", duration }),
+// KIE API — Runway Gen4 Turbo image-to-video (5s clip)
+async function kieRunwayImageToVideo(imageUrl: string, prompt: string, aspectRatio: string): Promise<{ task_id: string; status: string }> {
+  const res = await kiePost("/jobs/createTask", {
+    model: "runway/gen4-turbo-image-to-video",
+    image_url: imageUrl,
+    prompt,
+    aspect_ratio: aspectRatio,
+    duration: 5,
   });
-  if (!res.ok) throw new Error(`OpenAI Sora error ${res.status}: ${await res.text()}`);
-  const data = await res.json();
-  return { job_id: data.id, status: data.status ?? "queued" };
+  const taskId = res.data?.task_id ?? res.task_id ?? res.id ?? null;
+  if (!taskId) throw new Error("KIE Runway image-to-video: no task_id in response");
+  return { task_id: taskId, status: res.data?.state ?? "processing" };
 }
 
-async function openAISoraPoll(jobId: string): Promise<{ status: string; video_url: string | null }> {
-  if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY not configured");
-  const res = await fetch(`https://api.openai.com/v1/video/generations/${jobId}`, {
-    headers: { "Authorization": `Bearer ${OPENAI_API_KEY}` },
-  });
-  if (!res.ok) throw new Error(`OpenAI Sora poll error ${res.status}`);
-  const data = await res.json();
-  const video_url = data.generations?.[0]?.url ?? data.result?.url ?? null;
-  return { status: data.status ?? "processing", video_url };
+// Poll a KIE task until done or timeout (maxWaitMs)
+async function kieWaitForTask(taskId: string, maxWaitMs = 240_000): Promise<{ video_url: string | null; image_url: string | null; status: string }> {
+  const interval = 6000;
+  const maxTries = Math.ceil(maxWaitMs / interval);
+  for (let i = 0; i < maxTries; i++) {
+    await new Promise(r => setTimeout(r, interval));
+    const res = await kieGet(`/jobs/recordInfo?taskId=${taskId}`);
+    const state: string = res.data?.state ?? res.status ?? "waiting";
+    if (state === "success" || state === "DONE" || state === "completed") {
+      const resultJson = res.data?.resultJson ? JSON.parse(res.data.resultJson) : null;
+      const resultUrls: string[] = resultJson?.resultUrls ?? [];
+      return {
+        video_url: res.data?.video_url ?? resultUrls.find((u: string) => u.includes(".mp4")) ?? null,
+        image_url: resultUrls.find((u: string) => !u.includes(".mp4")) ?? resultUrls[0] ?? null,
+        status: "completed",
+      };
+    }
+    if (state === "fail" || state === "failed" || state === "error") {
+      return { video_url: null, image_url: null, status: "failed" };
+    }
+  }
+  return { video_url: null, image_url: null, status: "timeout" };
 }
 
 // HeyGen — avatar video generation (up to 3 minutes, YouTube format)
@@ -711,67 +723,345 @@ Keep under 150 words. Return ONLY the optimized prompt, no explanation, no quote
       return json({ ok: true, success: true, status: "background", db_id: dbId });
     }
 
-    // ── GENERATE VIDEO ───────────────────────────────────────────────────────
-    // Routing: duration > 10s → OpenAI Sora-2, otherwise → Kie API
+    // ── GENERATE VIDEO (5-phase pipeline) ───────────────────────────────────
+    // 5-Phase Video Pipeline (resumable via generation_id):
+    // Phase 1: KIE Flux 2 Pro → 12 images
+    // Phase 2: Claude Sonnet continuity scoring → pick top 6 (score >0.8)
+    // Phase 3: KIE Runway Gen4 Turbo → 6 × 5s clips (sequence-aware prompts)
+    // Phase 4: Modal FFmpeg smart loop per-clip → each 5s → 8-10s (saves after each)
+    // Phase 5: Modal FFmpeg stitch all 6 extended clips → final ~54-60s
     if (action === "generate_video") {
-      const { prompt, duration = 8, aspect_ratio = "9:16", model = "kling-v1", image_url = "" } = data;
+      const { prompt, aspect_ratio = "9:16", generation_id } = data;
+      const waCallback = String(data.wa_callback ?? "");
+      const waToken    = String(data.wa_token ?? "");
       if (!prompt) return json({ error: "prompt is required" }, 400);
 
-      const useOpenAI = Number(duration) > 10;
-      let task_id: string | null = null;
-      let video_url: string | null = null;
-      let status = "processing";
-      let ai_model = model;
-
-      if (useOpenAI) {
-        // OpenAI Sora-2 for long-duration videos (11–25s)
-        const soraRes = await openAISoraGenerate(prompt, Number(duration), aspect_ratio);
-        task_id = soraRes.job_id;
-        status = soraRes.status;
-        ai_model = "sora-2";
-      } else {
-        // Kie API for short videos (≤ 10s)
-        const payload: Record<string, unknown> = { prompt, duration, aspect_ratio, model, mode: data.mode ?? "standard" };
-        if (image_url) payload.image_url = image_url;
-        const kieRes = await kiePost("/video/generate", payload);
-        task_id = kieRes.task_id ?? kieRes.id ?? null;
-        video_url = kieRes.video_url ?? null;
-        status = kieRes.status ?? "processing";
-        ai_model = kieRes.model ?? model;
+      // Load existing job for resumability
+      let existingRow: Record<string, unknown> | null = null;
+      if (generation_id) {
+        const { data: row } = await supabase.from("gv_video_generations")
+          .select("id, pipeline_step, pipeline_data, video_status")
+          .eq("id", String(generation_id)).eq("brand_id", brand_id).maybeSingle();
+        existingRow = row as Record<string, unknown> | null;
       }
 
-      // If video_url already available (sync response), proxy to R2
-      let finalVideoUrl = video_url;
-      if (video_url && status === "completed") {
-        const r2VideoKey = `videos/${brand_id}/${Date.now()}.mp4`;
-        const r2Url = await proxyToR2(video_url, r2VideoKey, "video/mp4");
-        if (r2Url) { finalVideoUrl = r2Url; console.log(`[generate_video] R2 uploaded: ${r2Url}`); }
+      // In-memory pipeline data cache (merged with DB on each save)
+      const pipelineCache: Record<string, unknown> = (existingRow?.pipeline_data as Record<string, unknown>) ?? {};
+      let dbId: string | null = existingRow ? String(existingRow.id) : null;
+
+      // savePhaseData: updates pipeline_step + merges phaseData into pipeline_data JSONB
+      const savePhaseData = async (phase: number, note: string, phaseData?: Record<string, unknown>) => {
+        if (!dbId) return;
+        if (phaseData) Object.assign(pipelineCache, phaseData);
+        await supabase.from("gv_video_generations").update({
+          pipeline_step: phase,
+          status: "processing",
+          video_status: "processing",
+          pipeline_data: { ...pipelineCache },
+        }).eq("id", dbId);
+        console.log(`[gen_video] Phase ${phase}: ${note}`);
+      };
+
+      // Insert new record only if not resuming an existing job
+      if (!dbId) {
+        const { data: inserted } = await supabase.from("gv_video_generations").insert({
+          brand_id,
+          target_platform: data.platform ?? "tiktok",
+          hook: prompt,
+          ai_model: "flux2pro+runway-gen4-turbo",
+          status: "processing",
+          generation_mode: "kie",
+          runway_task_id: null,
+          video_url: null,
+          video_thumbnail_url: null,
+          video_aspect_ratio: aspect_ratio,
+          video_status: "processing",
+          pipeline_step: 0,
+          pipeline_data: {},
+        }).select("id").single();
+        dbId = inserted?.id ?? null;
       }
 
-      const { data: inserted, error: insertErr } = await supabase.from("gv_video_generations").insert({
-        brand_id,
-        target_platform: data.platform ?? "tiktok",
-        hook: prompt,
-        ai_model,
-        status,
-        generation_mode: useOpenAI ? "openai" : "kie",
-        runway_task_id: task_id,
-        video_url: finalVideoUrl,
-        video_thumbnail_url: null,
-        video_aspect_ratio: aspect_ratio,
-        video_status: status,
-      }).select("id").single();
-      if (insertErr) console.error("generate_video DB insert failed:", insertErr.message);
+      const bgTask = (async () => {
+        try {
+          // ── PHASE 1: Generate 12 images via KIE Flux 2 Pro ─────────────
+          let imageUrls: string[] = ((pipelineCache.phase1 as { image_urls?: string[] })?.image_urls) ?? [];
 
-      return json({
-        ok: true,
-        success: true,
-        task_id,
-        video_url: finalVideoUrl,
-        status,
-        db_id: inserted?.id ?? null,
-        job_id: task_id,
-      });
+          if (imageUrls.length < 6) {
+            await savePhaseData(1, "generating 12 Flux 2 Pro images");
+            const imageTaskIds: string[] = [];
+            for (let b = 0; b < 3; b++) {
+              const batchResults = await Promise.allSettled(
+                Array.from({ length: 4 }, () =>
+                  kiePost("/jobs/createTask", {
+                    model: "flux-2/pro-text-to-image",
+                    input: { prompt: String(prompt), aspect_ratio, resolution: "1K" },
+                  })
+                )
+              );
+              for (const r of batchResults) {
+                if (r.status === "fulfilled") {
+                  const tid = r.value?.data?.taskId ?? r.value?.taskId ?? null;
+                  if (tid) imageTaskIds.push(String(tid));
+                }
+              }
+            }
+            await Promise.allSettled(
+              imageTaskIds.map(async (tid) => {
+                const result = await kieWaitForTask(tid, 300_000);
+                if (result.image_url && result.status === "completed") imageUrls.push(result.image_url);
+              })
+            );
+            console.log(`[gen_video] Phase 1 done: ${imageUrls.length}/12 images`);
+            if (imageUrls.length === 0) throw new Error("Phase 1 failed: no images generated");
+            await savePhaseData(1, `${imageUrls.length} images ready`, { phase1: { image_urls: imageUrls } });
+          } else {
+            console.log(`[gen_video] Phase 1 resumed: ${imageUrls.length} images from cache`);
+          }
+
+          // ── PHASE 2: Claude Sonnet continuity scoring → top 6 ──────────
+          // PRIORITY #1: visual continuity & consistency across all selected images
+          let selectedImages: string[] = ((pipelineCache.phase2 as { selected_images?: string[] })?.selected_images) ?? [];
+
+          if (selectedImages.length < 6) {
+            await savePhaseData(2, `scoring ${imageUrls.length} images for continuity`);
+            selectedImages = imageUrls.slice(0, 6); // default fallback
+
+            if (ANTHROPIC_API_KEY && imageUrls.length > 1) {
+              try {
+                type CItem = { type: "text"; text: string } | { type: "image"; source: { type: "url"; url: string } };
+                const content: CItem[] = imageUrls.slice(0, 12).flatMap((url, i) => ([
+                  { type: "image" as const, source: { type: "url" as const, url } },
+                  { type: "text" as const, text: `[Image ${i + 1}] ${url}` },
+                ]));
+                content.push({
+                  type: "text",
+                  text: `You are a professional video director selecting 6 frames for a cinematic brand video sequence.
+
+PRIORITY #1 — CONTINUITY & CONSISTENCY (non-negotiable):
+• All 6 selected images MUST share the same visual world: matching color palette, lighting direction, mood, and aesthetic style
+• They must work as a coherent visual sequence — no jarring jumps between cuts
+• Prefer a cohesive group of 6 over 6 individually brilliant but visually mismatched images
+
+Scoring per image (0.0–1.0):
+1. Visual continuity fit (30%) — matches color palette, lighting, mood of the group
+2. Sequence logic (25%) — works as a sequential frame in a video story
+3. Lighting & color consistency (20%) — same light direction and quality as group
+4. Technical quality (15%) — sharp, clean, no artifacts
+5. Motion-readiness (10%) — suitable for 5s video clip generation
+
+Select exactly TOP 6 images prioritizing the most visually coherent group.
+Return ONLY valid JSON: {"selected":["url1","url2","url3","url4","url5","url6"],"scores":{"url1":0.92,...},"continuity_note":"one line on what visual element ties them together"}`,
+                });
+
+                const claudeResp = await fetch("https://api.anthropic.com/v1/messages", {
+                  method: "POST",
+                  headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+                  body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 1024, messages: [{ role: "user", content }] }),
+                });
+                if (claudeResp.ok) {
+                  const cd = await claudeResp.json();
+                  const match = (cd.content?.[0]?.text ?? "").match(/\{[\s\S]*\}/);
+                  if (match) {
+                    const parsed = JSON.parse(match[0]);
+                    if (Array.isArray(parsed.selected) && parsed.selected.length > 0) {
+                      const scored = parsed.selected.slice(0, 6);
+                      // Pad to 6 if fewer returned
+                      if (scored.length < 6) {
+                        const scoredSet = new Set(scored);
+                        const remaining = imageUrls.filter(u => !scoredSet.has(u));
+                        selectedImages = [...scored, ...remaining].slice(0, 6);
+                      } else {
+                        selectedImages = scored;
+                      }
+                    }
+                  }
+                }
+              } catch (e) {
+                console.warn("[gen_video] Phase 2 Claude failed, using top 6:", (e as Error).message);
+                selectedImages = imageUrls.slice(0, 6);
+              }
+            }
+            console.log(`[gen_video] Phase 2 done: ${selectedImages.length} images selected`);
+            await savePhaseData(2, `${selectedImages.length} images selected`, { phase2: { selected_images: selectedImages } });
+          } else {
+            console.log(`[gen_video] Phase 2 resumed: ${selectedImages.length} images from cache`);
+          }
+
+          // ── PHASE 3: KIE Runway Gen4 Turbo → 6 × 5s clips ─────────────
+          // Sequence-aware prompts maintain continuity: each clip knows its position in the story
+          let clipUrls: string[] = ((pipelineCache.phase3 as { clip_urls?: string[] })?.clip_urls) ?? [];
+
+          if (clipUrls.length < selectedImages.length) {
+            await savePhaseData(3, `generating ${selectedImages.length} × 5s clips with sequence continuity`);
+            const sceneLabels = [
+              "opening establishing shot — introduce the scene",
+              "build-up — develop the visual story",
+              "mid-sequence — continuation with forward momentum",
+              "peak moment — visual climax of the story",
+              "resolution — wind down, emotional payoff",
+              "closing outro — final impression, brand statement",
+            ];
+            const clipTaskIds: string[] = [];
+
+            for (let i = 0; i < selectedImages.length; i++) {
+              const sceneLabel = sceneLabels[i] ?? `scene ${i + 1} of ${selectedImages.length}`;
+              const sequencePrompt = `${String(prompt)} — Scene ${i + 1}/${selectedImages.length}: ${sceneLabel}. Maintain exact visual continuity: same color grade, lighting direction, and atmosphere as the previous scene. Smooth cinematic motion, professional brand video quality. No abrupt cuts or visual discontinuity.`;
+              try {
+                const r = await kieRunwayImageToVideo(selectedImages[i], sequencePrompt, aspect_ratio);
+                clipTaskIds.push(r.task_id);
+              } catch (e) {
+                console.warn(`[gen_video] Phase 3 clip ${i + 1} task failed:`, (e as Error).message);
+              }
+            }
+
+            // Poll all clip tasks in parallel (max 4 min each)
+            await Promise.allSettled(
+              clipTaskIds.map(async (tid) => {
+                const result = await kieWaitForTask(tid, 240_000);
+                if (result.video_url && result.status === "completed") clipUrls.push(result.video_url);
+              })
+            );
+            console.log(`[gen_video] Phase 3 done: ${clipUrls.length}/${selectedImages.length} clips ready`);
+            if (clipUrls.length === 0) throw new Error("Phase 3 failed: no clips generated");
+            await savePhaseData(3, `${clipUrls.length} clips ready`, { phase3: { clip_urls: clipUrls } });
+          } else {
+            console.log(`[gen_video] Phase 3 resumed: ${clipUrls.length} clips from cache`);
+          }
+
+          // ── PHASE 4: Per-clip FFmpeg smart loop → each 5s → 8-10s ──────
+          // Each clip extended individually — progress saved after EACH clip
+          // so a crash at clip 4 resumes from clip 4, not from scratch
+          let extendedClipUrls: string[] = ((pipelineCache.phase4 as { extended_clip_urls?: string[] })?.extended_clip_urls) ?? [];
+          const MODAL_FFMPEG = Deno.env.get("MODAL_FFMPEG_URL") ?? "";
+
+          if (extendedClipUrls.length < clipUrls.length) {
+            const startIdx = extendedClipUrls.length;
+            await savePhaseData(4, `extending clips ${startIdx + 1}–${clipUrls.length} to 8-10s each`);
+
+            for (let i = startIdx; i < clipUrls.length; i++) {
+              let extendedUrl: string = clipUrls[i]; // fallback to original
+              if (MODAL_FFMPEG) {
+                try {
+                  const loopRes = await fetch(MODAL_FFMPEG, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      clip_urls: [clipUrls[i]],
+                      target_duration: 9,   // 8-10s midpoint
+                      aspect_ratio,
+                      smart_loop: true,
+                      mode: "loop",
+                    }),
+                    signal: AbortSignal.timeout(90_000),
+                  });
+                  if (loopRes.ok) {
+                    const d = await loopRes.json();
+                    extendedUrl = d.video_url ?? d.output_url ?? extendedUrl;
+                    console.log(`[gen_video] Phase 4 clip ${i + 1}/${clipUrls.length} → ${extendedUrl}`);
+                  } else {
+                    console.error(`[gen_video] Phase 4 clip ${i + 1} FFmpeg error: ${loopRes.status} — using original`);
+                  }
+                } catch (e) {
+                  console.error(`[gen_video] Phase 4 clip ${i + 1} failed:`, (e as Error).message, "— using original");
+                }
+              }
+              extendedClipUrls.push(extendedUrl);
+              // Save after EVERY clip — crash recovery resumes from next clip
+              await savePhaseData(4, `clip ${i + 1}/${clipUrls.length} extended`, {
+                phase4: { extended_clip_urls: [...extendedClipUrls] },
+              });
+            }
+            console.log(`[gen_video] Phase 4 done: ${extendedClipUrls.length} clips extended to 8-10s`);
+          } else {
+            console.log(`[gen_video] Phase 4 resumed: ${extendedClipUrls.length} extended clips from cache`);
+          }
+
+          // ── PHASE 5: Stitch all extended clips → final ~54-60s ──────────
+          let finalVideoUrl: string | null = ((pipelineCache.phase5 as { video_url?: string })?.video_url) ?? null;
+
+          if (!finalVideoUrl) {
+            await savePhaseData(5, `stitching ${extendedClipUrls.length} extended clips → final video`);
+            let stitchedUrl: string | null = extendedClipUrls[0] ?? null;
+
+            if (MODAL_FFMPEG && extendedClipUrls.length > 0) {
+              try {
+                const stitchRes = await fetch(MODAL_FFMPEG, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    clip_urls: extendedClipUrls,
+                    aspect_ratio,
+                    smart_loop: false,
+                    transition: "crossfade",
+                    mode: "stitch",
+                  }),
+                  signal: AbortSignal.timeout(120_000),
+                });
+                if (stitchRes.ok) {
+                  const d = await stitchRes.json();
+                  stitchedUrl = d.video_url ?? d.output_url ?? stitchedUrl;
+                  console.log(`[gen_video] Phase 5 done: ${stitchedUrl}`);
+                } else {
+                  console.error("[gen_video] Phase 5 FFmpeg stitch error:", stitchRes.status);
+                }
+              } catch (e) {
+                console.error("[gen_video] Phase 5 stitch failed:", (e as Error).message);
+              }
+            }
+            finalVideoUrl = stitchedUrl;
+            if (finalVideoUrl) {
+              await savePhaseData(5, "stitch complete", { phase5: { video_url: finalVideoUrl } });
+            }
+          } else {
+            console.log(`[gen_video] Phase 5 resumed: final video from cache`);
+          }
+
+          // Upload final video to R2 CDN
+          if (finalVideoUrl) {
+            const r2Key = `videos/${brand_id}/${dbId ?? Date.now()}.mp4`;
+            const r2Url = await proxyToR2(finalVideoUrl, r2Key, "video/mp4");
+            if (r2Url) finalVideoUrl = r2Url;
+          }
+
+          // Final DB update
+          if (dbId) {
+            await supabase.from("gv_video_generations").update({
+              video_status: finalVideoUrl ? "completed" : "failed",
+              status: finalVideoUrl ? "completed" : "failed",
+              video_url: finalVideoUrl,
+              pipeline_step: 5,
+              pipeline_data: { ...pipelineCache },
+            }).eq("id", dbId);
+          }
+
+          // WA callback
+          if (waCallback && waToken) {
+            if (finalVideoUrl) {
+              await sendWACallback(waCallback, waToken, `🎬 *Video berhasil di-generate!* (~54-60s, 6 scenes)\n\n🎥 ${finalVideoUrl}`);
+            } else {
+              await sendWACallback(waCallback, waToken, `❌ Gagal generate video — pipeline error.\n\nResume dengan generation_id: ${dbId}`);
+            }
+          }
+        } catch (e) {
+          console.error("[gen_video] pipeline error:", (e as Error).message);
+          if (dbId) {
+            await supabase.from("gv_video_generations").update({
+              video_status: "failed",
+              status: "failed",
+              pipeline_data: { ...pipelineCache, last_error: (e as Error).message },
+            }).eq("id", dbId);
+          }
+          if (waCallback && waToken) {
+            await sendWACallback(waCallback, waToken, `❌ Gagal generate video — ${(e as Error).message}\n\nResume dengan generation_id: ${dbId}`);
+          }
+        }
+      })();
+
+      // @ts-ignore
+      if (typeof EdgeRuntime !== "undefined") { EdgeRuntime.waitUntil(bgTask); } else { await bgTask; }
+
+      return json({ ok: true, success: true, status: "background", db_id: dbId, resumable: true });
     }
 
     // ── LIST HEYGEN AVATARS ───────────────────────────────────────────────────
@@ -878,14 +1168,7 @@ Keep under 150 words. Return ONLY the optimized prompt, no explanation, no quote
       let video_url: string | null = null;
       let thumbnail_url: string | null = null;
 
-      if (generation_mode === "openai") {
-        const pollRes = await openAISoraPoll(String(task_id));
-        status = pollRes.status;
-        video_url = pollRes.video_url;
-        // Normalize OpenAI statuses
-        if (status === "succeeded") status = "completed";
-        if (status === "failed") status = "failed";
-      } else if (generation_mode === "heygen") {
+      if (generation_mode === "heygen") {
         const pollRes = await heygenPoll(String(task_id));
         status = pollRes.status;
         video_url = pollRes.video_url;

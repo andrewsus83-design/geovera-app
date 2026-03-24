@@ -290,8 +290,8 @@ Deno.serve(async (req) => {
     );
 
     const { brand_profile_id, user_id } = await req.json();
-    if (!brand_profile_id || !user_id) {
-      return new Response(JSON.stringify({ error: "brand_profile_id and user_id required" }),
+    if (!brand_profile_id) {
+      return new Response(JSON.stringify({ error: "brand_profile_id required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -332,11 +332,12 @@ Deno.serve(async (req) => {
     if (profileErr || !profile) throw new Error("Brand profile not found");
 
     // Extract website URL from research_data
+    // Structure: { gemini: Step1Output, perplexity_discovery: string, indexed_at: string }
     const rd = profile.research_data as Record<string, unknown> | null;
-    const sot = profile.source_of_truth as Record<string, unknown> | null;
+    const geminiData = rd?.gemini as Record<string, unknown> | null;
     const websiteUrl: string =
-      (rd?.digital_presence as Record<string, unknown>)?.website as string
-      ?? (sot?.brand_foundation as Record<string, unknown>)?.website as string
+      geminiData?.official_website as string
+      ?? (rd?.digital_presence as Record<string, unknown>)?.website as string
       ?? `https://${profile.brand_name?.toLowerCase().replace(/\s+/g, "")}.com`;
 
     // ── Google PageSpeed ─────────────────────────────────────────────────

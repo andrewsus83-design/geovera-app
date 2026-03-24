@@ -80,13 +80,23 @@ export async function POST(request: NextRequest) {
         : device.fonnte_token)
       : process.env.FONNTE_TOKEN ?? "";
 
-    if (fontteToken) {
-      const msg = `*GeoVera Login OTP*\n\nKode OTP kamu: *${otp}*\n\nBerlaku 5 menit. Jangan bagikan ke siapapun.`;
-      await fetch(FONNTE_API, {
-        method: "POST",
-        headers: { Authorization: fontteToken, "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({ target: wa, message: msg, countryCode: "62" }).toString(),
-      });
+    if (!fontteToken) {
+      console.error("[wa-auth/start] FONNTE token kosong — device:", device?.fonnte_token, "env FONNTE_TOKEN_GVAI:", !!process.env.FONNTE_TOKEN_GVAI, "env FONNTE_TOKEN:", !!process.env.FONNTE_TOKEN);
+      return NextResponse.json({ ok: false, error: "Layanan WhatsApp belum dikonfigurasi. Hubungi admin." }, { status: 503 });
+    }
+
+    const msg = `*GeoVera Login OTP*\n\nKode OTP kamu: *${otp}*\n\nBerlaku 5 menit. Jangan bagikan ke siapapun.`;
+    const fontteRes = await fetch(FONNTE_API, {
+      method: "POST",
+      headers: { Authorization: fontteToken, "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ target: wa, message: msg, countryCode: "62" }).toString(),
+    });
+    const fontteData = await fontteRes.json().catch(() => ({}));
+    console.log("[wa-auth/start] Fonnte response:", fontteRes.status, JSON.stringify(fontteData));
+
+    if (!fontteRes.ok || fontteData?.status === false) {
+      console.error("[wa-auth/start] Fonnte gagal:", fontteData);
+      return NextResponse.json({ ok: false, error: "Gagal kirim OTP via WhatsApp. Coba lagi." }, { status: 502 });
     }
 
     return NextResponse.json({ ok: true, message: "OTP terkirim ke WhatsApp kamu" });
