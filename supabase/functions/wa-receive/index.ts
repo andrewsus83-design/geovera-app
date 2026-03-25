@@ -178,29 +178,36 @@ async function buildArticleMenu(supabase: ReturnType<typeof createClient>, brand
   return { menu: lines.join('\n'), sessionData };
 }
 
-async function buildImageMenu(supabase: ReturnType<typeof createClient>, brandId: string, brandName: string, botPrefix = 'Geovera'): Promise<{ menu: string; sessionData: SessionData }> {
-  const taskTopics = await getTaskTopics(supabase, brandId, ['gambar', 'image', 'visual', 'foto', 'photo', 'desain', 'grafis', 'banner', 'poster']);
+async function buildImageMenu(supabase: ReturnType<typeof createClient>, brandId: string, brandName: string, _botPrefix = 'Geovera'): Promise<{ menu: string; sessionData: SessionData }> {
   const { data: recentArticles } = await supabase.from('gv_article_generations').select('id, topic').eq('brand_id', brandId).not('article_url', 'is', null).order('created_at', { ascending: false }).limit(5);
+  const taskTopics = await getTaskTopics(supabase, brandId, ['gambar', 'image', 'visual', 'foto', 'photo', 'desain', 'grafis', 'banner', 'poster']);
 
-  const rawTopics = taskTopics.length > 0 ? taskTopics.slice(0, 3) : [
-    { label: `Visual produk ${brandName}`, prompt: `Professional product photo for ${brandName}, clean white background, high quality`, source: 'suggested' },
-    { label: `Konten promo ${brandName}`, prompt: `Modern promotional social media graphic for ${brandName}, vibrant colors`, source: 'suggested' },
-    { label: `Behind the scenes ${brandName}`, prompt: `Behind the scenes authentic photo for ${brandName}, candid and professional`, source: 'suggested' },
-  ];
-  const topicOpts: ContentOption[] = rawTopics.map(t => ({ ...t, label: `Topik "${t.label}"` }));
-
-  const sections: ContentSection[] = [{ num: 2, label: 'Pilih topik yang direkomendasikan hari ini', opts: topicOpts }];
-
-  const articleOpts: ContentOption[] = ((recentArticles ?? []) as Record<string, unknown>[]).slice(0, 3).map(a => ({
-    label: `Judul artikel "${String(a.topic ?? 'Artikel terbaru').slice(0, 60)}"`,
+  // Priority: recent article topics → task topics → fallback
+  const ALPHA_LOCAL = 'abcdefghijklmnopqrstuvwxyz';
+  const articleBasedTopics: ContentOption[] = ((recentArticles ?? []) as Record<string, unknown>[]).slice(0, 3).map(a => ({
+    label: `Mengikuti artikel "${String(a.topic ?? 'Artikel terbaru').slice(0, 60)}"`,
     prompt: `Create a compelling featured image for article: "${String(a.topic ?? '')}". Professional, eye-catching, suitable for blog and social media`,
     source: 'article',
     source_id: String(a.id),
   }));
-  if (articleOpts.length > 0) sections.push({ num: 3, label: 'Gambar untuk artikel terbaru', opts: articleOpts });
+  const fallbackTopics: ContentOption[] = taskTopics.length > 0 ? taskTopics.slice(0, 3).map(t => ({ ...t, label: `Mengikuti topik "${t.label}"` })) : [
+    { label: `Visual produk ${brandName}`, prompt: `Professional product photo for ${brandName}, clean white background, high quality`, source: 'suggested' },
+    { label: `Konten promo ${brandName}`, prompt: `Modern promotional social media graphic for ${brandName}, vibrant colors`, source: 'suggested' },
+    { label: `Behind the scenes ${brandName}`, prompt: `Behind the scenes authentic photo for ${brandName}, candid and professional`, source: 'suggested' },
+  ];
+  const topicOpts: ContentOption[] = articleBasedTopics.length > 0 ? articleBasedTopics : fallbackTopics;
 
+  const sections: ContentSection[] = [{ num: 2, label: 'Deskripsi image (Suggested)', opts: topicOpts }];
   const sessionData: SessionData = { session_type: 'gambar', sections };
-  return { menu: buildMenuText('gambar', sections, `foto produk background putih`, botPrefix), sessionData };
+
+  const lines: string[] = ['Silahkan pilih opsi di bawah:'];
+  lines.push('', '*1.* Jumlah gambar: ketik *1, 2, 3* atau *4*');
+  lines.push('', '*2.* Deskripsi image (Suggested):');
+  topicOpts.forEach((o, i) => lines.push(`   ${ALPHA_LOCAL[i]}. ${o.label}`));
+  lines.push('', 'atau *3.* Deskripsi manual — tuliskan sendiri');
+  lines.push('', 'Contoh: *4, 2b* (4 gambar, topik b) atau *2 foto produk background putih*');
+
+  return { menu: lines.join('\n'), sessionData };
 }
 
 async function buildVideoMenu(supabase: ReturnType<typeof createClient>, brandId: string, brandName: string, botPrefix = 'Geovera'): Promise<{ menu: string; sessionData: SessionData }> {
@@ -253,23 +260,27 @@ async function fireContentGeneration(params: {
   deviceNumber: string;
   isGroup: boolean;
   length?: string;
+  numImages?: number;
 }) {
-  const { cmd, prompt, brandId, brandName, replyTo, token, memberName, waNumber, supabase, deviceNumber, isGroup, length } = params;
+  const { cmd, prompt, brandId, brandName, replyTo, token, memberName, waNumber, supabase, deviceNumber, isGroup, length, numImages } = params;
   const actionMap: Record<string, { action: string; emoji: string; label: string }> = {
     GEN_ARTICLE: { action: 'generate_article', emoji: '📝', label: 'artikel' },
     GEN_IMAGE:   { action: 'generate_image',   emoji: '🎨', label: 'gambar' },
     GEN_VIDEO:   { action: 'generate_video',   emoji: '🎬', label: 'video' },
   };
   const { action, emoji, label } = actionMap[cmd];
+  const imgCount = Math.min(Math.max(numImages ?? 1, 1), 4);
   const waitMsg = cmd === 'GEN_VIDEO'
     ? `${emoji} _Sedang generate ${label}: "${prompt.slice(0, 80)}"..._\n\n_Video pipeline: Scene Director → Flux Schnell → Quality Gate → Flux Dev → Runway Gen4 → Smart Loop.\nEstimasi 3-5 menit. Hasil akan dikirim otomatis ke group ini._`
+    : cmd === 'GEN_IMAGE'
+    ? `${emoji} _Sedang generate *${imgCount} gambar*: "${prompt.slice(0, 70)}"..._\n\n_Mohon tunggu beberapa menit._`
     : `${emoji} _Sedang generate ${label}: "${prompt.slice(0, 80)}"..._\n\n_Mohon tunggu, proses ini memakan waktu beberapa menit._`;
   await sendWA(replyTo, waitMsg, token);
 
   const csPayload: Record<string, unknown> = { action, brand_id: brandId, prompt, wa_callback: replyTo, wa_token: token, requested_by: memberName || waNumber };
   if (cmd === 'GEN_ARTICLE') { csPayload.topic = prompt; csPayload.objective = 'random'; csPayload.length = length || 'medium'; }
-  if (cmd === 'GEN_IMAGE')   { csPayload.aspect_ratio = '1:1'; csPayload.num_images = 1; }
-  if (cmd === 'GEN_VIDEO')   { csPayload.aspect_ratio = '16:9'; }
+  if (cmd === 'GEN_IMAGE')   { csPayload.aspect_ratio = '1:1'; csPayload.num_images = imgCount; }
+  if (cmd === 'GEN_VIDEO')   { csPayload.aspect_ratio = '9:16'; }
 
   const svcKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
   const csUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/content-studio-handler`;
@@ -414,8 +425,15 @@ async function handleMessage(p: Record<string, unknown>) {
     if (session) {
       await deleteSession(supabase, session.id);
       const genCmd = session.session_type === 'artikel' ? 'GEN_ARTICLE' : session.session_type === 'gambar' ? 'GEN_IMAGE' : 'GEN_VIDEO';
-      console.log(`[MANUAL_INPUT] session:${session.session_type} desc:"${arg}"`);
-      await fireContentGeneration({ cmd: genCmd as 'GEN_ARTICLE'|'GEN_IMAGE'|'GEN_VIDEO', prompt: arg, brandId, brandName, replyTo, token, memberName, waNumber, supabase, deviceNumber, isGroup });
+      // For gambar: extract leading count "2 foto produk..." → numImages=2, prompt="foto produk..."
+      let manualPrompt = arg;
+      let manualNumImages = 1;
+      if (session.session_type === 'gambar') {
+        const cm = arg.match(/^([1-4])\s*(?:images?|gambar|foto)?,?\s+/i);
+        if (cm) { manualNumImages = parseInt(cm[1]); manualPrompt = arg.slice(cm[0].length).trim(); }
+      }
+      console.log(`[MANUAL_INPUT] session:${session.session_type} desc:"${manualPrompt}" numImages:${manualNumImages}`);
+      await fireContentGeneration({ cmd: genCmd as 'GEN_ARTICLE'|'GEN_IMAGE'|'GEN_VIDEO', prompt: manualPrompt, brandId, brandName, replyTo, token, memberName, waNumber, supabase, deviceNumber, isGroup, numImages: manualNumImages });
       return;
     }
   }
@@ -424,7 +442,15 @@ async function handleMessage(p: Record<string, unknown>) {
     const session = await getActiveSession(supabase, brandId, replyTo);
     if (session) {
       // Parse ALL picks from message (e.g. "1b, 2b" → [{num:1,arg:'b'},{num:2,arg:'b'}])
-      const cleanedMsg = message.replace(/^(@\S+\s*)+/i, '').trim();
+      let cleanedMsg = message.replace(/^(@\S+\s*)+/i, '').trim();
+
+      // For gambar: extract leading count "4, 2b" or "4 images, 2b" or "4 gambar, 2b"
+      let sessionNumImages = 1;
+      if (session.session_type === 'gambar') {
+        const cm = cleanedMsg.match(/^([1-4])\s*(?:images?|gambar|foto)?,?\s*/i);
+        if (cm) { sessionNumImages = parseInt(cm[1]); cleanedMsg = cleanedMsg.slice(cm[0].length).trim(); }
+      }
+
       const allPickMatches = [...cleanedMsg.matchAll(/(\d)([a-f])(\s|,|$)/gi)].map(m => ({ num: parseInt(m[1]), arg: m[2].toLowerCase() }));
       if (allPickMatches.length === 0) allPickMatches.push({ num, arg });
 
@@ -447,8 +473,8 @@ async function handleMessage(p: Record<string, unknown>) {
       if (anyValid) {
         await deleteSession(supabase, session.id);
         const genCmd = session.session_type === 'artikel' ? 'GEN_ARTICLE' : session.session_type === 'gambar' ? 'GEN_IMAGE' : 'GEN_VIDEO';
-        console.log(`[SECTION_PICK] session:${session.session_type} picks:${allPickMatches.map(p=>p.num+p.arg).join(',')} prompt:"${finalPrompt.slice(0,60)}" length:${finalLength||'default'}`);
-        await fireContentGeneration({ cmd: genCmd as 'GEN_ARTICLE'|'GEN_IMAGE'|'GEN_VIDEO', prompt: finalPrompt, brandId, brandName, replyTo, token, memberName, waNumber, supabase, deviceNumber, isGroup, length: finalLength || undefined });
+        console.log(`[SECTION_PICK] session:${session.session_type} picks:${allPickMatches.map(p=>p.num+p.arg).join(',')} prompt:"${finalPrompt.slice(0,60)}" length:${finalLength||'default'} numImages:${sessionNumImages}`);
+        await fireContentGeneration({ cmd: genCmd as 'GEN_ARTICLE'|'GEN_IMAGE'|'GEN_VIDEO', prompt: finalPrompt, brandId, brandName, replyTo, token, memberName, waNumber, supabase, deviceNumber, isGroup, length: finalLength || undefined, numImages: sessionNumImages });
         return;
       }
     }
