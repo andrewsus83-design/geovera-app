@@ -217,7 +217,7 @@ function SSOPanel() {
           }}>
             <div style={{
               width: "36px", height: "36px", borderRadius: "9px",
-              background: e.visible ? "var(--success-subtle)" : "rgba(95,122,107,0.07)",
+              background: e.visible ? "var(--success-subtle)" : "var(--accent-ghost)",
               display: "flex", alignItems: "center", justifyContent: "center",
               flexShrink: 0,
             }}>

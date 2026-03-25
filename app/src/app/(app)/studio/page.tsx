@@ -124,9 +124,9 @@ export default function StudioPage() {
           {/* Artikel */}
           <button onClick={() => setType("artikel")} title="Artikel" style={{
             width: "34px", height: "34px", minWidth: "34px", minHeight: "34px", borderRadius: "50%",
-            border: type === "artikel" ? "1px solid rgba(95,122,107,0.5)" : "1px solid var(--border-strong)",
+            border: type === "artikel" ? "1px solid var(--accent)" : "1px solid var(--border-strong)",
             background: type === "artikel" ? "var(--border-strong)" : "var(--bg-recessed)",
-            color: type === "artikel" ? "#a3c4b5" : "var(--text-disabled)",
+            color: type === "artikel" ? "var(--accent)" : "var(--text-disabled)",
             display: "flex", alignItems: "center", justifyContent: "center",
             cursor: "pointer", WebkitTapHighlightColor: "transparent", flexShrink: 0,
           }}>
@@ -140,9 +140,9 @@ export default function StudioPage() {
           {/* Image */}
           <button onClick={() => setType("image")} title="Image" style={{
             width: "34px", height: "34px", minWidth: "34px", minHeight: "34px", borderRadius: "50%",
-            border: type === "image" ? "1px solid rgba(95,122,107,0.5)" : "1px solid var(--border-strong)",
+            border: type === "image" ? "1px solid var(--accent)" : "1px solid var(--border-strong)",
             background: type === "image" ? "var(--border-strong)" : "var(--bg-recessed)",
-            color: type === "image" ? "#a3c4b5" : "var(--text-disabled)",
+            color: type === "image" ? "var(--accent)" : "var(--text-disabled)",
             display: "flex", alignItems: "center", justifyContent: "center",
             cursor: "pointer", WebkitTapHighlightColor: "transparent", flexShrink: 0,
           }}>
@@ -155,9 +155,9 @@ export default function StudioPage() {
           {/* Video */}
           <button onClick={() => setType("video")} title="Video" style={{
             width: "34px", height: "34px", minWidth: "34px", minHeight: "34px", borderRadius: "50%",
-            border: type === "video" ? "1px solid rgba(95,122,107,0.5)" : "1px solid var(--border-strong)",
+            border: type === "video" ? "1px solid var(--accent)" : "1px solid var(--border-strong)",
             background: type === "video" ? "var(--border-strong)" : "var(--bg-recessed)",
-            color: type === "video" ? "#a3c4b5" : "var(--text-disabled)",
+            color: type === "video" ? "var(--accent)" : "var(--text-disabled)",
             display: "flex", alignItems: "center", justifyContent: "center",
             cursor: "pointer", WebkitTapHighlightColor: "transparent", flexShrink: 0,
           }}>
@@ -247,7 +247,7 @@ export default function StudioPage() {
                 {/* Meta */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "6px" }}>
                   <span style={{ fontSize: "8px", color: accent, fontWeight: 700 }}>{a.words}</span>
-                  <span style={{ fontSize: "8px", color: "rgba(255,255,255,0.3)" }}>{a.date}</span>
+                  <span style={{ fontSize: "8px", color: "var(--text-muted)" }}>{a.date}</span>
                 </div>
               </div>
             );
@@ -290,7 +290,7 @@ export default function StudioPage() {
                   } as React.CSSProperties}>{img.prompt}</p>
                   <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px" }}>
                     <span style={{ fontSize: "9px", color: accent, fontWeight: 600 }}>{img.model}</span>
-                    <span style={{ fontSize: "9px", color: "rgba(255,255,255,0.4)" }}>{img.date}</span>
+                    <span style={{ fontSize: "9px", color: "var(--text-muted)" }}>{img.date}</span>
                   </div>
                 </div>
               </div>
@@ -327,14 +327,14 @@ export default function StudioPage() {
                   {vid.status === "processing" ? (
                     <div style={{
                       width: "36px", height: "36px", borderRadius: "50%",
-                      border: "2px solid rgba(255,255,255,0.15)",
+                      border: "2px solid var(--border-default)",
                       borderTopColor: accent,
                       animation: "spin 1s linear infinite",
                     }} />
                   ) : (
                     <div style={{
                       width: "36px", height: "36px", borderRadius: "50%",
-                      background: "rgba(0,0,0,0.4)",
+                      background: "var(--glass-bg-strong)",
                       border: `1px solid ${accent}40`,
                       display: "flex", alignItems: "center", justifyContent: "center",
                     }}>
@@ -348,7 +348,7 @@ export default function StudioPage() {
                 <div style={{ display: "flex", justifyContent: "flex-end" }}>
                   <span style={{
                     fontSize: "10px", fontWeight: 700,
-                    background: "rgba(0,0,0,0.5)", color: "var(--text-primary)",
+                    background: "var(--glass-bg-strong)", color: "var(--text-primary)",
                     padding: "2px 6px", borderRadius: "4px",
                   }}>{vid.duration}</span>
                 </div>
@@ -368,7 +368,7 @@ export default function StudioPage() {
                     }}>
                       {vid.status === "processing" ? "Proses..." : "Selesai"}
                     </span>
-                    <span style={{ fontSize: "9px", color: "rgba(255,255,255,0.3)" }}>{vid.date}</span>
+                    <span style={{ fontSize: "9px", color: "var(--text-muted)" }}>{vid.date}</span>
                   </div>
                 </div>
               </div>
@@ -384,7 +384,7 @@ export default function StudioPage() {
         zIndex: 30,
         width: "48px", height: "48px", borderRadius: "50%",
         background: "var(--accent)", border: "none",
-        boxShadow: "0 4px 16px rgba(0,0,0,0.4), 0 0 0 1px rgba(95,122,107,0.4)",
+        boxShadow: "var(--shadow-md), 0 0 0 1px var(--accent-subtle)",
         display: "flex", alignItems: "center", justifyContent: "center",
         color: "var(--text-primary)", cursor: "pointer",
         WebkitTapHighlightColor: "transparent",
@@ -403,7 +403,7 @@ export default function StudioPage() {
           }} />
           <div style={{
             position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 50,
-            background: "#0d1510",
+            background: "var(--bg-tertiary)",
             border: "1px solid var(--border-strong)",
             borderRadius: "20px 20px 0 0",
             paddingBottom: "calc(60px + env(safe-area-inset-bottom) + 8px)",
