@@ -117,11 +117,13 @@ function ContentDetail({ item, onClose }: { item: DetailItem; onClose: () => voi
       }}>
         {/* Back */}
         <button onClick={onClose} style={{
-          width: "36px", height: "36px", borderRadius: "50%", flexShrink: 0,
+          width: "36px", height: "36px", minWidth: "36px", minHeight: "36px",
+          borderRadius: "50%", flexShrink: 0, padding: 0,
           background: "var(--bg-recessed)", border: "1px solid var(--border-strong)",
           display: "flex", alignItems: "center", justifyContent: "center",
           color: "var(--accent)", cursor: "pointer",
           WebkitTapHighlightColor: "transparent",
+          boxSizing: "border-box",
         }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
@@ -142,11 +144,13 @@ function ContentDetail({ item, onClose }: { item: DetailItem; onClose: () => voi
         </div>
         {/* Download */}
         <button style={{
-          width: "36px", height: "36px", borderRadius: "50%", flexShrink: 0,
+          width: "36px", height: "36px", minWidth: "36px", minHeight: "36px",
+          borderRadius: "50%", flexShrink: 0, padding: 0,
           background: "var(--bg-recessed)", border: "1px solid var(--border-strong)",
           display: "flex", alignItems: "center", justifyContent: "center",
           color: "var(--accent)", cursor: "pointer",
           WebkitTapHighlightColor: "transparent",
+          boxSizing: "border-box",
         }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
@@ -156,11 +160,13 @@ function ContentDetail({ item, onClose }: { item: DetailItem; onClose: () => voi
         </button>
         {/* Share / Forward */}
         <button style={{
-          width: "36px", height: "36px", borderRadius: "50%", flexShrink: 0,
+          width: "36px", height: "36px", minWidth: "36px", minHeight: "36px",
+          borderRadius: "50%", flexShrink: 0, padding: 0,
           background: "var(--bg-recessed)", border: "1px solid var(--border-strong)",
           display: "flex", alignItems: "center", justifyContent: "center",
           color: "var(--accent)", cursor: "pointer",
           WebkitTapHighlightColor: "transparent",
+          boxSizing: "border-box",
         }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="22" y1="2" x2="11" y2="13"/>
@@ -494,38 +500,79 @@ export default function StudioPage() {
 
       {/* ── LIST — text card (X/Twitter, Threads, Artikel teks) ── */}
       {activeLayout === "list" && (
-        <div style={{ padding: "4px 16px 24px", display: "flex", flexDirection: "column", gap: "8px" }}>
+        <div style={{
+          padding: "4px 16px calc(80px + env(safe-area-inset-bottom))",
+          display: "flex", flexDirection: "column", gap: "10px",
+        }}>
           {LIST_ITEMS.map((a, i) => {
             const [bg, accent] = CARD_COLORS[i % CARD_COLORS.length];
             return (
-            <div key={a.id} onClick={() => setSelectedItem({ kind: "list", data: a, bg, accent })} style={{
-              background: "var(--bg-recessed)", border: "1px solid var(--border-subtle)",
-              borderRadius: "12px", padding: "14px 14px",
-              cursor: "pointer",
-            }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "6px" }}>
-                <h3 style={{
-                  margin: 0, fontFamily: "var(--font-heading)", fontWeight: 700,
-                  fontSize: "13px", color: "var(--text-primary)", letterSpacing: "-0.01em",
-                  lineHeight: 1.4, flex: 1, paddingRight: "8px",
-                }}>{a.title}</h3>
-                <span style={{ fontSize: "10px", color: "var(--text-disabled)", flexShrink: 0 }}>{a.date}</span>
+              <div
+                key={a.id}
+                onClick={() => setSelectedItem({ kind: "list", data: a, bg, accent })}
+                style={{
+                  background: "var(--bg-recessed)",
+                  border: "1px solid var(--border-default)",
+                  borderRadius: "var(--radius-lg, 14px)",
+                  padding: "14px",
+                  cursor: "pointer",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px",
+                  WebkitTapHighlightColor: "transparent",
+                }}
+              >
+                {/* Title row */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
+                  <h3 style={{
+                    margin: 0,
+                    fontFamily: "var(--font-heading)",
+                    fontWeight: 700,
+                    fontSize: "13px",
+                    color: "var(--text-primary)",
+                    letterSpacing: "-0.01em",
+                    lineHeight: 1.4,
+                    flex: 1,
+                  }}>{a.title}</h3>
+                  <span style={{
+                    fontSize: "10px",
+                    color: "var(--text-disabled)",
+                    flexShrink: 0,
+                    fontFamily: "var(--font-body)",
+                    lineHeight: 1.4,
+                    paddingTop: "1px",
+                  }}>{a.date}</span>
+                </div>
+                {/* Body preview */}
+                <p style={{
+                  margin: 0,
+                  fontSize: "12px",
+                  color: "var(--text-muted)",
+                  lineHeight: 1.6,
+                  fontFamily: "var(--font-body)",
+                  display: "-webkit-box",
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: "vertical",
+                  overflow: "hidden",
+                } as React.CSSProperties}>{a.body}</p>
+                {/* Badges */}
+                <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                  <span style={{
+                    fontSize: "10px", fontWeight: 600,
+                    padding: "2px 8px", borderRadius: "20px",
+                    background: "var(--accent-subtle)", color: "var(--accent)",
+                    fontFamily: "var(--font-body)",
+                  }}>{a.words} kata</span>
+                  <span style={{
+                    fontSize: "10px", fontWeight: 600,
+                    padding: "2px 8px", borderRadius: "20px",
+                    background: "var(--success-subtle)", color: "var(--success)",
+                    fontFamily: "var(--font-body)",
+                  }}>Selesai</span>
+                </div>
               </div>
-              <p style={{ margin: "0 0 10px", fontSize: "12px", color: "var(--text-muted)", lineHeight: 1.6,
-                display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
-              } as React.CSSProperties}>{a.body}</p>
-              <div style={{ display: "flex", gap: "8px" }}>
-                <span style={{
-                  fontSize: "10px", fontWeight: 600, padding: "2px 8px", borderRadius: "20px",
-                  background: "var(--accent-subtle)", color: "var(--accent)",
-                }}>{a.words} kata</span>
-                <span style={{
-                  fontSize: "10px", fontWeight: 600, padding: "2px 8px", borderRadius: "20px",
-                  background: "var(--success-subtle)", color: "var(--success)",
-                }}>Selesai</span>
-              </div>
-            </div>
-          ); })}
+            );
+          })}
         </div>
       )}
 
