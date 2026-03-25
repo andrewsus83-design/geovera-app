@@ -107,13 +107,15 @@ function ContentDetail({ item, onClose }: { item: DetailItem; onClose: () => voi
       overflowY: "hidden",
     }}>
 
-      {/* ── Top bar ── */}
+      {/* ── Top bar (sticky) ── */}
       <div style={{
-        display: "flex", alignItems: "center", gap: "12px",
-        padding: "16px 16px 12px",
+        display: "flex", alignItems: "center", gap: "10px",
+        padding: "14px 16px 12px",
         borderBottom: "1px solid var(--border-subtle)",
+        background: "var(--bg-primary)",
         flexShrink: 0,
       }}>
+        {/* Back */}
         <button onClick={onClose} style={{
           width: "36px", height: "36px", borderRadius: "50%", flexShrink: 0,
           background: "var(--bg-recessed)", border: "1px solid var(--border-strong)",
@@ -125,27 +127,44 @@ function ContentDetail({ item, onClose }: { item: DetailItem; onClose: () => voi
             <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
           </svg>
         </button>
+        {/* Title */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ margin: 0, fontSize: "11px", color: "var(--text-disabled)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.07em" }}>
+          <p style={{ margin: 0, fontSize: "10px", color: "var(--text-disabled)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.07em" }}>
             {item.kind === "video" ? "Video" : item.kind === "image" ? "Gambar" : "Artikel"}
           </p>
           <h2 style={{
             margin: 0, fontFamily: "var(--font-heading)", fontWeight: 700,
-            fontSize: "15px", color: "var(--text-primary)", letterSpacing: "-0.01em",
+            fontSize: "14px", color: "var(--text-primary)", letterSpacing: "-0.01em",
             whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
           }}>
             {title}
           </h2>
         </div>
-        <button onClick={onClose} style={{
-          width: "32px", height: "32px", borderRadius: "50%", flexShrink: 0,
-          background: "none", border: "none",
+        {/* Download */}
+        <button style={{
+          width: "36px", height: "36px", borderRadius: "50%", flexShrink: 0,
+          background: "var(--bg-recessed)", border: "1px solid var(--border-strong)",
           display: "flex", alignItems: "center", justifyContent: "center",
-          color: "var(--text-disabled)", cursor: "pointer",
+          color: "var(--accent)", cursor: "pointer",
           WebkitTapHighlightColor: "transparent",
         }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+        </button>
+        {/* Share / Forward */}
+        <button style={{
+          width: "36px", height: "36px", borderRadius: "50%", flexShrink: 0,
+          background: "var(--bg-recessed)", border: "1px solid var(--border-strong)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: "var(--accent)", cursor: "pointer",
+          WebkitTapHighlightColor: "transparent",
+        }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"/>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
           </svg>
         </button>
       </div>
@@ -506,7 +525,7 @@ export default function StudioPage() {
                 }}>Selesai</span>
               </div>
             </div>
-          ))}
+          ); })}
         </div>
       )}
 
