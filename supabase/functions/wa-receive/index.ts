@@ -84,7 +84,7 @@ async function isAuthorized(supabase: ReturnType<typeof createClient>, brandId: 
 }
 
 // ─── Session types ─────────────────────────────────────────────────────────────
-interface ContentOption  { label: string; prompt: string; source?: string; source_id?: string; length?: string; }
+interface ContentOption  { label: string; prompt: string; source?: string; source_id?: string; length?: string; image_type?: string; }
 interface ContentSection { num: number; label: string; opts: ContentOption[]; }
 interface SessionData    { session_type: string; sections: ContentSection[]; }
 
@@ -182,30 +182,47 @@ async function buildImageMenu(supabase: ReturnType<typeof createClient>, brandId
   const { data: recentArticles } = await supabase.from('gv_article_generations').select('id, topic').eq('brand_id', brandId).not('article_url', 'is', null).order('created_at', { ascending: false }).limit(5);
   const taskTopics = await getTaskTopics(supabase, brandId, ['gambar', 'image', 'visual', 'foto', 'photo', 'desain', 'grafis', 'banner', 'poster']);
 
-  // Priority: recent article topics → task topics → fallback
   const ALPHA_LOCAL = 'abcdefghijklmnopqrstuvwxyz';
+
+  // Section 2: Image type
+  const typeOpts: ContentOption[] = [
+    { label: 'Product only', prompt: '', image_type: 'product only, product as main subject, clean commercial photography, no people' },
+    { label: 'Character only', prompt: '', image_type: 'character/model focused, lifestyle photography, no product visible, authentic and natural' },
+    { label: 'Product + Character', prompt: '', image_type: 'lifestyle product photography, model holding/using product, brand and human together' },
+  ];
+
+  // Section 3: Suggested description (from recent articles → task topics → fallback)
   const articleBasedTopics: ContentOption[] = ((recentArticles ?? []) as Record<string, unknown>[]).slice(0, 3).map(a => ({
-    label: `Mengikuti artikel "${String(a.topic ?? 'Artikel terbaru').slice(0, 60)}"`,
-    prompt: `Create a compelling featured image for article: "${String(a.topic ?? '')}". Professional, eye-catching, suitable for blog and social media`,
+    label: `"${String(a.topic ?? 'Artikel terbaru').slice(0, 60)}"`,
+    prompt: `Create a compelling featured image for: "${String(a.topic ?? '')}". Professional, eye-catching, suitable for blog and social media.`,
     source: 'article',
     source_id: String(a.id),
   }));
-  const fallbackTopics: ContentOption[] = taskTopics.length > 0 ? taskTopics.slice(0, 3).map(t => ({ ...t, label: `Mengikuti topik "${t.label}"` })) : [
-    { label: `Visual produk ${brandName}`, prompt: `Professional product photo for ${brandName}, clean white background, high quality`, source: 'suggested' },
-    { label: `Konten promo ${brandName}`, prompt: `Modern promotional social media graphic for ${brandName}, vibrant colors`, source: 'suggested' },
-    { label: `Behind the scenes ${brandName}`, prompt: `Behind the scenes authentic photo for ${brandName}, candid and professional`, source: 'suggested' },
+  const fallbackTopics: ContentOption[] = taskTopics.length > 0 ? taskTopics.slice(0, 3).map(t => ({
+    ...t,
+    label: `"${t.label}"`,
+    prompt: `Professional image for ${brandName}: ${t.prompt}`,
+  })) : [
+    { label: `"Visual produk ${brandName}"`, prompt: `Professional product photo for ${brandName}, clean white background, high quality commercial shot`, source: 'suggested' },
+    { label: `"Konten promo ${brandName}"`, prompt: `Modern promotional social media graphic for ${brandName}, vibrant colors, eye-catching`, source: 'suggested' },
+    { label: `"Behind the scenes ${brandName}"`, prompt: `Behind the scenes authentic photo for ${brandName}, candid and professional, relatable`, source: 'suggested' },
   ];
-  const topicOpts: ContentOption[] = articleBasedTopics.length > 0 ? articleBasedTopics : fallbackTopics;
+  const descOpts: ContentOption[] = articleBasedTopics.length > 0 ? articleBasedTopics : fallbackTopics;
 
-  const sections: ContentSection[] = [{ num: 2, label: 'Deskripsi image (Suggested)', opts: topicOpts }];
+  const sections: ContentSection[] = [
+    { num: 2, label: 'Tipe gambar', opts: typeOpts },
+    { num: 3, label: 'Deskripsi image (Suggested)', opts: descOpts },
+  ];
   const sessionData: SessionData = { session_type: 'gambar', sections };
 
   const lines: string[] = ['Silahkan pilih opsi di bawah:'];
   lines.push('', '*1.* Jumlah gambar: ketik *1, 2, 3* atau *4*');
-  lines.push('', '*2.* Deskripsi image (Suggested):');
-  topicOpts.forEach((o, i) => lines.push(`   ${ALPHA_LOCAL[i]}. ${o.label}`));
-  lines.push('', 'atau *3.* Deskripsi manual — tuliskan sendiri');
-  lines.push('', 'Contoh: *4, 2b* (4 gambar, topik b) atau *2 foto produk background putih*');
+  lines.push('', '*2.* Tipe gambar:');
+  typeOpts.forEach((o, i) => lines.push(`   ${ALPHA_LOCAL[i]}. ${o.label}`));
+  lines.push('', '*3.* Deskripsi image (Suggested):');
+  descOpts.forEach((o, i) => lines.push(`   ${ALPHA_LOCAL[i]}. ${o.label}`));
+  lines.push('', 'atau *4.* Deskripsi manual — tuliskan sendiri');
+  lines.push('', 'Contoh: *3, 2b, 3a* atau *2, 2a, foto produk background putih*');
 
   return { menu: lines.join('\n'), sessionData };
 }
@@ -425,12 +442,27 @@ async function handleMessage(p: Record<string, unknown>) {
     if (session) {
       await deleteSession(supabase, session.id);
       const genCmd = session.session_type === 'artikel' ? 'GEN_ARTICLE' : session.session_type === 'gambar' ? 'GEN_IMAGE' : 'GEN_VIDEO';
-      // For gambar: extract leading count "2 foto produk..." → numImages=2, prompt="foto produk..."
+      // For gambar: extract count + optional type pick + manual description
+      // e.g. "2, 2b, foto produk background putih" or "3 foto produk" or "foto produk"
       let manualPrompt = arg;
       let manualNumImages = 1;
+      let manualImageType = '';
       if (session.session_type === 'gambar') {
-        const cm = arg.match(/^([1-4])\s*(?:images?|gambar|foto)?,?\s+/i);
+        // Extract leading count
+        const cm = arg.match(/^([1-4])\s*(?:images?|gambar|foto)?,?\s*/i);
         if (cm) { manualNumImages = parseInt(cm[1]); manualPrompt = arg.slice(cm[0].length).trim(); }
+        // Extract type pick "2b, ..." embedded in manual text
+        const typeSec = session.sections.find(s => s.num === 2);
+        const tpMatch = manualPrompt.match(/^2([a-c])[\s,]+/i);
+        if (tpMatch && typeSec) {
+          const idx = ALPHA.indexOf(tpMatch[1].toLowerCase());
+          if (idx >= 0 && idx < typeSec.opts.length) {
+            manualImageType = typeSec.opts[idx].image_type ?? '';
+            manualPrompt = manualPrompt.slice(tpMatch[0].length).trim();
+          }
+        }
+        if (manualImageType && manualPrompt) manualPrompt = `${manualPrompt} | Style: ${manualImageType}`;
+        else if (manualImageType) manualPrompt = `${manualImageType} image for ${brandName}`;
       }
       console.log(`[MANUAL_INPUT] session:${session.session_type} desc:"${manualPrompt}" numImages:${manualNumImages}`);
       await fireContentGeneration({ cmd: genCmd as 'GEN_ARTICLE'|'GEN_IMAGE'|'GEN_VIDEO', prompt: manualPrompt, brandId, brandName, replyTo, token, memberName, waNumber, supabase, deviceNumber, isGroup, numImages: manualNumImages });
@@ -456,6 +488,7 @@ async function handleMessage(p: Record<string, unknown>) {
 
       let finalPrompt = '';
       let finalLength = '';
+      let finalImageType = '';
       let anyValid = false;
 
       for (const pick of allPickMatches) {
@@ -465,15 +498,29 @@ async function handleMessage(p: Record<string, unknown>) {
         if (subIdx < 0 || subIdx >= sec.opts.length) continue;
         const chosen = sec.opts[subIdx];
         anyValid = true;
-        if (chosen.length) finalLength = chosen.length;          // section 1: length
-        if (!chosen.length) finalPrompt = chosen.prompt;         // section 2+: topic
-        else if (!finalPrompt) finalPrompt = chosen.prompt;      // fallback: use section 1 topic if no section 2
+        if (chosen.length)     finalLength    = chosen.length;      // artikel: length
+        if (chosen.image_type) finalImageType = chosen.image_type;  // gambar: type modifier
+        if (!chosen.length && !chosen.image_type) finalPrompt = chosen.prompt; // description
+        else if (!finalPrompt && chosen.prompt) finalPrompt = chosen.prompt;   // fallback
       }
 
-      if (anyValid) {
+      // For gambar: check for trailing manual text after all picks (e.g. "3, 2b, foto produk")
+      if (session.session_type === 'gambar' && !finalPrompt) {
+        const withoutPicks = cleanedMsg.replace(/\d[a-f](\s|,|$)/gi, '').replace(/,/g, '').trim();
+        if (withoutPicks.length > 3) finalPrompt = withoutPicks;
+      }
+
+      // Combine image_type + prompt for gambar
+      if (session.session_type === 'gambar' && finalImageType) {
+        finalPrompt = finalPrompt
+          ? `${finalPrompt} | Style: ${finalImageType}`
+          : `${finalImageType} image for ${brandName}`;
+      }
+
+      if (anyValid || finalPrompt) {
         await deleteSession(supabase, session.id);
         const genCmd = session.session_type === 'artikel' ? 'GEN_ARTICLE' : session.session_type === 'gambar' ? 'GEN_IMAGE' : 'GEN_VIDEO';
-        console.log(`[SECTION_PICK] session:${session.session_type} picks:${allPickMatches.map(p=>p.num+p.arg).join(',')} prompt:"${finalPrompt.slice(0,60)}" length:${finalLength||'default'} numImages:${sessionNumImages}`);
+        console.log(`[SECTION_PICK] session:${session.session_type} picks:${allPickMatches.map(p=>p.num+p.arg).join(',')} prompt:"${finalPrompt.slice(0,60)}" length:${finalLength||'default'} imgType:${finalImageType||'-'} numImages:${sessionNumImages}`);
         await fireContentGeneration({ cmd: genCmd as 'GEN_ARTICLE'|'GEN_IMAGE'|'GEN_VIDEO', prompt: finalPrompt, brandId, brandName, replyTo, token, memberName, waNumber, supabase, deviceNumber, isGroup, length: finalLength || undefined, numImages: sessionNumImages });
         return;
       }
