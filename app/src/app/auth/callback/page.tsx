@@ -15,19 +15,9 @@ export default function AuthCallbackPage() {
       return;
     }
 
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session?.user) { router.replace("/signin"); return; }
-
-      // Check onboarding + subscription status
-      const { data: profile } = await supabase
-        .from("user_profiles")
-        .select("onboarding_completed, status")
-        .eq("id", session.user.id)
-        .single();
-
-      if (profile?.status === "active") { router.replace("/getting-started"); return; }
-      if (!profile?.onboarding_completed) { router.replace("/onboarding"); return; }
-      router.replace("/pricing");
+      router.replace("/home");
     });
   }, [router]);
 
@@ -38,19 +28,19 @@ export default function AuthCallbackPage() {
       flexDirection: "column",
       alignItems: "center",
       justifyContent: "center",
-      background: "var(--gv-color-bg-base)",
-      fontFamily: "var(--gv-font-body)",
+      background: "var(--bg-primary)",
+      fontFamily: "var(--font-body)",
     }}>
       <div style={{
         width: 40,
         height: 40,
         borderRadius: "50%",
-        border: "3px solid var(--gv-color-neutral-200)",
-        borderTopColor: "var(--gv-color-primary-500)",
-        animation: "gv-spin 0.8s linear infinite",
+        border: "3px solid var(--border-default)",
+        borderTopColor: "var(--accent)",
+        animation: "spin 0.8s linear infinite",
         marginBottom: 16,
       }} />
-      <p style={{ color: "var(--gv-color-neutral-500)", fontSize: 15 }}>
+      <p style={{ color: "var(--text-muted)", fontSize: 15 }}>
         Memverifikasi akun…
       </p>
     </div>

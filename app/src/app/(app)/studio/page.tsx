@@ -299,20 +299,17 @@ export default function StudioPage() {
         </div>
       )}
 
-      {/* ── MASONRY — 2-column Pinterest (TikTok, Reels, Shorts) ── */}
+      {/* ── MASONRY — 2-column 3:4 grid (TikTok, Reels, Shorts) ── */}
       {activeLayout === "masonry" && (
         <div style={{
           display: "grid", gridTemplateColumns: "1fr 1fr",
-          gridTemplateRows: "auto",
           gap: "3px", padding: "3px",
-          alignItems: "start",
         }}>
           {VIDEO_ITEMS.map((vid, i) => {
             const [bg, accent] = CARD_COLORS[i % CARD_COLORS.length];
-            const height = vid.tall ? "220px" : "150px";
             return (
               <div key={vid.id} style={{
-                height,
+                aspectRatio: "3/4",
                 background: bg,
                 borderRadius: "8px",
                 display: "flex", flexDirection: "column",
