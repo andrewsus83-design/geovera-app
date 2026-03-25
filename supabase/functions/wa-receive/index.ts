@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// wa-receive v28 — Interactive menus with 2-level selection (1. manual / 2a, 2b, 3a...)
+// wa-receive v29 — Video menu: image picker (multi-pick) + suggested topics + manual
 // Content gen (ARTIKEL/GAMBAR/VIDEO menu) ONLY triggers via @GeoveraAI mention in group
 
 const BASE_URL   = 'https://vozjwptzutolvkvfpknk.supabase.co/functions/v1';
@@ -84,7 +84,7 @@ async function isAuthorized(supabase: ReturnType<typeof createClient>, brandId: 
 }
 
 // ─── Session types ─────────────────────────────────────────────────────────────
-interface ContentOption  { label: string; prompt: string; source?: string; source_id?: string; length?: string; image_type?: string; }
+interface ContentOption  { label: string; prompt: string; source?: string; source_id?: string; length?: string; image_type?: string; image_url?: string; }
 interface ContentSection { num: number; label: string; opts: ContentOption[]; }
 interface SessionData    { session_type: string; sections: ContentSection[]; }
 
@@ -227,40 +227,56 @@ async function buildImageMenu(supabase: ReturnType<typeof createClient>, brandId
   return { menu: lines.join('\n'), sessionData };
 }
 
-async function buildVideoMenu(supabase: ReturnType<typeof createClient>, brandId: string, brandName: string, botPrefix = 'Geovera'): Promise<{ menu: string; sessionData: SessionData }> {
-  const taskTopics = await getTaskTopics(supabase, brandId, ['video', 'reel', 'tiktok', 'short', 'cinematic']);
-  const [{ data: recentArticles }, { data: recentImages }] = await Promise.all([
-    supabase.from('gv_article_generations').select('id, topic').eq('brand_id', brandId).not('article_url', 'is', null).order('created_at', { ascending: false }).limit(4),
-    supabase.from('gv_image_generations').select('id, prompt_text').eq('brand_id', brandId).not('image_url', 'is', null).order('created_at', { ascending: false }).limit(4),
+async function buildVideoMenu(supabase: ReturnType<typeof createClient>, brandId: string, brandName: string, _botPrefix = 'Geovera'): Promise<{ menu: string; sessionData: SessionData }> {
+  const [{ data: recentImages }, taskTopics, { data: recentArticles }] = await Promise.all([
+    supabase.from('gv_image_generations').select('id, prompt_text, image_url').eq('brand_id', brandId).not('image_url', 'is', null).order('created_at', { ascending: false }).limit(5),
+    getTaskTopics(supabase, brandId, ['video', 'reel', 'tiktok', 'short', 'cinematic', 'artikel', 'konten']),
+    supabase.from('gv_article_generations').select('id, topic').eq('brand_id', brandId).not('article_url', 'is', null).order('created_at', { ascending: false }).limit(5),
   ]);
 
-  const rawTopics = taskTopics.length > 0 ? taskTopics.slice(0, 3) : [
-    { label: `Video promo ${brandName}`, prompt: `Cinematic promotional video showcasing ${brandName} products, modern and energetic`, source: 'suggested' },
-    { label: `Brand story ${brandName}`, prompt: `Brand story video for ${brandName}, authentic and inspiring narrative`, source: 'suggested' },
-    { label: `Tutorial ${brandName}`, prompt: `Step-by-step tutorial video for ${brandName}, clear and professional`, source: 'suggested' },
-  ];
-  const topicOpts: ContentOption[] = rawTopics.map(t => ({ ...t, label: `Topik "${t.label}"` }));
+  const ALPHA_LOCAL = 'abcdefghijklmnopqrstuvwxyz';
+  const sections: ContentSection[] = [];
 
-  const sections: ContentSection[] = [{ num: 2, label: 'Pilih topik yang direkomendasikan hari ini', opts: topicOpts }];
+  // Section 1: Recent generated images (multiple picks allowed)
+  const imageOpts: ContentOption[] = ((recentImages ?? []) as Record<string, unknown>[]).slice(0, 5).map((img, i) => ({
+    label: `Image ${ALPHA_LOCAL[i].toUpperCase()} — "${String(img.prompt_text ?? '').slice(0, 50)}"`,
+    prompt: String(img.prompt_text ?? `Image ${i + 1}`),
+    image_url: String(img.image_url ?? ''),
+    source: 'image',
+    source_id: String(img.id),
+  }));
+  if (imageOpts.length > 0) sections.push({ num: 1, label: 'Pilih image (bisa multiple)', opts: imageOpts });
 
-  const articleOpts: ContentOption[] = ((recentArticles ?? []) as Record<string, unknown>[]).slice(0, 3).map(a => ({
-    label: `Judul artikel "${String(a.topic ?? 'Artikel terbaru').slice(0, 55)}"`,
+  // Section 2: Suggested topics (from recent articles → task topics → fallback)
+  const articleTopics: ContentOption[] = ((recentArticles ?? []) as Record<string, unknown>[]).slice(0, 3).map(a => ({
+    label: `"${String(a.topic ?? 'Artikel terbaru').slice(0, 60)}"`,
     prompt: `Cinematic video based on article: "${String(a.topic ?? '')}". Visual storytelling, engaging and professional`,
     source: 'article',
     source_id: String(a.id),
   }));
-  if (articleOpts.length > 0) sections.push({ num: 3, label: 'Video dari artikel terbaru', opts: articleOpts });
-
-  const imageOpts: ContentOption[] = ((recentImages ?? []) as Record<string, unknown>[]).slice(0, 3).map(img => ({
-    label: `Gambar "${String(img.prompt_text ?? 'Gambar terbaru').slice(0, 55)}"`,
-    prompt: String(img.prompt_text ?? `Cinematic video for ${brandName}`),
-    source: 'image_set',
-    source_id: String(img.id),
-  }));
-  if (imageOpts.length > 0) sections.push({ num: (sections[sections.length - 1]?.num ?? 1) + 1, label: 'Video dari gambar tersedia', opts: imageOpts });
+  const topicOpts: ContentOption[] = articleTopics.length > 0 ? articleTopics : taskTopics.length > 0 ? taskTopics.slice(0, 3).map(t => ({ ...t, label: `"${t.label}"` })) : [
+    { label: `"Video promo ${brandName}"`, prompt: `Cinematic promotional video for ${brandName}, modern and energetic`, source: 'suggested' },
+    { label: `"Brand story ${brandName}"`, prompt: `Authentic brand story for ${brandName}, inspiring narrative`, source: 'suggested' },
+    { label: `"Tutorial ${brandName}"`, prompt: `Step-by-step tutorial for ${brandName}, clear and professional`, source: 'suggested' },
+  ];
+  sections.push({ num: 2, label: 'Suggested topic', opts: topicOpts });
 
   const sessionData: SessionData = { session_type: 'video', sections };
-  return { menu: buildMenuText('video', sections, `video promo produk terbaru ${brandName}`, botPrefix), sessionData };
+
+  const lines: string[] = ['Silahkan pilih opsi di bawah:'];
+  if (imageOpts.length > 0) {
+    lines.push('', '*1.* Pilih image (bisa multiple):');
+    imageOpts.forEach((o, i) => lines.push(`   ${ALPHA_LOCAL[i]}. ${o.label}`));
+  }
+  lines.push('', '*2.* Suggested topic:');
+  topicOpts.forEach((o, i) => lines.push(`   ${ALPHA_LOCAL[i]}. ${o.label}`));
+  lines.push('', 'atau *3.* Tulis deskripsi manual — ketik: *3 [deskripsi kamu]*');
+  lines.push('', 'Durasi otomatis.');
+  lines.push('', imageOpts.length > 0
+    ? 'Contoh: *1a, 1b, 1c* (pilih gambar) atau *2a* (pilih topik) atau *3 deskripsi video kamu*'
+    : 'Contoh: *2a* (pilih topik) atau *3 deskripsi video kamu*');
+
+  return { menu: lines.join('\n'), sessionData };
 }
 
 // ─── Content generation fire-and-forget ───────────────────────────────────────
@@ -278,8 +294,9 @@ async function fireContentGeneration(params: {
   isGroup: boolean;
   length?: string;
   numImages?: number;
+  imageUrls?: string[];
 }) {
-  const { cmd, prompt, brandId, brandName, replyTo, token, memberName, waNumber, supabase, deviceNumber, isGroup, length, numImages } = params;
+  const { cmd, prompt, brandId, brandName, replyTo, token, memberName, waNumber, supabase, deviceNumber, isGroup, length, numImages, imageUrls } = params;
   const actionMap: Record<string, { action: string; emoji: string; label: string }> = {
     GEN_ARTICLE: { action: 'generate_article', emoji: '📝', label: 'artikel' },
     GEN_IMAGE:   { action: 'generate_image',   emoji: '🎨', label: 'gambar' },
@@ -288,7 +305,9 @@ async function fireContentGeneration(params: {
   const { action, emoji, label } = actionMap[cmd];
   const imgCount = Math.min(Math.max(numImages ?? 1, 1), 4);
   const waitMsg = cmd === 'GEN_VIDEO'
-    ? `${emoji} _Sedang generate ${label}: "${prompt.slice(0, 80)}"..._\n\n_Video pipeline: Scene Director → Flux Schnell → Quality Gate → Flux Dev → Runway Gen4 → Smart Loop.\nEstimasi 3-5 menit. Hasil akan dikirim otomatis ke group ini._`
+    ? imageUrls && imageUrls.length > 0
+      ? `${emoji} _Sedang generate ${label} dari *${imageUrls.length} gambar*..._\n\n_Video pipeline: Runway Gen4 → Smart Loop.\nEstimasi 2-4 menit. Hasil akan dikirim otomatis ke group ini._`
+      : `${emoji} _Sedang generate ${label}: "${prompt.slice(0, 80)}"..._\n\n_Video pipeline: Scene Director → Flux Schnell → Quality Gate → Flux Dev → Runway Gen4 → Smart Loop.\nEstimasi 3-5 menit. Hasil akan dikirim otomatis ke group ini._`
     : cmd === 'GEN_IMAGE'
     ? `${emoji} _Sedang generate *${imgCount} gambar*: "${prompt.slice(0, 70)}"..._\n\n_Mohon tunggu beberapa menit._`
     : `${emoji} _Sedang generate ${label}: "${prompt.slice(0, 80)}"..._\n\n_Mohon tunggu, proses ini memakan waktu beberapa menit._`;
@@ -297,7 +316,7 @@ async function fireContentGeneration(params: {
   const csPayload: Record<string, unknown> = { action, brand_id: brandId, prompt, wa_callback: replyTo, wa_token: token, requested_by: memberName || waNumber };
   if (cmd === 'GEN_ARTICLE') { csPayload.topic = prompt; csPayload.objective = 'random'; csPayload.length = length || 'medium'; }
   if (cmd === 'GEN_IMAGE')   { csPayload.aspect_ratio = '1:1'; csPayload.num_images = imgCount; }
-  if (cmd === 'GEN_VIDEO')   { csPayload.aspect_ratio = '9:16'; }
+  if (cmd === 'GEN_VIDEO')   { csPayload.aspect_ratio = '9:16'; if (imageUrls && imageUrls.length > 0) csPayload.image_urls = imageUrls; }
 
   const svcKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
   const csUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/content-studio-handler`;
@@ -489,6 +508,7 @@ async function handleMessage(p: Record<string, unknown>) {
       let finalPrompt = '';
       let finalLength = '';
       let finalImageType = '';
+      let finalImageUrls: string[] = [];
       let anyValid = false;
 
       for (const pick of allPickMatches) {
@@ -500,8 +520,9 @@ async function handleMessage(p: Record<string, unknown>) {
         anyValid = true;
         if (chosen.length)     finalLength    = chosen.length;      // artikel: length
         if (chosen.image_type) finalImageType = chosen.image_type;  // gambar: type modifier
-        if (!chosen.length && !chosen.image_type) finalPrompt = chosen.prompt; // description
-        else if (!finalPrompt && chosen.prompt) finalPrompt = chosen.prompt;   // fallback
+        if (chosen.image_url)  finalImageUrls.push(chosen.image_url); // video: image picks
+        if (!chosen.length && !chosen.image_type && !chosen.image_url) finalPrompt = chosen.prompt; // description
+        else if (!finalPrompt && chosen.prompt && !chosen.image_url) finalPrompt = chosen.prompt;   // fallback
       }
 
       // For gambar: check for trailing manual text after all picks (e.g. "3, 2b, foto produk")
@@ -517,11 +538,16 @@ async function handleMessage(p: Record<string, unknown>) {
           : `${finalImageType} image for ${brandName}`;
       }
 
+      // For video with image picks: use image count as description fallback
+      if (session.session_type === 'video' && finalImageUrls.length > 0 && !finalPrompt) {
+        finalPrompt = `Cinematic video from ${finalImageUrls.length} selected image${finalImageUrls.length > 1 ? 's' : ''} for ${brandName}`;
+      }
+
       if (anyValid || finalPrompt) {
         await deleteSession(supabase, session.id);
         const genCmd = session.session_type === 'artikel' ? 'GEN_ARTICLE' : session.session_type === 'gambar' ? 'GEN_IMAGE' : 'GEN_VIDEO';
-        console.log(`[SECTION_PICK] session:${session.session_type} picks:${allPickMatches.map(p=>p.num+p.arg).join(',')} prompt:"${finalPrompt.slice(0,60)}" length:${finalLength||'default'} imgType:${finalImageType||'-'} numImages:${sessionNumImages}`);
-        await fireContentGeneration({ cmd: genCmd as 'GEN_ARTICLE'|'GEN_IMAGE'|'GEN_VIDEO', prompt: finalPrompt, brandId, brandName, replyTo, token, memberName, waNumber, supabase, deviceNumber, isGroup, length: finalLength || undefined, numImages: sessionNumImages });
+        console.log(`[SECTION_PICK] session:${session.session_type} picks:${allPickMatches.map(p=>p.num+p.arg).join(',')} prompt:"${finalPrompt.slice(0,60)}" length:${finalLength||'default'} imgType:${finalImageType||'-'} numImages:${sessionNumImages} imgUrls:${finalImageUrls.length}`);
+        await fireContentGeneration({ cmd: genCmd as 'GEN_ARTICLE'|'GEN_IMAGE'|'GEN_VIDEO', prompt: finalPrompt, brandId, brandName, replyTo, token, memberName, waNumber, supabase, deviceNumber, isGroup, length: finalLength || undefined, numImages: sessionNumImages, imageUrls: finalImageUrls.length > 0 ? finalImageUrls : undefined });
         return;
       }
     }

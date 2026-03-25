@@ -3,15 +3,15 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 
 // ── API Types ─────────────────────────────────────────────────────────────────
-type APIArticle = { id: string; title: string; description?: string; created_at: string; status: string; platform?: string; content_type?: string };
-type APIImage   = { id: string; prompt: string; created_at: string; model: string; status: string; url?: string };
-type APIVideo   = { id: string; title: string; created_at: string; status: string; target_platform?: string; pipeline_step?: string; video_status?: string };
+type APIArticle = { id: string; topic: string | null; article_url: string | null; word_count: number | null; length: string | null; created_at: string; status: string | null };
+type APIImage   = { id: string; prompt_text: string | null; image_url: string | null; ai_model: string | null; status: string | null; created_at: string };
+type APIVideo   = { id: string; hook: string | null; video_url: string | null; video_status: string | null; ai_model: string | null; target_platform: string | null; pipeline_step: number | null; created_at: string };
 
 // ── Mapped UI types ───────────────────────────────────────────────────────────
-type ListItem    = { id: string; title: string; body: string; date: string; words: string };
-type GridItem    = { id: string; title: string; date: string; words: string };
-type ImageItem   = { id: string; prompt: string; date: string; model: string };
-type VideoItem   = { id: string; title: string; duration: string; date: string; status: string; tall: boolean };
+type ListItem    = { id: string; title: string; body: string; date: string; words: string; article_url?: string };
+type GridItem    = { id: string; title: string; date: string; words: string; article_url?: string };
+type ImageItem   = { id: string; prompt: string; date: string; model: string; image_url?: string };
+type VideoItem   = { id: string; title: string; duration: string; date: string; status: string; tall: boolean; video_url?: string };
 
 // ── Detail item union ─────────────────────────────────────────────────────────
 type DetailItem =
@@ -213,36 +213,56 @@ function ContentDetail({
             marginBottom: "20px",
             margin: "0 auto 20px",
           }}>
-            {isVideo && (
-              isProcessing ? (
-                <div style={{
-                  width: "56px", height: "56px", borderRadius: "50%",
-                  border: "3px solid var(--border-default)",
-                  borderTopColor: item.accent,
-                  animation: "spin 1s linear infinite",
-                }} />
-              ) : (
-                <div style={{
-                  width: "60px", height: "60px", borderRadius: "50%",
-                  background: "var(--glass-bg-strong)",
-                  border: `2px solid ${item.accent}60`,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}>
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill={item.accent}>
-                    <polygon points="5 3 19 12 5 21 5 3"/>
-                  </svg>
-                </div>
-              )
+            {/* Real image */}
+            {isImage && (item.data as ImageItem).image_url && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={(item.data as ImageItem).image_url}
+                alt={(item.data as ImageItem).prompt}
+                style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "16px" }}
+              />
             )}
-            {isImage && (
+            {/* Image placeholder when no URL */}
+            {isImage && !(item.data as ImageItem).image_url && (
               <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke={item.accent} strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" opacity="0.4">
                 <rect x="3" y="3" width="18" height="18" rx="2"/>
                 <circle cx="8.5" cy="8.5" r="1.5"/>
                 <polyline points="21 15 16 10 5 21"/>
               </svg>
             )}
-            {/* Duration badge for video */}
-            {isVideo && (
+            {/* Real video player */}
+            {isVideo && !isProcessing && (item.data as VideoItem).video_url && (
+              <video
+                src={(item.data as VideoItem).video_url}
+                controls
+                playsInline
+                style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "16px" }}
+              />
+            )}
+            {/* Video processing spinner */}
+            {isVideo && isProcessing && (
+              <div style={{
+                width: "56px", height: "56px", borderRadius: "50%",
+                border: "3px solid var(--border-default)",
+                borderTopColor: item.accent,
+                animation: "spin 1s linear infinite",
+              }} />
+            )}
+            {/* Video play placeholder (completed but no URL yet) */}
+            {isVideo && !isProcessing && !(item.data as VideoItem).video_url && (
+              <div style={{
+                width: "60px", height: "60px", borderRadius: "50%",
+                background: "var(--glass-bg-strong)",
+                border: `2px solid ${item.accent}60`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill={item.accent}>
+                  <polygon points="5 3 19 12 5 21 5 3"/>
+                </svg>
+              </div>
+            )}
+            {/* Duration badge */}
+            {isVideo && (item.data as VideoItem).duration !== "—" && (
               <span style={{
                 position: "absolute", top: "12px", right: "12px",
                 fontSize: "11px", fontWeight: 700,
@@ -270,6 +290,40 @@ function ContentDetail({
               }}>{(item.data as ImageItem).model}</span>
             )}
           </div>
+        )}
+
+        {/* CDN link buttons for images and videos */}
+        {isImage && (item.data as ImageItem).image_url && (
+          <a href={(item.data as ImageItem).image_url} target="_blank" rel="noopener noreferrer"
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center", gap: "6px",
+              padding: "10px 14px", borderRadius: "12px", marginBottom: "20px",
+              background: "var(--bg-recessed)", border: "1px solid var(--border-strong)",
+              color: "var(--accent)", fontSize: "13px", fontWeight: 600,
+              textDecoration: "none",
+            }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/>
+              <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+            </svg>
+            Buka CDN Image
+          </a>
+        )}
+        {isVideo && (item.data as VideoItem).video_url && (
+          <a href={(item.data as VideoItem).video_url} target="_blank" rel="noopener noreferrer"
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center", gap: "6px",
+              padding: "10px 14px", borderRadius: "12px", marginBottom: "20px",
+              background: "var(--bg-recessed)", border: "1px solid var(--border-strong)",
+              color: "var(--accent)", fontSize: "13px", fontWeight: 600,
+              textDecoration: "none",
+            }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/>
+              <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+            </svg>
+            Tonton Video CDN
+          </a>
         )}
 
         {/* Artikel / Text content */}
@@ -314,6 +368,24 @@ function ContentDetail({
               </p>
             ))}
           </div>
+        )}
+
+        {/* Artikel CDN link */}
+        {(item.kind === "list" || item.kind === "grid3") && (item.data as ListItem).article_url && (
+          <a href={(item.data as ListItem).article_url} target="_blank" rel="noopener noreferrer"
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center", gap: "6px",
+              padding: "10px 14px", borderRadius: "12px", marginBottom: "20px",
+              background: "var(--bg-recessed)", border: "1px solid var(--border-strong)",
+              color: "var(--success)", fontSize: "13px", fontWeight: 600,
+              textDecoration: "none",
+            }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/>
+              <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+            </svg>
+            Buka Artikel CDN
+          </a>
         )}
 
         {/* Image prompt detail */}
@@ -630,26 +702,29 @@ export default function StudioPage() {
 
         setArticles(rawArticles.map((a) => ({
           id: a.id,
-          title: a.title,
-          body: a.description ?? "Artikel dihasilkan oleh AI GeoVera.",
+          title: a.topic ?? "Artikel",
+          body: "Artikel dihasilkan oleh AI GeoVera.",
           date: formatDate(a.created_at),
-          words: "—",
+          words: a.word_count != null ? String(a.word_count) : "—",
+          article_url: a.article_url ?? undefined,
         })));
 
         setImages(rawImages.map((img) => ({
           id: img.id,
-          prompt: img.prompt,
+          prompt: img.prompt_text ?? "",
           date: formatDate(img.created_at),
-          model: img.model || "Flux H100",
+          model: img.ai_model ?? "Flux 2 Pro",
+          image_url: img.image_url ?? undefined,
         })));
 
         setVideos(rawVideos.map((v) => ({
           id: v.id,
-          title: v.title,
+          title: v.hook ?? "Video",
           duration: "—",
           date: formatDate(v.created_at),
-          status: v.video_status ?? v.status ?? "done",
+          status: v.video_status ?? "processing",
           tall: false,
+          video_url: v.video_url ?? undefined,
         })));
       } finally {
         setContentLoading(false);
@@ -666,6 +741,7 @@ export default function StudioPage() {
     title: a.title,
     date: a.date,
     words: a.words,
+    article_url: a.article_url,
   }));
 
   // Count for active view
