@@ -1,6 +1,13 @@
 "use client";
 import { useState } from "react";
 
+// ── Detail item union ─────────────────────────────────────────────────────────
+type DetailItem =
+  | { kind: "list";   data: typeof LIST_ITEMS[0];    bg: string; accent: string }
+  | { kind: "grid3";  data: typeof ARTIKEL_ITEMS[0]; bg: string; accent: string }
+  | { kind: "image";  data: typeof IMAGE_ITEMS[0];   bg: string; accent: string }
+  | { kind: "video";  data: typeof VIDEO_ITEMS[0];   bg: string; accent: string };
+
 type ContentType = "artikel" | "image" | "video";
 
 const ARTIKEL_ITEMS = [
@@ -80,15 +87,303 @@ const LIST_ITEMS = [
   { id: 4, title: "SEO vs GEO: Mana Lebih Penting?", body: "Google bukan satu-satunya mesin pencari yang penting. GEO (Generative Engine Optimization) kini semakin krusial...", date: "21 Mar", words: "750" },
 ];
 
+// ── Full-screen Content Detail ────────────────────────────────────────────────
+function ContentDetail({ item, onClose }: { item: DetailItem; onClose: () => void }) {
+  const isVideo = item.kind === "video";
+  const isImage = item.kind === "image";
+  const isProcessing = isVideo && item.data.status === "processing";
+
+  const title =
+    item.kind === "image" ? item.data.prompt :
+    item.kind === "list"  ? item.data.title  :
+    item.data.title;
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 60,
+      background: "var(--bg-primary)", color: "var(--text-primary)",
+      fontFamily: "var(--font-body)",
+      display: "flex", flexDirection: "column",
+      overflowY: "hidden",
+    }}>
+
+      {/* ── Top bar ── */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: "12px",
+        padding: "16px 16px 12px",
+        borderBottom: "1px solid var(--border-subtle)",
+        flexShrink: 0,
+      }}>
+        <button onClick={onClose} style={{
+          width: "36px", height: "36px", borderRadius: "50%", flexShrink: 0,
+          background: "var(--bg-recessed)", border: "1px solid var(--border-strong)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: "var(--accent)", cursor: "pointer",
+          WebkitTapHighlightColor: "transparent",
+        }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
+          </svg>
+        </button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ margin: 0, fontSize: "11px", color: "var(--text-disabled)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.07em" }}>
+            {item.kind === "video" ? "Video" : item.kind === "image" ? "Gambar" : "Artikel"}
+          </p>
+          <h2 style={{
+            margin: 0, fontFamily: "var(--font-heading)", fontWeight: 700,
+            fontSize: "15px", color: "var(--text-primary)", letterSpacing: "-0.01em",
+            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+          }}>
+            {title}
+          </h2>
+        </div>
+        <button onClick={onClose} style={{
+          width: "32px", height: "32px", borderRadius: "50%", flexShrink: 0,
+          background: "none", border: "none",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: "var(--text-disabled)", cursor: "pointer",
+          WebkitTapHighlightColor: "transparent",
+        }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+
+      {/* ── Content area ── */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "20px 16px" }}>
+
+        {/* Video / Image preview */}
+        {(isVideo || isImage) && (
+          <div style={{
+            width: "100%",
+            aspectRatio: isVideo ? "9/16" : "1",
+            maxHeight: isVideo ? "55vh" : "50vw",
+            background: item.bg,
+            borderRadius: "16px",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            position: "relative", overflow: "hidden",
+            marginBottom: "20px",
+            margin: "0 auto 20px",
+          }}>
+            {isVideo && (
+              isProcessing ? (
+                <div style={{
+                  width: "56px", height: "56px", borderRadius: "50%",
+                  border: "3px solid var(--border-default)",
+                  borderTopColor: item.accent,
+                  animation: "spin 1s linear infinite",
+                }} />
+              ) : (
+                <div style={{
+                  width: "60px", height: "60px", borderRadius: "50%",
+                  background: "var(--glass-bg-strong)",
+                  border: `2px solid ${item.accent}60`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill={item.accent}>
+                    <polygon points="5 3 19 12 5 21 5 3"/>
+                  </svg>
+                </div>
+              )
+            )}
+            {isImage && (
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke={item.accent} strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" opacity="0.4">
+                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <polyline points="21 15 16 10 5 21"/>
+              </svg>
+            )}
+            {/* Duration badge for video */}
+            {isVideo && (
+              <span style={{
+                position: "absolute", top: "12px", right: "12px",
+                fontSize: "11px", fontWeight: 700,
+                background: "var(--glass-bg-strong)", color: "var(--text-primary)",
+                padding: "3px 8px", borderRadius: "6px",
+              }}>{(item.data as typeof VIDEO_ITEMS[0]).duration}</span>
+            )}
+            {/* Status badge */}
+            {isVideo && (
+              <span style={{
+                position: "absolute", bottom: "12px", left: "12px",
+                fontSize: "10px", fontWeight: 600, padding: "3px 8px", borderRadius: "6px",
+                background: isProcessing ? "var(--warning-subtle)" : "var(--success-subtle)",
+                color: isProcessing ? "var(--warning)" : "var(--success)",
+              }}>
+                {isProcessing ? "Sedang diproses…" : "Selesai"}
+              </span>
+            )}
+            {isImage && (
+              <span style={{
+                position: "absolute", bottom: "12px", right: "12px",
+                fontSize: "10px", fontWeight: 600,
+                color: item.accent, background: `${item.accent}18`,
+                padding: "3px 8px", borderRadius: "6px",
+              }}>{(item.data as typeof IMAGE_ITEMS[0]).model}</span>
+            )}
+          </div>
+        )}
+
+        {/* Artikel / Text content */}
+        {(item.kind === "list" || item.kind === "grid3") && (
+          <div style={{
+            background: "var(--bg-recessed)",
+            border: "1px solid var(--border-subtle)",
+            borderRadius: "14px",
+            padding: "20px",
+            marginBottom: "20px",
+          }}>
+            <h1 style={{
+              fontFamily: "var(--font-heading)", fontWeight: 800,
+              fontSize: "20px", color: "var(--text-primary)",
+              letterSpacing: "-0.02em", lineHeight: 1.3, margin: "0 0 16px",
+            }}>{title}</h1>
+            <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
+              <span style={{
+                fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "20px",
+                background: "var(--accent-subtle)", color: "var(--accent)",
+              }}>
+                {item.kind === "list" ? item.data.words : (item.data as typeof ARTIKEL_ITEMS[0]).words} kata
+              </span>
+              <span style={{
+                fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "20px",
+                background: "var(--success-subtle)", color: "var(--success)",
+              }}>Selesai</span>
+              <span style={{ fontSize: "11px", color: "var(--text-disabled)", padding: "3px 0" }}>
+                {item.data.date}
+              </span>
+            </div>
+            {/* Body text — dummy full content */}
+            {[1,2,3].map((p) => (
+              <p key={p} style={{
+                margin: "0 0 14px", fontSize: "14px", color: "var(--text-secondary)",
+                lineHeight: 1.7,
+              }}>
+                {item.kind === "list"
+                  ? item.data.body.replace("...", " Pelajari lebih lanjut strategi yang terbukti berhasil untuk brand di Indonesia. Dengan pendekatan berbasis data dan AI, GeoVera membantu brand kamu tampil lebih relevan di setiap touchpoint digital.")
+                  : `Konten ini dihasilkan oleh AI GeoVera berdasarkan riset brand, source of truth, dan tren terkini. Setiap bagian telah dioptimasi untuk SEO, GEO, dan visibilitas di mesin pencari generatif seperti Perplexity dan ChatGPT.`
+                }
+              </p>
+            ))}
+          </div>
+        )}
+
+        {/* Image prompt detail */}
+        {isImage && (
+          <div style={{
+            background: "var(--bg-recessed)", border: "1px solid var(--border-subtle)",
+            borderRadius: "14px", padding: "16px", marginBottom: "20px",
+          }}>
+            <p style={{ margin: "0 0 6px", fontSize: "11px", color: "var(--text-disabled)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.07em" }}>Prompt</p>
+            <p style={{ margin: 0, fontSize: "14px", color: "var(--text-primary)", lineHeight: 1.6 }}>
+              {(item.data as typeof IMAGE_ITEMS[0]).prompt}
+            </p>
+          </div>
+        )}
+
+        {/* Meta row */}
+        <div style={{
+          display: "flex", gap: "10px", flexWrap: "wrap",
+          padding: "12px 14px",
+          background: "var(--bg-recessed)", border: "1px solid var(--border-subtle)",
+          borderRadius: "12px",
+        }}>
+          <div style={{ flex: 1, minWidth: "80px" }}>
+            <p style={{ margin: "0 0 2px", fontSize: "10px", color: "var(--text-disabled)", textTransform: "uppercase", letterSpacing: "0.07em" }}>Dibuat</p>
+            <p style={{ margin: 0, fontSize: "13px", color: "var(--text-primary)", fontWeight: 600 }}>{item.data.date}</p>
+          </div>
+          <div style={{ flex: 1, minWidth: "80px" }}>
+            <p style={{ margin: "0 0 2px", fontSize: "10px", color: "var(--text-disabled)", textTransform: "uppercase", letterSpacing: "0.07em" }}>Model AI</p>
+            <p style={{ margin: 0, fontSize: "13px", color: "var(--text-primary)", fontWeight: 600 }}>
+              {isImage ? (item.data as typeof IMAGE_ITEMS[0]).model : "Claude Sonnet"}
+            </p>
+          </div>
+          <div style={{ flex: 1, minWidth: "80px" }}>
+            <p style={{ margin: "0 0 2px", fontSize: "10px", color: "var(--text-disabled)", textTransform: "uppercase", letterSpacing: "0.07em" }}>Status</p>
+            <p style={{ margin: 0, fontSize: "13px", fontWeight: 600, color: isProcessing ? "var(--warning)" : "var(--success)" }}>
+              {isProcessing ? "Proses…" : "Siap"}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Bottom CTA bar ── */}
+      <div style={{
+        padding: "12px 16px",
+        paddingBottom: "calc(12px + env(safe-area-inset-bottom))",
+        borderTop: "1px solid var(--border-subtle)",
+        background: "var(--bg-secondary)",
+        display: "flex", gap: "8px",
+        flexShrink: 0,
+      }}>
+        {/* Reject */}
+        <button onClick={onClose} style={{
+          flex: 1, height: "46px", borderRadius: "12px",
+          background: "var(--danger-subtle)", border: "1px solid var(--danger-subtle)",
+          color: "var(--danger)", fontSize: "13px", fontWeight: 600,
+          fontFamily: "var(--font-body)", cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center", gap: "5px",
+          WebkitTapHighlightColor: "transparent",
+        }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+          Reject
+        </button>
+        {/* Jadwalkan */}
+        <button disabled={isProcessing} style={{
+          flex: 1, height: "46px", borderRadius: "12px",
+          background: "var(--bg-recessed)", border: "1px solid var(--border-strong)",
+          color: isProcessing ? "var(--text-disabled)" : "var(--accent)",
+          fontSize: "13px", fontWeight: 600,
+          fontFamily: "var(--font-body)",
+          cursor: isProcessing ? "not-allowed" : "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center", gap: "5px",
+          WebkitTapHighlightColor: "transparent",
+        }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/>
+            <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+          </svg>
+          Jadwalkan
+        </button>
+        {/* Publish Now — primary */}
+        <button disabled={isProcessing} style={{
+          flex: 2, height: "46px", borderRadius: "12px",
+          background: isProcessing ? "var(--bg-recessed)" : "var(--accent)",
+          border: "none",
+          color: isProcessing ? "var(--text-disabled)" : "var(--bg-primary)",
+          fontSize: "13px", fontWeight: 700,
+          fontFamily: "var(--font-body)",
+          cursor: isProcessing ? "not-allowed" : "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center", gap: "6px",
+          WebkitTapHighlightColor: "transparent",
+          letterSpacing: "0.01em",
+        }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+          {isProcessing ? "Diproses…" : "Publish Now"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function StudioPage() {
   const [type, setType] = useState<ContentType>("artikel");
   const [showFab, setShowFab] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState<typeof PLATFORMS[0] | null>(null);
+  const [selectedItem, setSelectedItem] = useState<DetailItem | null>(null);
 
   const activeLayout: Layout = selectedPlatform?.layout ?? "list";
 
   return (
     <div style={{ minHeight: "100svh", background: "var(--bg-primary)", color: "var(--text-primary)", fontFamily: "var(--font-body)" }}>
+
+      {/* Full-screen content detail */}
+      {selectedItem && <ContentDetail item={selectedItem} onClose={() => setSelectedItem(null)} />}
 
       {/* Header */}
       <div style={{ padding: "24px 16px 0", display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
@@ -181,8 +476,10 @@ export default function StudioPage() {
       {/* ── LIST — text card (X/Twitter, Threads, Artikel teks) ── */}
       {activeLayout === "list" && (
         <div style={{ padding: "4px 16px 24px", display: "flex", flexDirection: "column", gap: "8px" }}>
-          {LIST_ITEMS.map((a) => (
-            <div key={a.id} style={{
+          {LIST_ITEMS.map((a, i) => {
+            const [bg, accent] = CARD_COLORS[i % CARD_COLORS.length];
+            return (
+            <div key={a.id} onClick={() => setSelectedItem({ kind: "list", data: a, bg, accent })} style={{
               background: "var(--bg-recessed)", border: "1px solid var(--border-subtle)",
               borderRadius: "12px", padding: "14px 14px",
               cursor: "pointer",
@@ -222,7 +519,7 @@ export default function StudioPage() {
           {ARTIKEL_ITEMS.map((a, i) => {
             const [bg, accent] = CARD_COLORS[i % CARD_COLORS.length];
             return (
-              <div key={a.id} style={{
+              <div key={a.id} onClick={() => setSelectedItem({ kind: "grid3", data: a, bg, accent })} style={{
                 aspectRatio: "1",
                 background: bg,
                 display: "flex", flexDirection: "column",
@@ -264,7 +561,7 @@ export default function StudioPage() {
           {IMAGE_ITEMS.map((img, i) => {
             const [bg, accent] = CARD_COLORS[i % CARD_COLORS.length];
             return (
-              <div key={img.id} style={{
+              <div key={img.id} onClick={() => setSelectedItem({ kind: "image", data: img, bg, accent })} style={{
                 aspectRatio: "1",
                 background: bg,
                 display: "flex", flexDirection: "column",
@@ -308,7 +605,7 @@ export default function StudioPage() {
           {VIDEO_ITEMS.map((vid, i) => {
             const [bg, accent] = CARD_COLORS[i % CARD_COLORS.length];
             return (
-              <div key={vid.id} style={{
+              <div key={vid.id} onClick={() => setSelectedItem({ kind: "video", data: vid, bg, accent })} style={{
                 aspectRatio: "9/16",
                 background: bg,
                 borderRadius: "8px",
