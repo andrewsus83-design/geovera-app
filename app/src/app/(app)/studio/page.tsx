@@ -742,20 +742,21 @@ export default function StudioPage() {
                 </svg>
               </button>
             </div>
-            {/* Platform grid — 4 columns */}
-            <div style={{ padding: "0 12px", display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px", maxHeight: "55vh", overflowY: "auto" }}>
+            {/* Platform grid — 3 columns, 1:1 cards */}
+            <div style={{ padding: "0 12px", display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px", maxHeight: "55vh", overflowY: "auto" }}>
               {PLATFORMS.map(p => (
                 <button key={p.id} onClick={() => { setSelectedPlatform(p); setShowFab(false); }} style={{
-                  display: "flex", flexDirection: "column", alignItems: "center", gap: "7px",
-                  padding: "12px 6px",
-                  background: "transparent",
+                  aspectRatio: "1",
+                  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "8px",
+                  padding: "0",
+                  background: "var(--bg-recessed)",
                   border: "1px solid var(--glass-border)",
-                  borderRadius: "12px",
+                  borderRadius: "14px",
                   cursor: "pointer",
                   WebkitTapHighlightColor: "transparent",
                 }}>
                   <div style={{
-                    width: "40px", height: "40px", borderRadius: "11px",
+                    width: "44px", height: "44px", borderRadius: "12px",
                     background: `${p.accent}18`,
                     display: "flex", alignItems: "center", justifyContent: "center",
                     color: p.accent,
@@ -766,6 +767,7 @@ export default function StudioPage() {
                     fontFamily: "var(--font-heading)", fontWeight: 600,
                     fontSize: "10px", color: "var(--text-secondary)",
                     textAlign: "center", lineHeight: 1.3,
+                    padding: "0 6px",
                   }}>
                     {p.label}
                   </span>
