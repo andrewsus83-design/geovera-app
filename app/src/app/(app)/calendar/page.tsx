@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
 
 const TABS = [
   {
@@ -106,13 +107,88 @@ function buildCalendar(year: number, month: number) {
 
 export default function CalendarPage() {
   const [active, setActive] = useState("reply");
-  const tab = TABS.find(t => t.id === active)!;
 
   const today = new Date();
   const [selectedDate, setSelectedDate] = useState<Date>(today);
   const [showPicker, setShowPicker] = useState(false);
   const [pickerYear, setPickerYear] = useState(today.getFullYear());
   const [pickerMonth, setPickerMonth] = useState(today.getMonth());
+
+  const [brandId, setBrandId] = useState<string | null>(null);
+  const [publishItems, setPublishItems] = useState<any[]>([]);
+  const [approvalItems, setApprovalItems] = useState<any[]>([]);
+  const [dataLoading, setDataLoading] = useState(false);
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        const { data: brandData } = await supabase
+          .from("brands")
+          .select("id")
+          .eq("user_id", session.user.id)
+          .single();
+
+        if (!brandData?.id) return;
+
+        setBrandId(brandData.id);
+        setDataLoading(true);
+
+        const [publishRes, approvalRes] = await Promise.all([
+          fetch(`/api/calendar/data?brand_id=${brandData.id}&tab=publish`),
+          fetch(`/api/calendar/data?brand_id=${brandData.id}&tab=approval`),
+        ]);
+
+        if (publishRes.ok) {
+          const data = await publishRes.json();
+          if (Array.isArray(data.items) && data.items.length > 0) {
+            setPublishItems(
+              data.items.map((item: any) => ({
+                platform: item.platform || "—",
+                title: item.title,
+                type: item.type || item.content_type || "Konten",
+                time: item.time,
+                status: item.status,
+              }))
+            );
+          }
+        }
+
+        if (approvalRes.ok) {
+          const data = await approvalRes.json();
+          if (Array.isArray(data.items) && data.items.length > 0) {
+            setApprovalItems(
+              data.items.map((item: any) => ({
+                title: item.title,
+                type: item.type || "Konten",
+                requestedBy: "AI Studio",
+                time: item.time,
+                urgent: item.urgent || false,
+              }))
+            );
+          }
+        }
+      } catch {
+        // keep fallback on error
+      } finally {
+        setDataLoading(false);
+      }
+    }
+
+    fetchData();
+  }, []);
+
+  // Derive actual items shown per tab — use real data when loaded, fallback otherwise
+  const publishTabItems = publishItems.length > 0 ? publishItems : TABS.find(t => t.id === "publish")!.items;
+  const approvalTabItems = approvalItems.length > 0 ? approvalItems : TABS.find(t => t.id === "approval")!.items;
+
+  // Derive badge counts for publish/approval using real data when available
+  const publishBadge = publishItems.length > 0 ? publishItems.length : TABS.find(t => t.id === "publish")!.badge;
+  const approvalBadge = approvalItems.length > 0 ? approvalItems.length : TABS.find(t => t.id === "approval")!.badge;
+
+  const tab = TABS.find(t => t.id === active)!;
 
   const cells = buildCalendar(pickerYear, pickerMonth);
 
@@ -139,7 +215,7 @@ export default function CalendarPage() {
             Calendar
           </h1>
           <p style={{ margin: "2px 0 0", fontSize: "12px", color: "var(--text-disabled)" }}>
-            Aktivitas & jadwal brand kamu
+            Aktivitas &amp; jadwal brand kamu
           </p>
         </div>
         {/* Selected date chip */}
@@ -278,6 +354,7 @@ export default function CalendarPage() {
       } as React.CSSProperties}>
         {TABS.map(t => {
           const isActive = t.id === active;
+          const badge = t.id === "publish" ? publishBadge : t.id === "approval" ? approvalBadge : t.badge;
           return (
             <button key={t.id} onClick={() => setActive(t.id)} style={{
               display: "flex", alignItems: "center", gap: "6px",
@@ -293,7 +370,7 @@ export default function CalendarPage() {
             }}>
               {t.icon}
               {t.label}
-              {t.badge > 0 && (
+              {badge > 0 && (
                 <span style={{
                   minWidth: "18px", height: "18px", borderRadius: "9px",
                   background: isActive ? "var(--accent)" : "var(--accent-subtle)",
@@ -302,7 +379,7 @@ export default function CalendarPage() {
                   display: "flex", alignItems: "center", justifyContent: "center",
                   padding: "0 4px",
                 }}>
-                  {t.badge}
+                  {badge}
                 </span>
               )}
             </button>
@@ -333,7 +410,7 @@ export default function CalendarPage() {
               {!!item.urgent && <span style={{ fontSize: "10px", color: "var(--danger)", fontWeight: 600 }}>Urgent</span>}
             </div>
             <div style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "4px" }}>{item.user as string}</div>
-            <div style={{ fontSize: "13px", color: "var(--text-primary)", lineHeight: 1.5, marginBottom: "10px" }}>"{item.comment as string}"</div>
+            <div style={{ fontSize: "13px", color: "var(--text-primary)", lineHeight: 1.5, marginBottom: "10px" }}>&quot;{item.comment as string}&quot;</div>
             <button style={{
               height: "30px", padding: "0 14px", borderRadius: "8px",
               border: "1px solid var(--border-default)", background: "var(--accent-subtle)",
@@ -345,37 +422,47 @@ export default function CalendarPage() {
         ))}
 
         {/* PUBLISH */}
-        {active === "publish" && tab.items.map((item: Record<string, unknown>, i) => (
-          <div key={i} style={{
-            background: "var(--bg-recessed)", border: "1px solid var(--border-subtle)",
-            borderRadius: "12px", padding: "12px 14px",
-            display: "flex", alignItems: "center", gap: "12px",
-          }}>
-            <div style={{
-              width: "40px", height: "40px", borderRadius: "9px", flexShrink: 0,
-              background: `${PLATFORM_COLOR[item.platform as string] || "var(--accent)"}18`,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              color: PLATFORM_COLOR[item.platform as string] || "var(--accent)",
-              fontSize: "11px", fontWeight: 700,
-            }}>
-              {(item.platform as string).slice(0, 2).toUpperCase()}
+        {active === "publish" && (
+          dataLoading ? (
+            <div style={{ textAlign: "center", padding: "32px 0", color: "var(--text-disabled)", fontSize: "13px" }}>
+              Memuat data...
             </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontFamily: "var(--font-heading)", fontWeight: 700, fontSize: "13px", color: "var(--text-primary)", marginBottom: "2px" }}>
-                {item.title as string}
+          ) : publishTabItems.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "32px 0", color: "var(--text-disabled)", fontSize: "13px" }}>
+              Belum ada konten terjadwal.
+            </div>
+          ) : publishTabItems.map((item: Record<string, unknown>, i) => (
+            <div key={i} style={{
+              background: "var(--bg-recessed)", border: "1px solid var(--border-subtle)",
+              borderRadius: "12px", padding: "12px 14px",
+              display: "flex", alignItems: "center", gap: "12px",
+            }}>
+              <div style={{
+                width: "40px", height: "40px", borderRadius: "9px", flexShrink: 0,
+                background: `${PLATFORM_COLOR[item.platform as string] || "var(--accent)"}18`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: PLATFORM_COLOR[item.platform as string] || "var(--accent)",
+                fontSize: "11px", fontWeight: 700,
+              }}>
+                {(item.platform as string).slice(0, 2).toUpperCase()}
               </div>
-              <div style={{ fontSize: "11px", color: "var(--text-disabled)" }}>{item.type as string} · {item.time as string}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: "var(--font-heading)", fontWeight: 700, fontSize: "13px", color: "var(--text-primary)", marginBottom: "2px" }}>
+                  {item.title as string}
+                </div>
+                <div style={{ fontSize: "11px", color: "var(--text-disabled)" }}>{item.type as string} · {item.time as string}</div>
+              </div>
+              <span style={{
+                fontSize: "11px", fontWeight: 600, padding: "3px 8px", borderRadius: "20px",
+                background: item.status === "scheduled" ? "var(--success-subtle)" : "var(--warning-subtle)",
+                color: item.status === "scheduled" ? "var(--success)" : "var(--warning)",
+                flexShrink: 0,
+              }}>
+                {item.status === "scheduled" ? "Terjadwal" : "Draft"}
+              </span>
             </div>
-            <span style={{
-              fontSize: "11px", fontWeight: 600, padding: "3px 8px", borderRadius: "20px",
-              background: item.status === "scheduled" ? "var(--success-subtle)" : "var(--warning-subtle)",
-              color: item.status === "scheduled" ? "var(--success)" : "var(--warning)",
-              flexShrink: 0,
-            }}>
-              {item.status === "scheduled" ? "Terjadwal" : "Draft"}
-            </span>
-          </div>
-        ))}
+          ))
+        )}
 
         {/* REPORT */}
         {active === "report" && tab.items.map((item: Record<string, unknown>, i) => (
@@ -409,42 +496,52 @@ export default function CalendarPage() {
         ))}
 
         {/* APPROVAL */}
-        {active === "approval" && tab.items.map((item: Record<string, unknown>, i) => (
-          <div key={i} style={{
-            background: "var(--bg-recessed)",
-            border: `1px solid ${item.urgent ? "var(--danger-subtle)" : "var(--border-subtle)"}`,
-            borderRadius: "12px", padding: "14px",
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
-              <span style={{
-                fontSize: "10px", fontWeight: 600, padding: "2px 8px", borderRadius: "20px",
-                background: "var(--accent-subtle)", color: "var(--accent)",
-              }}>{item.type as string}</span>
-              {!!item.urgent && <span style={{ fontSize: "10px", color: "var(--danger)", fontWeight: 600 }}>Urgent</span>}
-              <span style={{ fontSize: "10px", color: "var(--text-disabled)", marginLeft: "auto" }}>{item.time as string}</span>
+        {active === "approval" && (
+          dataLoading ? (
+            <div style={{ textAlign: "center", padding: "32px 0", color: "var(--text-disabled)", fontSize: "13px" }}>
+              Memuat data...
             </div>
-            <div style={{ fontFamily: "var(--font-heading)", fontWeight: 700, fontSize: "13px", color: "var(--text-primary)", marginBottom: "4px" }}>
-              {item.title as string}
+          ) : approvalTabItems.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "32px 0", color: "var(--text-disabled)", fontSize: "13px" }}>
+              Tidak ada item yang menunggu persetujuan.
             </div>
-            <div style={{ fontSize: "11px", color: "var(--text-disabled)", marginBottom: "12px" }}>Diminta oleh: {item.requestedBy as string}</div>
-            <div style={{ display: "flex", gap: "8px" }}>
-              <button style={{
-                flex: 1, height: "32px", borderRadius: "8px",
-                border: "1px solid var(--success-subtle)", background: "var(--success-subtle)",
-                color: "var(--success)", fontSize: "12px", fontWeight: 600,
-                fontFamily: "var(--font-body)", cursor: "pointer",
-                WebkitTapHighlightColor: "transparent",
-              }}>Approve</button>
-              <button style={{
-                flex: 1, height: "32px", borderRadius: "8px",
-                border: "1px solid var(--danger-subtle)", background: "var(--danger-subtle)",
-                color: "var(--danger)", fontSize: "12px", fontWeight: 600,
-                fontFamily: "var(--font-body)", cursor: "pointer",
-                WebkitTapHighlightColor: "transparent",
-              }}>Tolak</button>
+          ) : approvalTabItems.map((item: Record<string, unknown>, i) => (
+            <div key={i} style={{
+              background: "var(--bg-recessed)",
+              border: `1px solid ${item.urgent ? "var(--danger-subtle)" : "var(--border-subtle)"}`,
+              borderRadius: "12px", padding: "14px",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
+                <span style={{
+                  fontSize: "10px", fontWeight: 600, padding: "2px 8px", borderRadius: "20px",
+                  background: "var(--accent-subtle)", color: "var(--accent)",
+                }}>{item.type as string}</span>
+                {!!item.urgent && <span style={{ fontSize: "10px", color: "var(--danger)", fontWeight: 600 }}>Urgent</span>}
+                <span style={{ fontSize: "10px", color: "var(--text-disabled)", marginLeft: "auto" }}>{item.time as string}</span>
+              </div>
+              <div style={{ fontFamily: "var(--font-heading)", fontWeight: 700, fontSize: "13px", color: "var(--text-primary)", marginBottom: "4px" }}>
+                {item.title as string}
+              </div>
+              <div style={{ fontSize: "11px", color: "var(--text-disabled)", marginBottom: "12px" }}>Diminta oleh: {item.requestedBy as string}</div>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button style={{
+                  flex: 1, height: "32px", borderRadius: "8px",
+                  border: "1px solid var(--success-subtle)", background: "var(--success-subtle)",
+                  color: "var(--success)", fontSize: "12px", fontWeight: 600,
+                  fontFamily: "var(--font-body)", cursor: "pointer",
+                  WebkitTapHighlightColor: "transparent",
+                }}>Approve</button>
+                <button style={{
+                  flex: 1, height: "32px", borderRadius: "8px",
+                  border: "1px solid var(--danger-subtle)", background: "var(--danger-subtle)",
+                  color: "var(--danger)", fontSize: "12px", fontWeight: 600,
+                  fontFamily: "var(--font-body)", cursor: "pointer",
+                  WebkitTapHighlightColor: "transparent",
+                }}>Tolak</button>
+              </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
 
         {/* NEWS */}
         {active === "news" && tab.items.map((item: Record<string, unknown>, i) => (

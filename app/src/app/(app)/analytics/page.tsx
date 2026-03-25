@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
 
 type Tab = "seo" | "geo" | "sso";
 
@@ -9,64 +10,9 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "sso", label: "SSO" },
 ];
 
-// ── SEO Data ──────────────────────────────────────────────────────────────────
-const SEO_KEYWORDS = [
-  { kw: "brand marketing indonesia", pos: 4, vol: "8.2K", change: +2 },
-  { kw: "ai content creator", pos: 7, vol: "22K", change: -1 },
-  { kw: "social media management", pos: 11, vol: "14K", change: +5 },
-  { kw: "geovera platform", pos: 1, vol: "1.1K", change: 0 },
-  { kw: "konten otomatis whatsapp", pos: 3, vol: "3.4K", change: +1 },
-];
-
-const SEO_STATS = [
-  { label: "Avg. Posisi", value: "5.2", sub: "↑ dari 7.8", up: true },
-  { label: "Kata Kunci", value: "24", sub: "5 halaman 1", up: true },
-  { label: "Backlink", value: "138", sub: "+12 bulan ini", up: true },
-  { label: "Click-through", value: "3.4%", sub: "↓ 0.2%", up: false },
-];
-
-// ── GEO Data ──────────────────────────────────────────────────────────────────
-const GEO_LOCATIONS = [
-  { city: "Jakarta", score: 87, reviews: 42, citations: 28 },
-  { city: "Surabaya", score: 71, reviews: 18, citations: 15 },
-  { city: "Bandung", score: 65, reviews: 12, citations: 11 },
-  { city: "Medan", score: 54, reviews: 8, citations: 7 },
-  { city: "Makassar", score: 48, reviews: 5, citations: 4 },
-];
-
-const GEO_STATS = [
-  { label: "Local Score", value: "74", sub: "Rata-rata semua kota", up: true },
-  { label: "Total Review", value: "85", sub: "+8 bulan ini", up: true },
-  { label: "Konsistensi NAP", value: "91%", sub: "Nama/Alamat/Telp", up: true },
-  { label: "Jangkauan Kota", value: "5", sub: "Kota aktif", up: null },
-];
-
-// ── SSO Data ──────────────────────────────────────────────────────────────────
-const SSO_ENGINES = [
-  { name: "Perplexity AI", visible: true, rank: 2, mentions: 14, icon: "P" },
-  { name: "ChatGPT", visible: true, rank: 5, mentions: 9, icon: "G" },
-  { name: "Google SGE", visible: false, rank: null, mentions: 3, icon: "Gs" },
-  { name: "Gemini", visible: true, rank: 3, mentions: 11, icon: "Gm" },
-  { name: "You.com", visible: false, rank: null, mentions: 2, icon: "Y" },
-];
-
-const SSO_STATS = [
-  { label: "AI Visibility", value: "62%", sub: "3 dari 5 engine", up: true },
-  { label: "Total Mention", value: "39", sub: "+16 bulan ini", up: true },
-  { label: "Avg. AI Rank", value: "#3.3", sub: "Di engine aktif", up: true },
-  { label: "Topik Terlacak", value: "18", sub: "Pertanyaan relevan", up: null },
-];
-
-const SSO_TOPICS = [
-  { q: "Apa platform terbaik untuk konten marketing?", found: true },
-  { q: "Cara otomasi konten whatsapp untuk bisnis", found: true },
-  { q: "AI marketing tools Indonesia 2026", found: false },
-  { q: "Brand analytics platform terbaik", found: true },
-  { q: "Perbedaan SEO dan GEO marketing", found: false },
-];
-
 // ── Shared Components ─────────────────────────────────────────────────────────
 type StatItem = { label: string; value: string; sub: string; up: boolean | null };
+
 function StatCards({ stats }: { stats: StatItem[] }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "20px" }}>
@@ -113,14 +59,32 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
+function EmptyState() {
+  return (
+    <div style={{
+      textAlign: "center", padding: "40px 16px",
+      background: "var(--bg-recessed)", borderRadius: "12px",
+      border: "1px solid var(--border-subtle)",
+    }}>
+      <p style={{ color: "var(--text-disabled)", fontSize: "13px", margin: "0 0 4px" }}>Belum ada data</p>
+      <p style={{ color: "var(--text-muted)", fontSize: "12px", margin: 0 }}>Data akan muncul setelah analisis pertama selesai.</p>
+    </div>
+  );
+}
+
 // ── Tab Panels ────────────────────────────────────────────────────────────────
-function SEOPanel() {
+function SEOPanel({ keywords, stats, hasData }: {
+  keywords: any[];
+  stats: StatItem[];
+  hasData: boolean;
+}) {
+  if (!hasData) return <EmptyState />;
   return (
     <>
-      <StatCards stats={SEO_STATS} />
+      <StatCards stats={stats} />
       <SectionTitle>Ranking Kata Kunci</SectionTitle>
       <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-        {SEO_KEYWORDS.map((k) => (
+        {keywords.map((k) => (
           <div key={k.kw} style={{
             display: "flex", alignItems: "center", gap: "10px",
             background: "var(--bg-recessed)",
@@ -163,13 +127,18 @@ function SEOPanel() {
   );
 }
 
-function GEOPanel() {
+function GEOPanel({ locations, stats, hasData }: {
+  locations: any[];
+  stats: StatItem[];
+  hasData: boolean;
+}) {
+  if (!hasData) return <EmptyState />;
   return (
     <>
-      <StatCards stats={GEO_STATS} />
+      <StatCards stats={stats} />
       <SectionTitle>Performa Per Kota</SectionTitle>
       <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-        {GEO_LOCATIONS.map((loc) => {
+        {locations.map((loc) => {
           const pct = loc.score;
           const color = pct >= 80 ? "var(--success)" : pct >= 60 ? "var(--warning)" : "var(--danger)";
           return (
@@ -202,13 +171,19 @@ function GEOPanel() {
   );
 }
 
-function SSOPanel() {
+function SSOPanel({ engines, topics, stats, hasData }: {
+  engines: any[];
+  topics: any[];
+  stats: StatItem[];
+  hasData: boolean;
+}) {
+  if (!hasData) return <EmptyState />;
   return (
     <>
-      <StatCards stats={SSO_STATS} />
+      <StatCards stats={stats} />
       <SectionTitle>Visibilitas di AI Engine</SectionTitle>
       <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "20px" }}>
-        {SSO_ENGINES.map((e) => (
+        {engines.map((e) => (
           <div key={e.name} style={{
             display: "flex", alignItems: "center", gap: "12px",
             background: "var(--bg-recessed)",
@@ -244,7 +219,7 @@ function SSOPanel() {
 
       <SectionTitle>Topik Terlacak</SectionTitle>
       <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-        {SSO_TOPICS.map((t) => (
+        {topics.map((t) => (
           <div key={t.q} style={{
             display: "flex", alignItems: "flex-start", gap: "10px",
             background: "var(--bg-recessed)",
@@ -274,6 +249,49 @@ function SSOPanel() {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function AnalyticsPage() {
   const [tab, setTab] = useState<Tab>("seo");
+
+  const [brandId, setBrandId] = useState<string | null>(null);
+  const [seoData, setSeoData] = useState<{ keywords: any[]; stats: any[]; hasData: boolean } | null>(null);
+  const [geoData, setGeoData] = useState<{ locations: any[]; stats: any[]; hasData: boolean } | null>(null);
+  const [ssoData, setSsoData] = useState<{ engines: any[]; topics: any[]; stats: any[]; hasData: boolean } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { setLoading(false); return; }
+
+      const { data: brand } = await supabase
+        .from("brands")
+        .select("id")
+        .eq("user_id", session.user.id)
+        .single();
+
+      if (!brand) { setLoading(false); return; }
+      setBrandId(brand.id);
+
+      try {
+        const [seoRes, geoRes, ssoRes] = await Promise.all([
+          fetch(`/api/analytics/seo?brand_id=${brand.id}`),
+          fetch(`/api/analytics/geo?brand_id=${brand.id}`),
+          fetch(`/api/analytics/sso?brand_id=${brand.id}`),
+        ]);
+
+        const [seo, geo, sso] = await Promise.all([
+          seoRes.ok ? seoRes.json() : { keywords: [], stats: [], hasData: false },
+          geoRes.ok ? geoRes.json() : { locations: [], stats: [], hasData: false },
+          ssoRes.ok ? ssoRes.json() : { engines: [], topics: [], stats: [], hasData: false },
+        ]);
+
+        setSeoData(seo);
+        setGeoData(geo);
+        setSsoData(sso);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
 
   return (
     <div style={{
@@ -341,10 +359,44 @@ export default function AnalyticsPage() {
 
       {/* Content */}
       <div style={{ padding: "0 16px 24px" }}>
-        {tab === "seo" && <SEOPanel />}
-        {tab === "geo" && <GEOPanel />}
-        {tab === "sso" && <SSOPanel />}
+        {loading ? (
+          <div style={{ display: "flex", justifyContent: "center", padding: "60px 16px" }}>
+            <div style={{
+              width: "32px", height: "32px", borderRadius: "50%",
+              border: "3px solid var(--border-default)",
+              borderTopColor: "var(--accent)",
+              animation: "spin 1s linear infinite",
+            }} />
+          </div>
+        ) : (
+          <>
+            {tab === "seo" && (
+              <SEOPanel
+                keywords={seoData?.keywords ?? []}
+                stats={seoData?.stats ?? []}
+                hasData={seoData?.hasData ?? false}
+              />
+            )}
+            {tab === "geo" && (
+              <GEOPanel
+                locations={geoData?.locations ?? []}
+                stats={geoData?.stats ?? []}
+                hasData={geoData?.hasData ?? false}
+              />
+            )}
+            {tab === "sso" && (
+              <SSOPanel
+                engines={ssoData?.engines ?? []}
+                topics={ssoData?.topics ?? []}
+                stats={ssoData?.stats ?? []}
+                hasData={ssoData?.hasData ?? false}
+              />
+            )}
+          </>
+        )}
       </div>
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

@@ -1,0 +1,7 @@
+{
+  "name": "geovera-worktree-root",
+  "private": true,
+  "scripts": {
+    "dev": "cd app && npx next dev"
+  }
+}

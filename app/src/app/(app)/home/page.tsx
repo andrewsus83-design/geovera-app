@@ -1,7 +1,15 @@
+"use client";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import UserAvatar from "@/components/nav/UserAvatar";
+import { supabase } from "@/lib/supabase";
 
-export const metadata = { title: "Home — GeoVera" };
+type ChronicleItem = {
+  title: string;
+  desc: string;
+  date: string;
+  status: "done" | "pending" | "upcoming";
+};
 
 const MENUS = [
   {
@@ -34,7 +42,7 @@ const MENUS = [
   },
 ];
 
-const CHRONICLE = [
+const FALLBACK_CHRONICLE: ChronicleItem[] = [
   {
     date: "Mar 2026",
     title: "Brand Didaftarkan",
@@ -74,6 +82,46 @@ const statusColor: Record<string, string> = {
 };
 
 export default function HomePage() {
+  const [chronicle, setChronicle] = useState<ChronicleItem[]>(FALLBACK_CHRONICLE);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchChronicle() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          setLoading(false);
+          return;
+        }
+
+        const { data: brandData } = await supabase
+          .from("brands")
+          .select("id")
+          .eq("user_id", session.user.id)
+          .single();
+
+        if (!brandData?.id) {
+          setLoading(false);
+          return;
+        }
+
+        const res = await fetch(`/api/home/chronicle?brand_id=${brandData.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.chronicle && data.chronicle.length > 0) {
+            setChronicle(data.chronicle);
+          }
+        }
+      } catch {
+        // keep fallback on any error
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchChronicle();
+  }, []);
+
   return (
     <div style={{
       minHeight: "100svh",
@@ -207,7 +255,7 @@ export default function HomePage() {
         </div>
 
         {/* Timeline */}
-        <div style={{ position: "relative", paddingLeft: "20px" }}>
+        <div style={{ position: "relative", paddingLeft: "20px", opacity: loading ? 0.5 : 1, transition: "opacity 0.2s" }}>
           {/* Vertical line */}
           <div style={{
             position: "absolute",
@@ -219,10 +267,10 @@ export default function HomePage() {
           }} />
 
           <div style={{ display: "flex", flexDirection: "column", gap: "0" }}>
-            {CHRONICLE.map((item, i) => (
+            {chronicle.map((item, i) => (
               <div key={i} style={{
                 position: "relative",
-                paddingBottom: i < CHRONICLE.length - 1 ? "20px" : "0",
+                paddingBottom: i < chronicle.length - 1 ? "20px" : "0",
               }}>
                 {/* Dot */}
                 <div style={{

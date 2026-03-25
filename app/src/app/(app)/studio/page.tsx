@@ -1,44 +1,26 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
+
+// ── API Types ─────────────────────────────────────────────────────────────────
+type APIArticle = { id: string; title: string; description?: string; created_at: string; status: string; platform?: string; content_type?: string };
+type APIImage   = { id: string; prompt: string; created_at: string; model: string; status: string; url?: string };
+type APIVideo   = { id: string; title: string; created_at: string; status: string; target_platform?: string; pipeline_step?: string; video_status?: string };
+
+// ── Mapped UI types ───────────────────────────────────────────────────────────
+type ListItem    = { id: string; title: string; body: string; date: string; words: string };
+type GridItem    = { id: string; title: string; date: string; words: string };
+type ImageItem   = { id: string; prompt: string; date: string; model: string };
+type VideoItem   = { id: string; title: string; duration: string; date: string; status: string; tall: boolean };
 
 // ── Detail item union ─────────────────────────────────────────────────────────
 type DetailItem =
-  | { kind: "list";   data: typeof LIST_ITEMS[0];    bg: string; accent: string }
-  | { kind: "grid3";  data: typeof ARTIKEL_ITEMS[0]; bg: string; accent: string }
-  | { kind: "image";  data: typeof IMAGE_ITEMS[0];   bg: string; accent: string }
-  | { kind: "video";  data: typeof VIDEO_ITEMS[0];   bg: string; accent: string };
+  | { kind: "list";   data: ListItem;  bg: string; accent: string }
+  | { kind: "grid3";  data: GridItem;  bg: string; accent: string }
+  | { kind: "image";  data: ImageItem; bg: string; accent: string }
+  | { kind: "video";  data: VideoItem; bg: string; accent: string };
 
 type ContentType = "artikel" | "image" | "video";
-
-const ARTIKEL_ITEMS = [
-  { id: 1, title: "10 Tren Marketing Digital 2026 yang Wajib Kamu Tahu", date: "24 Mar", words: "1.2k" },
-  { id: 2, title: "Cara Membangun Brand Authority di Era AI", date: "23 Mar", words: "890" },
-  { id: 3, title: "Strategi Konten Ramadan untuk UMKM Indonesia", date: "22 Mar", words: "1.1k" },
-  { id: 4, title: "SEO vs GEO: Mana yang Lebih Penting?", date: "21 Mar", words: "750" },
-  { id: 5, title: "Panduan Lengkap TikTok Shop 2026", date: "20 Mar", words: "2.0k" },
-  { id: 6, title: "Psikologi Warna dalam Branding Modern", date: "19 Mar", words: "640" },
-  { id: 7, title: "5 Kesalahan Fatal Brand di Social Media", date: "18 Mar", words: "980" },
-  { id: 8, title: "Cara Kerja Algoritma Instagram 2026", date: "17 Mar", words: "1.3k" },
-  { id: 9, title: "Content Repurposing: Satu Konten, Banyak Platform", date: "16 Mar", words: "870" },
-];
-
-const IMAGE_ITEMS = [
-  { id: 1, prompt: "Product photography minimalist white background", date: "24 Mar", model: "Flux H100" },
-  { id: 2, prompt: "Lifestyle brand shot warm tones", date: "24 Mar", model: "Flux H100" },
-  { id: 3, prompt: "Ramadan campaign visual crescent moon", date: "23 Mar", model: "DALL-E 3" },
-  { id: 4, prompt: "Social media carousel template teal", date: "23 Mar", model: "Flux H100" },
-  { id: 5, prompt: "Behind the scenes coffee roasting", date: "22 Mar", model: "Flux H100" },
-  { id: 6, prompt: "Brand logo mockup on packaging", date: "21 Mar", model: "Flux H100" },
-];
-
-const VIDEO_ITEMS = [
-  { id: 1, title: "Brand Story — 30s Hook", duration: "0:30", date: "24 Mar", status: "done", tall: true },
-  { id: 2, title: "Product Demo Reels", duration: "0:15", date: "23 Mar", status: "done", tall: false },
-  { id: 3, title: "Ramadan Campaign", duration: "0:45", date: "22 Mar", status: "processing", tall: false },
-  { id: 4, title: "Behind The Scenes", duration: "0:20", date: "21 Mar", status: "done", tall: true },
-  { id: 5, title: "Tutorial Singkat", duration: "0:60", date: "20 Mar", status: "done", tall: false },
-  { id: 6, title: "Testimonial Compilation", duration: "0:35", date: "19 Mar", status: "done", tall: true },
-];
 
 // Deterministic color palette for artikel cards
 const CARD_COLORS = [
@@ -80,12 +62,12 @@ const PLATFORMS: { id: string; label: string; type: string; accent: string; layo
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> },
 ];
 
-const LIST_ITEMS = [
-  { id: 1, title: "10 Tren Marketing Digital 2026", body: "AI mengubah cara brand berkomunikasi dengan audiens. Berikut tren yang tidak boleh kamu lewatkan tahun ini...", date: "24 Mar", words: "1.2k" },
-  { id: 2, title: "Cara Membangun Brand Authority", body: "Authority bukan soal ukuran, tapi soal kepercayaan. Ikuti framework 3-langkah ini untuk membangun otoritas...", date: "23 Mar", words: "890" },
-  { id: 3, title: "Strategi Konten Ramadan", body: "Ramadan adalah momen emas untuk brand Indonesia. Gunakan emotional storytelling dan nilai-nilai yang relevan...", date: "22 Mar", words: "1.1k" },
-  { id: 4, title: "SEO vs GEO: Mana Lebih Penting?", body: "Google bukan satu-satunya mesin pencari yang penting. GEO (Generative Engine Optimization) kini semakin krusial...", date: "21 Mar", words: "750" },
-];
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function formatDate(s: string): string {
+  const d = new Date(s);
+  const M = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Ags","Sep","Okt","Nov","Des"];
+  return `${d.getDate()} ${M[d.getMonth()]}`;
+}
 
 // ── Full-screen Content Detail ────────────────────────────────────────────────
 function ContentDetail({ item, onClose }: { item: DetailItem; onClose: () => void }) {
@@ -226,7 +208,7 @@ function ContentDetail({ item, onClose }: { item: DetailItem; onClose: () => voi
                 fontSize: "11px", fontWeight: 700,
                 background: "var(--glass-bg-strong)", color: "var(--text-primary)",
                 padding: "3px 8px", borderRadius: "6px",
-              }}>{(item.data as typeof VIDEO_ITEMS[0]).duration}</span>
+              }}>{(item.data as VideoItem).duration}</span>
             )}
             {/* Status badge */}
             {isVideo && (
@@ -245,7 +227,7 @@ function ContentDetail({ item, onClose }: { item: DetailItem; onClose: () => voi
                 fontSize: "10px", fontWeight: 600,
                 color: item.accent, background: `${item.accent}18`,
                 padding: "3px 8px", borderRadius: "6px",
-              }}>{(item.data as typeof IMAGE_ITEMS[0]).model}</span>
+              }}>{(item.data as ImageItem).model}</span>
             )}
           </div>
         )}
@@ -269,7 +251,7 @@ function ContentDetail({ item, onClose }: { item: DetailItem; onClose: () => voi
                 fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "20px",
                 background: "var(--accent-subtle)", color: "var(--accent)",
               }}>
-                {item.kind === "list" ? item.data.words : (item.data as typeof ARTIKEL_ITEMS[0]).words} kata
+                {item.kind === "list" ? item.data.words : (item.data as GridItem).words} kata
               </span>
               <span style={{
                 fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "20px",
@@ -279,7 +261,7 @@ function ContentDetail({ item, onClose }: { item: DetailItem; onClose: () => voi
                 {item.data.date}
               </span>
             </div>
-            {/* Body text — dummy full content */}
+            {/* Body text */}
             {[1,2,3].map((p) => (
               <p key={p} style={{
                 margin: "0 0 14px", fontSize: "14px", color: "var(--text-secondary)",
@@ -302,7 +284,7 @@ function ContentDetail({ item, onClose }: { item: DetailItem; onClose: () => voi
           }}>
             <p style={{ margin: "0 0 6px", fontSize: "11px", color: "var(--text-disabled)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.07em" }}>Prompt</p>
             <p style={{ margin: 0, fontSize: "14px", color: "var(--text-primary)", lineHeight: 1.6 }}>
-              {(item.data as typeof IMAGE_ITEMS[0]).prompt}
+              {(item.data as ImageItem).prompt}
             </p>
           </div>
         )}
@@ -321,7 +303,7 @@ function ContentDetail({ item, onClose }: { item: DetailItem; onClose: () => voi
           <div style={{ flex: 1, minWidth: "80px" }}>
             <p style={{ margin: "0 0 2px", fontSize: "10px", color: "var(--text-disabled)", textTransform: "uppercase", letterSpacing: "0.07em" }}>Model AI</p>
             <p style={{ margin: 0, fontSize: "13px", color: "var(--text-primary)", fontWeight: 600 }}>
-              {isImage ? (item.data as typeof IMAGE_ITEMS[0]).model : "Claude Sonnet"}
+              {isImage ? (item.data as ImageItem).model : "Claude Sonnet"}
             </p>
           </div>
           <div style={{ flex: 1, minWidth: "80px" }}>
@@ -402,7 +384,82 @@ export default function StudioPage() {
   const [selectedPlatform, setSelectedPlatform] = useState<typeof PLATFORMS[0] | null>(null);
   const [selectedItem, setSelectedItem] = useState<DetailItem | null>(null);
 
+  // ── Data state ──────────────────────────────────────────────────────────────
+  const [brandId, setBrandId] = useState<string | null>(null);
+  const [articles, setArticles] = useState<ListItem[]>([]);
+  const [images, setImages]   = useState<ImageItem[]>([]);
+  const [videos, setVideos]   = useState<VideoItem[]>([]);
+  const [contentLoading, setContentLoading] = useState(false);
+
+  useEffect(() => {
+    async function load() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const { data: brand } = await supabase
+        .from("brands")
+        .select("id")
+        .eq("user_id", session.user.id)
+        .single();
+
+      if (!brand) return;
+      setBrandId(brand.id);
+      setContentLoading(true);
+
+      try {
+        const res = await fetch(`/api/studio/content?brand_id=${brand.id}`);
+        if (!res.ok) return;
+        const json = await res.json();
+
+        const rawArticles: APIArticle[] = json.artikel ?? [];
+        const rawImages: APIImage[]   = json.image ?? [];
+        const rawVideos: APIVideo[]    = json.video ?? [];
+
+        setArticles(rawArticles.map((a) => ({
+          id: a.id,
+          title: a.title,
+          body: a.description ?? "Artikel dihasilkan oleh AI GeoVera.",
+          date: formatDate(a.created_at),
+          words: "—",
+        })));
+
+        setImages(rawImages.map((img) => ({
+          id: img.id,
+          prompt: img.prompt,
+          date: formatDate(img.created_at),
+          model: img.model || "Flux H100",
+        })));
+
+        setVideos(rawVideos.map((v) => ({
+          id: v.id,
+          title: v.title,
+          duration: "—",
+          date: formatDate(v.created_at),
+          status: v.video_status ?? v.status ?? "done",
+          tall: false,
+        })));
+      } finally {
+        setContentLoading(false);
+      }
+    }
+    load();
+  }, []);
+
   const activeLayout: Layout = selectedPlatform?.layout ?? "list";
+
+  // Grid items (same articles mapped to grid shape)
+  const gridItems: GridItem[] = articles.map((a) => ({
+    id: a.id,
+    title: a.title,
+    date: a.date,
+    words: a.words,
+  }));
+
+  // Count for active view
+  const activeCount =
+    type === "artikel" ? articles.length :
+    type === "image"   ? images.length   :
+    videos.length;
 
   return (
     <div style={{ minHeight: "100svh", background: "var(--bg-primary)", color: "var(--text-primary)", fontFamily: "var(--font-body)" }}>
@@ -495,19 +552,33 @@ export default function StudioPage() {
       {/* Count label */}
       <div style={{ padding: "10px 16px 4px" }}>
         <span style={{ fontSize: "11px", color: "var(--text-disabled)", fontWeight: 500 }}>
-          {activeLayout === "list"    && `${LIST_ITEMS.length} konten`}
-          {activeLayout === "grid3"   && `${IMAGE_ITEMS.length} konten`}
-          {activeLayout === "masonry" && `${VIDEO_ITEMS.length} konten`}
+          {contentLoading ? "Memuat…" : `${activeCount} konten`}
         </span>
       </div>
 
+      {/* Loading spinner */}
+      {contentLoading && (
+        <div style={{ display: "flex", justifyContent: "center", padding: "40px 16px" }}>
+          <div style={{
+            width: "32px", height: "32px", borderRadius: "50%",
+            border: "3px solid var(--border-default)",
+            borderTopColor: "var(--accent)",
+            animation: "spin 1s linear infinite",
+          }} />
+        </div>
+      )}
+
       {/* ── LIST — text card (X/Twitter, Threads, Artikel teks) ── */}
-      {activeLayout === "list" && (
+      {!contentLoading && activeLayout === "list" && (
         <div style={{
           padding: "4px 16px calc(80px + env(safe-area-inset-bottom))",
           display: "flex", flexDirection: "column", gap: "10px",
         }}>
-          {LIST_ITEMS.map((a, i) => {
+          {articles.length === 0 ? (
+            <p style={{ padding: "24px 16px", color: "var(--text-disabled)", fontSize: "13px" }}>
+              Belum ada konten. Buat konten pertamamu melalui WhatsApp.
+            </p>
+          ) : articles.map((a, i) => {
             const [bg, accent] = CARD_COLORS[i % CARD_COLORS.length];
             return (
               <div
@@ -580,12 +651,18 @@ export default function StudioPage() {
       )}
 
       {/* ── GRID3 — 3-column Instagram grid (Facebook, IG Post, Artikel+Gambar) ── */}
-      {activeLayout === "grid3" && (
+      {!contentLoading && activeLayout === "grid3" && (
         <div style={{
           display: "grid", gridTemplateColumns: "repeat(3, 1fr)",
           gap: "2px", padding: "2px",
         }}>
-          {ARTIKEL_ITEMS.map((a, i) => {
+          {gridItems.length === 0 ? (
+            <div style={{ gridColumn: "1 / -1" }}>
+              <p style={{ padding: "24px 16px", color: "var(--text-disabled)", fontSize: "13px" }}>
+                Belum ada konten. Buat konten pertamamu melalui WhatsApp.
+              </p>
+            </div>
+          ) : gridItems.map((a, i) => {
             const [bg, accent] = CARD_COLORS[i % CARD_COLORS.length];
             return (
               <div key={a.id} onClick={() => setSelectedItem({ kind: "grid3", data: a, bg, accent })} style={{
@@ -622,12 +699,18 @@ export default function StudioPage() {
       )}
 
       {/* ── IMAGE — 2-column grid (kept for type toggle) ── */}
-      {type === "image" && activeLayout !== "grid3" && activeLayout !== "masonry" && (
+      {!contentLoading && type === "image" && activeLayout !== "grid3" && activeLayout !== "masonry" && (
         <div style={{
           display: "grid", gridTemplateColumns: "1fr 1fr",
           gap: "3px", padding: "3px",
         }}>
-          {IMAGE_ITEMS.map((img, i) => {
+          {images.length === 0 ? (
+            <div style={{ gridColumn: "1 / -1" }}>
+              <p style={{ padding: "24px 16px", color: "var(--text-disabled)", fontSize: "13px" }}>
+                Belum ada konten. Buat konten pertamamu melalui WhatsApp.
+              </p>
+            </div>
+          ) : images.map((img, i) => {
             const [bg, accent] = CARD_COLORS[i % CARD_COLORS.length];
             return (
               <div key={img.id} onClick={() => setSelectedItem({ kind: "image", data: img, bg, accent })} style={{
@@ -666,12 +749,18 @@ export default function StudioPage() {
       )}
 
       {/* ── MASONRY — 2-column 9:16 grid (TikTok, Reels, Shorts) ── */}
-      {activeLayout === "masonry" && (
+      {!contentLoading && activeLayout === "masonry" && (
         <div style={{
           display: "grid", gridTemplateColumns: "1fr 1fr",
           gap: "3px", padding: "3px",
         }}>
-          {VIDEO_ITEMS.map((vid, i) => {
+          {videos.length === 0 ? (
+            <div style={{ gridColumn: "1 / -1" }}>
+              <p style={{ padding: "24px 16px", color: "var(--text-disabled)", fontSize: "13px" }}>
+                Belum ada konten. Buat konten pertamamu melalui WhatsApp.
+              </p>
+            </div>
+          ) : videos.map((vid, i) => {
             const [bg, accent] = CARD_COLORS[i % CARD_COLORS.length];
             return (
               <div key={vid.id} onClick={() => setSelectedItem({ kind: "video", data: vid, bg, accent })} style={{
