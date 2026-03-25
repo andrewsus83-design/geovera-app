@@ -60,6 +60,8 @@ const PLATFORMS: { id: string; label: string; type: string; accent: string; layo
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> },
   { id: "artikel",     label: "Artikel",           type: "artikel", accent: "var(--success)", layout: "list",
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> },
+  { id: "pinterest",   label: "Pinterest",         type: "image",   accent: "#E60023", layout: "grid3",
+    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12c0 5.084 3.163 9.426 7.627 11.174-.105-.949-.2-2.405.042-3.441.218-.937 1.407-5.965 1.407-5.965s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738a.36.36 0 01.083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.632-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0z"/></svg> },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -70,10 +72,48 @@ function formatDate(s: string): string {
 }
 
 // ── Full-screen Content Detail ────────────────────────────────────────────────
-function ContentDetail({ item, onClose }: { item: DetailItem; onClose: () => void }) {
+function ContentDetail({
+  item, onClose, brandId, platformId, onToast,
+}: {
+  item: DetailItem;
+  onClose: () => void;
+  brandId: string | null;
+  platformId: string | null;
+  onToast: (msg: string) => void;
+}) {
+  const [publishing, setPublishing] = useState(false);
+
   const isVideo = item.kind === "video";
   const isImage = item.kind === "image";
   const isProcessing = isVideo && item.data.status === "processing";
+
+  async function handlePublish() {
+    if (!brandId || !platformId || publishing || isProcessing) return;
+    setPublishing(true);
+    try {
+      const content =
+        item.kind === "image" ? item.data.prompt :
+        item.kind === "list"  ? `${item.data.title}\n\n${item.data.body}` :
+        item.kind === "grid3" ? item.data.title :
+        item.data.title;
+      const res = await fetch("/api/social/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brand_id: brandId, platform: platformId, content, publish_now: true }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        onToast(data.demo ? "Demo mode — koneksi platform belum aktif." : "Berhasil dipublish!");
+      } else {
+        onToast(`Gagal publish: ${data.error ?? "unknown error"}`);
+      }
+    } catch {
+      onToast("Terjadi kesalahan saat publish.");
+    } finally {
+      setPublishing(false);
+      onClose();
+    }
+  }
 
   const title =
     item.kind === "image" ? item.data.prompt :
@@ -356,25 +396,197 @@ function ContentDetail({ item, onClose }: { item: DetailItem; onClose: () => voi
           Jadwalkan
         </button>
         {/* Publish Now — primary */}
-        <button disabled={isProcessing} style={{
-          flex: 2, height: "46px", borderRadius: "12px",
-          background: isProcessing ? "var(--bg-recessed)" : "var(--accent)",
-          border: "none",
-          color: isProcessing ? "var(--text-disabled)" : "var(--bg-primary)",
-          fontSize: "13px", fontWeight: 700,
-          fontFamily: "var(--font-body)",
-          cursor: isProcessing ? "not-allowed" : "pointer",
-          display: "flex", alignItems: "center", justifyContent: "center", gap: "6px",
-          WebkitTapHighlightColor: "transparent",
-          letterSpacing: "0.01em",
-        }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
-          </svg>
-          {isProcessing ? "Diproses…" : "Publish Now"}
+        <button
+          onClick={handlePublish}
+          disabled={isProcessing || publishing || !platformId}
+          style={{
+            flex: 2, height: "46px", borderRadius: "12px",
+            background: (isProcessing || publishing || !platformId) ? "var(--bg-recessed)" : "var(--accent)",
+            border: "none",
+            color: (isProcessing || publishing || !platformId) ? "var(--text-disabled)" : "var(--bg-primary)",
+            fontSize: "13px", fontWeight: 700,
+            fontFamily: "var(--font-body)",
+            cursor: (isProcessing || publishing || !platformId) ? "not-allowed" : "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: "6px",
+            WebkitTapHighlightColor: "transparent",
+            letterSpacing: "0.01em",
+          }}
+        >
+          {publishing ? (
+            <div style={{ width: "14px", height: "14px", borderRadius: "50%", border: "2px solid var(--border-default)", borderTopColor: "var(--text-disabled)", animation: "spin 0.8s linear infinite" }} />
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+          )}
+          {isProcessing ? "Diproses…" : publishing ? "Publishing…" : !platformId ? "Pilih Platform" : "Publish Now"}
         </button>
       </div>
     </div>
+  );
+}
+
+// ── Generate Modal ────────────────────────────────────────────────────────────
+function GenerateModal({
+  platform, brandId, onClose, onDone,
+}: {
+  platform: typeof PLATFORMS[0];
+  brandId: string;
+  onClose: () => void;
+  onDone: (result: { kind: string; title?: string; prompt?: string; url?: string; status?: string }) => void;
+}) {
+  const [topic, setTopic] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState("");
+
+  const ctype = platform.type; // "artikel"|"image"|"video"|"text"
+  const action =
+    ctype === "image"   ? "generate_image"  :
+    ctype === "video"   ? "generate_video"  :
+    "generate_article";
+
+  const placeholder =
+    ctype === "image"   ? "Deskripsikan gambar yang ingin dibuat…" :
+    ctype === "video"   ? "Topik video 9:16 yang ingin dibuat…"    :
+    "Topik artikel yang ingin dibuat…";
+
+  const label =
+    ctype === "image"   ? "Generate Gambar" :
+    ctype === "video"   ? "Generate Video 9:16" :
+    "Generate Artikel";
+
+  async function handleGenerate() {
+    if (!topic.trim()) return;
+    setGenerating(true);
+    setError("");
+    try {
+      const res = await fetch("/api/content-studio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          brand_id: brandId,
+          platform: platform.id,
+          topic: topic.trim(),
+          prompt: topic.trim(),
+          aspect_ratio: ctype === "video" ? "9:16" : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || "Gagal generate konten");
+      onDone({ kind: ctype, title: data.title ?? topic.trim(), prompt: topic.trim(), url: data.url, status: data.status ?? "done" });
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Terjadi kesalahan");
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 55, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }} />
+      <div style={{
+        position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 60,
+        background: "var(--bg-tertiary)", border: "1px solid var(--border-strong)",
+        borderRadius: "20px 20px 0 0",
+        paddingBottom: "calc(env(safe-area-inset-bottom) + 24px)",
+      }}>
+        {/* Handle */}
+        <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 0" }}>
+          <div style={{ width: "36px", height: "4px", borderRadius: "2px", background: "var(--border-strong)" }} />
+        </div>
+        {/* Header */}
+        <div style={{ padding: "12px 16px 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{
+              width: "36px", height: "36px", borderRadius: "10px",
+              background: `${platform.accent}18`,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              color: platform.accent,
+            }}>
+              {platform.icon}
+            </div>
+            <div>
+              <p style={{ margin: 0, fontSize: "10px", color: "var(--text-disabled)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.07em" }}>
+                {platform.label}
+              </p>
+              <p style={{ margin: 0, fontSize: "15px", fontFamily: "var(--font-heading)", fontWeight: 700, color: "var(--text-primary)" }}>
+                {label}
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} style={{
+            background: "none", border: "none", color: "var(--text-disabled)",
+            cursor: "pointer", padding: "4px", WebkitTapHighlightColor: "transparent",
+          }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        {/* Input */}
+        <div style={{ padding: "16px 16px 0" }}>
+          <textarea
+            value={topic}
+            onChange={(e) => setTopic(e.target.value)}
+            placeholder={placeholder}
+            rows={3}
+            style={{
+              width: "100%", boxSizing: "border-box",
+              background: "var(--bg-recessed)", border: "1px solid var(--border-strong)",
+              borderRadius: "12px", padding: "12px 14px",
+              fontSize: "14px", color: "var(--text-primary)",
+              fontFamily: "var(--font-body)", lineHeight: 1.5, resize: "none",
+              outline: "none",
+            }}
+          />
+          {error && (
+            <p style={{ margin: "6px 0 0", fontSize: "12px", color: "var(--danger)" }}>{error}</p>
+          )}
+        </div>
+        {/* CTA */}
+        <div style={{ padding: "12px 16px 0" }}>
+          <button
+            onClick={handleGenerate}
+            disabled={generating || !topic.trim()}
+            style={{
+              width: "100%", height: "50px", borderRadius: "14px",
+              background: generating || !topic.trim() ? "var(--bg-recessed)" : "var(--accent)",
+              border: generating || !topic.trim() ? "1px solid var(--border-strong)" : "none",
+              color: generating || !topic.trim() ? "var(--text-disabled)" : "var(--bg-primary)",
+              fontSize: "15px", fontWeight: 700, fontFamily: "var(--font-body)",
+              cursor: generating || !topic.trim() ? "not-allowed" : "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+              WebkitTapHighlightColor: "transparent",
+              transition: "background 0.15s, color 0.15s",
+            }}
+          >
+            {generating ? (
+              <>
+                <div style={{
+                  width: "16px", height: "16px", borderRadius: "50%",
+                  border: "2px solid var(--border-default)", borderTopColor: "var(--text-disabled)",
+                  animation: "spin 0.8s linear infinite",
+                }} />
+                Generating…
+              </>
+            ) : (
+              <>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                </svg>
+                Generate
+              </>
+            )}
+          </button>
+        </div>
+        {ctype === "video" && (
+          <p style={{ margin: "8px 16px 0", fontSize: "11px", color: "var(--text-disabled)", textAlign: "center" }}>
+            Video 9:16 membutuhkan beberapa menit untuk diproses.
+          </p>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -383,6 +595,7 @@ export default function StudioPage() {
   const [showFab, setShowFab] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState<typeof PLATFORMS[0] | null>(null);
   const [selectedItem, setSelectedItem] = useState<DetailItem | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
   // ── Data state ──────────────────────────────────────────────────────────────
   const [brandId, setBrandId] = useState<string | null>(null);
@@ -465,7 +678,30 @@ export default function StudioPage() {
     <div style={{ minHeight: "100svh", background: "var(--bg-primary)", color: "var(--text-primary)", fontFamily: "var(--font-body)" }}>
 
       {/* Full-screen content detail */}
-      {selectedItem && <ContentDetail item={selectedItem} onClose={() => setSelectedItem(null)} />}
+      {selectedItem && (
+        <ContentDetail
+          item={selectedItem}
+          onClose={() => setSelectedItem(null)}
+          brandId={brandId}
+          platformId={selectedPlatform?.id ?? null}
+          onToast={(msg) => { setToast(msg); setTimeout(() => setToast(null), 3500); }}
+        />
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div style={{
+          position: "fixed", bottom: `calc(80px + env(safe-area-inset-bottom))`,
+          left: "50%", transform: "translateX(-50%)",
+          zIndex: 70, whiteSpace: "nowrap",
+          background: "var(--bg-tertiary)", border: "1px solid var(--border-strong)",
+          borderRadius: "24px", padding: "10px 18px",
+          fontSize: "13px", color: "var(--text-primary)", fontWeight: 500,
+          boxShadow: "var(--shadow-md)",
+        }}>
+          {toast}
+        </div>
+      )}
 
       {/* Header */}
       <div style={{ padding: "24px 16px 0", display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>

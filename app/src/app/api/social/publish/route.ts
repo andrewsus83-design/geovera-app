@@ -13,13 +13,19 @@ const ARTICLE_PLATFORMS = new Set(["blog", "medium", "quora", "reddit"]);
 // Map display platform names → Late API platform slugs
 const PLATFORM_SLUG: Record<string, string> = {
   instagram:    "instagram",
+  "ig-post":    "instagram",
+  "ig-reels":   "instagram",
   tiktok:       "tiktok",
   "x (twitter)": "twitter",
   twitter:      "twitter",
   x:            "twitter",
   linkedin:     "linkedin",
   youtube:      "youtube",
+  "yt-video":   "youtube",
+  "yt-shorts":  "youtube",
   facebook:     "facebook",
+  pinterest:    "pinterest",
+  threads:      "threads",
 };
 
 const cors = {
@@ -65,15 +71,15 @@ export async function POST(request: NextRequest) {
     if (SUPABASE_KEY) {
       const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
       const { data: conn } = await supabase
-        .from("social_connections")
-        .select("platform_account_id")
+        .from("platform_connections")
+        .select("account_id")
         .eq("brand_id", brandId)
         .eq("platform", platform)
         .eq("status", "connected")
         .maybeSingle();
 
-      if (conn?.platform_account_id) {
-        accountId = conn.platform_account_id;
+      if (conn?.account_id) {
+        accountId = conn.account_id;
       }
     }
 
