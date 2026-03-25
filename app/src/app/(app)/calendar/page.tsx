@@ -11,8 +11,6 @@ const TABS = [
       </svg>
     ),
     badge: 5,
-    empty: "Tidak ada komentar yang perlu dibalas",
-    emptyDesc: "Komentar baru dari social media akan muncul di sini",
     items: [
       { platform: "Instagram", user: "@user_kopi123", comment: "Berapa harga untuk paket bulanan kak?", time: "2 menit lalu", urgent: true },
       { platform: "TikTok", user: "@brandlover_id", comment: "Kontennya bagus banget! Ada collab gak?", time: "15 menit lalu", urgent: false },
@@ -30,8 +28,6 @@ const TABS = [
       </svg>
     ),
     badge: 3,
-    empty: "Tidak ada konten yang dijadwalkan",
-    emptyDesc: "Buat konten dari Studio lalu jadwalkan publikasinya di sini",
     items: [
       { platform: "Instagram", title: "Tips Marketing Digital 2026", type: "Carousel", time: "Hari ini 14:00", status: "scheduled" },
       { platform: "TikTok", title: "Behind the scenes produksi", type: "Video", time: "Besok 09:00", status: "scheduled" },
@@ -51,8 +47,6 @@ const TABS = [
       </svg>
     ),
     badge: 0,
-    empty: "Belum ada laporan yang dibuat",
-    emptyDesc: "Laporan performa brand akan digenerate otomatis setiap 14 hari",
     items: [
       { title: "Laporan Mingguan — Maret W4", period: "17–23 Mar 2026", status: "ready", score: 78 },
       { title: "Laporan Mingguan — Maret W3", period: "10–16 Mar 2026", status: "ready", score: 71 },
@@ -69,8 +63,6 @@ const TABS = [
       </svg>
     ),
     badge: 2,
-    empty: "Tidak ada yang menunggu persetujuan",
-    emptyDesc: "Konten yang perlu di-approve sebelum dipublikasi akan muncul di sini",
     items: [
       { title: "Artikel: 10 Tren Marketing 2026", type: "Artikel", requestedBy: "AI Content", time: "1 jam lalu", urgent: true },
       { title: "Gambar: Campaign Ramadan 3 variasi", type: "Gambar", requestedBy: "AI Studio", time: "3 jam lalu", urgent: false },
@@ -86,8 +78,6 @@ const TABS = [
       </svg>
     ),
     badge: 4,
-    empty: "Tidak ada berita terbaru",
-    emptyDesc: "Update platform dan informasi industri akan tampil di sini",
     items: [
       { title: "Instagram update algoritma Reels April 2026", category: "Platform Update", time: "2 jam lalu", important: true },
       { title: "TikTok Shop Indonesia Q2 merchant promo", category: "Peluang", time: "5 jam lalu", important: false },
@@ -136,19 +126,19 @@ export default function CalendarPage() {
     d === selectedDate.getDate() && pickerMonth === selectedDate.getMonth() && pickerYear === selectedDate.getFullYear();
 
   return (
-    <div style={{ minHeight: "100svh", background: "#080d0b", color: "#e8ede9", fontFamily: "Inter, system-ui, sans-serif" }}>
+    <div style={{ minHeight: "100svh", background: "var(--bg-primary)", color: "var(--text-primary)", fontFamily: "var(--font-body)" }}>
 
       {/* Header */}
       <div style={{ padding: "24px 16px 0", display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
         <div>
           <h1 style={{
-            fontFamily: "Manrope, system-ui, sans-serif",
-            fontSize: "22px", fontWeight: 800, color: "#e8ede9",
+            fontFamily: "var(--font-heading)",
+            fontSize: "22px", fontWeight: 800, color: "var(--text-primary)",
             margin: 0, letterSpacing: "-0.02em",
           }}>
             Calendar
           </h1>
-          <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#3d4f44" }}>
+          <p style={{ margin: "2px 0 0", fontSize: "12px", color: "var(--text-disabled)" }}>
             Aktivitas & jadwal brand kamu
           </p>
         </div>
@@ -156,19 +146,19 @@ export default function CalendarPage() {
         <div style={{
           display: "flex", alignItems: "center", gap: "5px",
           padding: "6px 10px", borderRadius: "20px",
-          background: "#0a100d", border: "1px solid rgba(95,122,107,0.2)",
+          background: "var(--bg-recessed)", border: "1px solid var(--border-default)",
           marginTop: "2px",
         }}>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#5f7a6b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
           </svg>
-          <span style={{ fontSize: "11px", fontWeight: 600, color: "#a3c4b5", whiteSpace: "nowrap" }}>
+          <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
             {fmtDate(selectedDate)}
           </span>
         </div>
       </div>
 
-      {/* Calendar Bottom Sheet Overlay */}
+      {/* Calendar Bottom Sheet */}
       {showPicker && (
         <>
           <div onClick={() => setShowPicker(false)} style={{
@@ -177,14 +167,13 @@ export default function CalendarPage() {
           }} />
           <div style={{
             position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 50,
-            background: "#0d1510",
-            border: "1px solid rgba(95,122,107,0.2)",
+            background: "var(--bg-tertiary)",
+            border: "1px solid var(--border-default)",
             borderRadius: "20px 20px 0 0",
             padding: "0 16px calc(60px + env(safe-area-inset-bottom) + 16px)",
           }}>
-            {/* Handle */}
             <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 4px" }}>
-              <div style={{ width: "36px", height: "4px", borderRadius: "2px", background: "rgba(95,122,107,0.3)" }} />
+              <div style={{ width: "36px", height: "4px", borderRadius: "2px", background: "var(--border-strong)" }} />
             </div>
 
             {/* Month nav */}
@@ -192,16 +181,16 @@ export default function CalendarPage() {
               <button onClick={() => {
                 if (pickerMonth === 0) { setPickerMonth(11); setPickerYear(y => y - 1); }
                 else setPickerMonth(m => m - 1);
-              }} style={{ background: "none", border: "none", color: "#5f7a6b", cursor: "pointer", padding: "4px 8px", WebkitTapHighlightColor: "transparent" }}>
+              }} style={{ background: "none", border: "none", color: "var(--accent)", cursor: "pointer", padding: "4px 8px", WebkitTapHighlightColor: "transparent" }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
               </button>
-              <span style={{ fontFamily: "Manrope, sans-serif", fontWeight: 700, fontSize: "15px", color: "#e8ede9" }}>
+              <span style={{ fontFamily: "var(--font-heading)", fontWeight: 700, fontSize: "15px", color: "var(--text-primary)" }}>
                 {MONTHS[pickerMonth]} {pickerYear}
               </span>
               <button onClick={() => {
                 if (pickerMonth === 11) { setPickerMonth(0); setPickerYear(y => y + 1); }
                 else setPickerMonth(m => m + 1);
-              }} style={{ background: "none", border: "none", color: "#5f7a6b", cursor: "pointer", padding: "4px 8px", WebkitTapHighlightColor: "transparent" }}>
+              }} style={{ background: "none", border: "none", color: "var(--accent)", cursor: "pointer", padding: "4px 8px", WebkitTapHighlightColor: "transparent" }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
               </button>
             </div>
@@ -209,7 +198,7 @@ export default function CalendarPage() {
             {/* Day headers */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", marginBottom: "8px" }}>
               {DAYS.map(d => (
-                <div key={d} style={{ textAlign: "center", fontSize: "11px", fontWeight: 600, color: "#3d4f44", padding: "4px 0" }}>{d}</div>
+                <div key={d} style={{ textAlign: "center", fontSize: "11px", fontWeight: 600, color: "var(--text-disabled)", padding: "4px 0" }}>{d}</div>
               ))}
             </div>
 
@@ -225,9 +214,9 @@ export default function CalendarPage() {
                     setShowPicker(false);
                   }} style={{
                     height: "38px", borderRadius: "8px",
-                    background: sel ? "#5f7a6b" : tod ? "rgba(95,122,107,0.15)" : "none",
-                    border: tod && !sel ? "1px solid rgba(95,122,107,0.3)" : "none",
-                    color: sel ? "#e8ede9" : tod ? "#a3c4b5" : "#6b7f72",
+                    background: sel ? "var(--accent)" : tod ? "var(--accent-subtle)" : "none",
+                    border: tod && !sel ? "1px solid var(--border-default)" : "none",
+                    color: sel ? "var(--text-primary)" : tod ? "var(--text-secondary)" : "var(--text-muted)",
                     fontSize: "13px", fontWeight: sel || tod ? 700 : 400,
                     cursor: "pointer", WebkitTapHighlightColor: "transparent",
                   }}>
@@ -245,9 +234,9 @@ export default function CalendarPage() {
               setShowPicker(false);
             }} style={{
               width: "100%", height: "40px", marginTop: "14px",
-              borderRadius: "10px", border: "1px solid rgba(95,122,107,0.25)",
-              background: "rgba(95,122,107,0.08)", color: "#5f7a6b",
-              fontSize: "13px", fontWeight: 600, fontFamily: "Inter, sans-serif",
+              borderRadius: "10px", border: "1px solid var(--border-default)",
+              background: "var(--accent-subtle)", color: "var(--accent)",
+              fontSize: "13px", fontWeight: 600, fontFamily: "var(--font-body)",
               cursor: "pointer", WebkitTapHighlightColor: "transparent",
             }}>
               Hari Ini
@@ -263,11 +252,11 @@ export default function CalendarPage() {
         bottom: `calc(60px + env(safe-area-inset-bottom) + 14px)`,
         zIndex: 30,
         width: "48px", height: "48px", borderRadius: "50%",
-        background: "#5f7a6b",
+        background: "var(--accent)",
         border: "none",
-        boxShadow: "0 4px 16px rgba(0,0,0,0.4), 0 0 0 1px rgba(95,122,107,0.4)",
+        boxShadow: "var(--shadow-lg)",
         display: "flex", alignItems: "center", justifyContent: "center",
-        color: "#e8ede9", cursor: "pointer",
+        color: "var(--text-primary)", cursor: "pointer",
         WebkitTapHighlightColor: "transparent",
       }}>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -294,22 +283,21 @@ export default function CalendarPage() {
               display: "flex", alignItems: "center", gap: "6px",
               padding: "8px 12px",
               borderRadius: "20px",
-              border: isActive ? "1px solid rgba(95,122,107,0.4)" : "1px solid rgba(95,122,107,0.13)",
-              background: isActive ? "rgba(95,122,107,0.15)" : "#0a100d",
-              color: isActive ? "#a3c4b5" : "#3d4f44",
+              border: isActive ? "1px solid var(--border-strong)" : "1px solid var(--border-subtle)",
+              background: isActive ? "var(--glass-bg-medium)" : "var(--bg-recessed)",
+              color: isActive ? "var(--text-secondary)" : "var(--text-disabled)",
               fontSize: "13px", fontWeight: isActive ? 600 : 400,
-              fontFamily: "Inter, system-ui, sans-serif",
+              fontFamily: "var(--font-body)",
               cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
               WebkitTapHighlightColor: "transparent",
-              transition: "all 150ms",
             }}>
               {t.icon}
               {t.label}
               {t.badge > 0 && (
                 <span style={{
                   minWidth: "18px", height: "18px", borderRadius: "9px",
-                  background: isActive ? "#5f7a6b" : "rgba(95,122,107,0.25)",
-                  color: isActive ? "#e8ede9" : "#5f7a6b",
+                  background: isActive ? "var(--accent)" : "var(--accent-subtle)",
+                  color: isActive ? "var(--text-primary)" : "var(--accent)",
                   fontSize: "11px", fontWeight: 700,
                   display: "flex", alignItems: "center", justifyContent: "center",
                   padding: "0 4px",
@@ -323,7 +311,7 @@ export default function CalendarPage() {
       </div>
 
       {/* Divider */}
-      <div style={{ height: "1px", background: "rgba(95,122,107,0.1)", margin: "12px 0 0" }} />
+      <div style={{ height: "1px", background: "var(--border-subtle)", margin: "12px 0 0" }} />
 
       {/* Content */}
       <div style={{ padding: "14px 16px 24px", display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -331,26 +319,26 @@ export default function CalendarPage() {
         {/* REPLY */}
         {active === "reply" && tab.items.map((item: Record<string, unknown>, i) => (
           <div key={i} style={{
-            background: "#0a100d",
-            border: `1px solid ${item.urgent ? "rgba(248,113,113,0.2)" : "rgba(95,122,107,0.13)"}`,
+            background: "var(--bg-recessed)",
+            border: `1px solid ${item.urgent ? "var(--danger-subtle)" : "var(--border-subtle)"}`,
             borderRadius: "12px", padding: "12px 14px",
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
               <span style={{
                 fontSize: "10px", fontWeight: 600, padding: "2px 8px", borderRadius: "20px",
-                background: `${PLATFORM_COLOR[item.platform as string] || "#5f7a6b"}18`,
-                color: PLATFORM_COLOR[item.platform as string] || "#5f7a6b",
+                background: `${PLATFORM_COLOR[item.platform as string] || "var(--accent)"}18`,
+                color: PLATFORM_COLOR[item.platform as string] || "var(--accent)",
               }}>{item.platform as string}</span>
-              <span style={{ fontSize: "10px", color: "#3d4f44", marginLeft: "auto" }}>{item.time as string}</span>
-              {!!item.urgent && <span style={{ fontSize: "10px", color: "#f87171", fontWeight: 600 }}>Urgent</span>}
+              <span style={{ fontSize: "10px", color: "var(--text-disabled)", marginLeft: "auto" }}>{item.time as string}</span>
+              {!!item.urgent && <span style={{ fontSize: "10px", color: "var(--danger)", fontWeight: 600 }}>Urgent</span>}
             </div>
-            <div style={{ fontSize: "12px", color: "#6b7f72", marginBottom: "4px" }}>{item.user as string}</div>
-            <div style={{ fontSize: "13px", color: "#e8ede9", lineHeight: 1.5, marginBottom: "10px" }}>"{item.comment as string}"</div>
+            <div style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "4px" }}>{item.user as string}</div>
+            <div style={{ fontSize: "13px", color: "var(--text-primary)", lineHeight: 1.5, marginBottom: "10px" }}>"{item.comment as string}"</div>
             <button style={{
               height: "30px", padding: "0 14px", borderRadius: "8px",
-              border: "1px solid rgba(95,122,107,0.3)", background: "rgba(95,122,107,0.1)",
-              color: "#5f7a6b", fontSize: "12px", fontWeight: 600,
-              fontFamily: "Inter, system-ui, sans-serif", cursor: "pointer",
+              border: "1px solid var(--border-default)", background: "var(--accent-subtle)",
+              color: "var(--accent)", fontSize: "12px", fontWeight: 600,
+              fontFamily: "var(--font-body)", cursor: "pointer",
               WebkitTapHighlightColor: "transparent",
             }}>Balas</button>
           </div>
@@ -359,29 +347,29 @@ export default function CalendarPage() {
         {/* PUBLISH */}
         {active === "publish" && tab.items.map((item: Record<string, unknown>, i) => (
           <div key={i} style={{
-            background: "#0a100d", border: "1px solid rgba(95,122,107,0.13)",
+            background: "var(--bg-recessed)", border: "1px solid var(--border-subtle)",
             borderRadius: "12px", padding: "12px 14px",
             display: "flex", alignItems: "center", gap: "12px",
           }}>
             <div style={{
               width: "40px", height: "40px", borderRadius: "9px", flexShrink: 0,
-              background: `${PLATFORM_COLOR[item.platform as string] || "#5f7a6b"}18`,
+              background: `${PLATFORM_COLOR[item.platform as string] || "var(--accent)"}18`,
               display: "flex", alignItems: "center", justifyContent: "center",
-              color: PLATFORM_COLOR[item.platform as string] || "#5f7a6b",
+              color: PLATFORM_COLOR[item.platform as string] || "var(--accent)",
               fontSize: "11px", fontWeight: 700,
             }}>
               {(item.platform as string).slice(0, 2).toUpperCase()}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontFamily: "Manrope, sans-serif", fontWeight: 700, fontSize: "13px", color: "#e8ede9", marginBottom: "2px" }}>
+              <div style={{ fontFamily: "var(--font-heading)", fontWeight: 700, fontSize: "13px", color: "var(--text-primary)", marginBottom: "2px" }}>
                 {item.title as string}
               </div>
-              <div style={{ fontSize: "11px", color: "#3d4f44" }}>{item.type as string} · {item.time as string}</div>
+              <div style={{ fontSize: "11px", color: "var(--text-disabled)" }}>{item.type as string} · {item.time as string}</div>
             </div>
             <span style={{
               fontSize: "11px", fontWeight: 600, padding: "3px 8px", borderRadius: "20px",
-              background: item.status === "scheduled" ? "rgba(34,197,94,0.1)" : "rgba(245,158,11,0.1)",
-              color: item.status === "scheduled" ? "#22C55E" : "#F59E0B",
+              background: item.status === "scheduled" ? "var(--success-subtle)" : "var(--warning-subtle)",
+              color: item.status === "scheduled" ? "var(--success)" : "var(--warning)",
               flexShrink: 0,
             }}>
               {item.status === "scheduled" ? "Terjadwal" : "Draft"}
@@ -392,29 +380,29 @@ export default function CalendarPage() {
         {/* REPORT */}
         {active === "report" && tab.items.map((item: Record<string, unknown>, i) => (
           <div key={i} style={{
-            background: "#0a100d", border: "1px solid rgba(95,122,107,0.13)",
+            background: "var(--bg-recessed)", border: "1px solid var(--border-subtle)",
             borderRadius: "12px", padding: "14px",
             display: "flex", alignItems: "center", gap: "12px",
           }}>
             <div style={{
               width: "42px", height: "42px", borderRadius: "10px", flexShrink: 0,
-              background: "rgba(95,122,107,0.1)",
+              background: "var(--accent-subtle)",
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontFamily: "Manrope, sans-serif", fontWeight: 800, fontSize: "16px", color: "#5f7a6b",
+              fontFamily: "var(--font-heading)", fontWeight: 800, fontSize: "16px", color: "var(--accent)",
             }}>
               {item.score as number}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontFamily: "Manrope, sans-serif", fontWeight: 700, fontSize: "13px", color: "#e8ede9", marginBottom: "2px" }}>
+              <div style={{ fontFamily: "var(--font-heading)", fontWeight: 700, fontSize: "13px", color: "var(--text-primary)", marginBottom: "2px" }}>
                 {item.title as string}
               </div>
-              <div style={{ fontSize: "11px", color: "#3d4f44" }}>{item.period as string}</div>
+              <div style={{ fontSize: "11px", color: "var(--text-disabled)" }}>{item.period as string}</div>
             </div>
             <button style={{
               height: "30px", padding: "0 12px", borderRadius: "8px",
-              border: "1px solid rgba(95,122,107,0.3)", background: "rgba(95,122,107,0.1)",
-              color: "#5f7a6b", fontSize: "12px", fontWeight: 600,
-              fontFamily: "Inter, system-ui, sans-serif", cursor: "pointer",
+              border: "1px solid var(--border-default)", background: "var(--accent-subtle)",
+              color: "var(--accent)", fontSize: "12px", fontWeight: 600,
+              fontFamily: "var(--font-body)", cursor: "pointer",
               WebkitTapHighlightColor: "transparent", flexShrink: 0,
             }}>Lihat</button>
           </div>
@@ -423,35 +411,35 @@ export default function CalendarPage() {
         {/* APPROVAL */}
         {active === "approval" && tab.items.map((item: Record<string, unknown>, i) => (
           <div key={i} style={{
-            background: "#0a100d",
-            border: `1px solid ${item.urgent ? "rgba(248,113,113,0.2)" : "rgba(95,122,107,0.13)"}`,
+            background: "var(--bg-recessed)",
+            border: `1px solid ${item.urgent ? "var(--danger-subtle)" : "var(--border-subtle)"}`,
             borderRadius: "12px", padding: "14px",
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
               <span style={{
                 fontSize: "10px", fontWeight: 600, padding: "2px 8px", borderRadius: "20px",
-                background: "rgba(95,122,107,0.12)", color: "#5f7a6b",
+                background: "var(--accent-subtle)", color: "var(--accent)",
               }}>{item.type as string}</span>
-              {!!item.urgent && <span style={{ fontSize: "10px", color: "#f87171", fontWeight: 600 }}>Urgent</span>}
-              <span style={{ fontSize: "10px", color: "#3d4f44", marginLeft: "auto" }}>{item.time as string}</span>
+              {!!item.urgent && <span style={{ fontSize: "10px", color: "var(--danger)", fontWeight: 600 }}>Urgent</span>}
+              <span style={{ fontSize: "10px", color: "var(--text-disabled)", marginLeft: "auto" }}>{item.time as string}</span>
             </div>
-            <div style={{ fontFamily: "Manrope, sans-serif", fontWeight: 700, fontSize: "13px", color: "#e8ede9", marginBottom: "4px" }}>
+            <div style={{ fontFamily: "var(--font-heading)", fontWeight: 700, fontSize: "13px", color: "var(--text-primary)", marginBottom: "4px" }}>
               {item.title as string}
             </div>
-            <div style={{ fontSize: "11px", color: "#3d4f44", marginBottom: "12px" }}>Diminta oleh: {item.requestedBy as string}</div>
+            <div style={{ fontSize: "11px", color: "var(--text-disabled)", marginBottom: "12px" }}>Diminta oleh: {item.requestedBy as string}</div>
             <div style={{ display: "flex", gap: "8px" }}>
               <button style={{
                 flex: 1, height: "32px", borderRadius: "8px",
-                border: "1px solid rgba(34,197,94,0.3)", background: "rgba(34,197,94,0.08)",
-                color: "#22C55E", fontSize: "12px", fontWeight: 600,
-                fontFamily: "Inter, system-ui, sans-serif", cursor: "pointer",
+                border: "1px solid var(--success-subtle)", background: "var(--success-subtle)",
+                color: "var(--success)", fontSize: "12px", fontWeight: 600,
+                fontFamily: "var(--font-body)", cursor: "pointer",
                 WebkitTapHighlightColor: "transparent",
               }}>Approve</button>
               <button style={{
                 flex: 1, height: "32px", borderRadius: "8px",
-                border: "1px solid rgba(248,113,113,0.3)", background: "rgba(248,113,113,0.08)",
-                color: "#f87171", fontSize: "12px", fontWeight: 600,
-                fontFamily: "Inter, system-ui, sans-serif", cursor: "pointer",
+                border: "1px solid var(--danger-subtle)", background: "var(--danger-subtle)",
+                color: "var(--danger)", fontSize: "12px", fontWeight: 600,
+                fontFamily: "var(--font-body)", cursor: "pointer",
                 WebkitTapHighlightColor: "transparent",
               }}>Tolak</button>
             </div>
@@ -461,18 +449,18 @@ export default function CalendarPage() {
         {/* NEWS */}
         {active === "news" && tab.items.map((item: Record<string, unknown>, i) => (
           <div key={i} style={{
-            background: "#0a100d",
-            border: `1px solid ${item.important ? "rgba(95,122,107,0.25)" : "rgba(95,122,107,0.1)"}`,
+            background: "var(--bg-recessed)",
+            border: `1px solid ${item.important ? "var(--border-default)" : "var(--border-subtle)"}`,
             borderRadius: "12px", padding: "12px 14px",
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
               <span style={{
                 fontSize: "10px", fontWeight: 600, padding: "2px 8px", borderRadius: "20px",
-                background: "rgba(95,122,107,0.1)", color: "#5f7a6b",
+                background: "var(--accent-subtle)", color: "var(--accent)",
               }}>{item.category as string}</span>
-              <span style={{ fontSize: "10px", color: "#3d4f44", marginLeft: "auto" }}>{item.time as string}</span>
+              <span style={{ fontSize: "10px", color: "var(--text-disabled)", marginLeft: "auto" }}>{item.time as string}</span>
             </div>
-            <div style={{ fontFamily: "Manrope, sans-serif", fontWeight: 700, fontSize: "13px", color: "#e8ede9", lineHeight: 1.4 }}>
+            <div style={{ fontFamily: "var(--font-heading)", fontWeight: 700, fontSize: "13px", color: "var(--text-primary)", lineHeight: 1.4 }}>
               {item.title as string}
             </div>
           </div>
