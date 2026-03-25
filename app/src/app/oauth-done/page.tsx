@@ -1,12 +1,12 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 /**
  * OAuth landing page — Late API redirects here after platform authorization.
  * Immediately forwards back to /home/connect with ?connected=1 or ?error=...
  */
-export default function OAuthDonePage() {
+function OAuthDoneInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -19,6 +19,10 @@ export default function OAuthDonePage() {
     }
   }, [router, searchParams]);
 
+  return null;
+}
+
+export default function OAuthDonePage() {
   return (
     <div style={{
       minHeight: "100svh",
@@ -31,6 +35,9 @@ export default function OAuthDonePage() {
       fontFamily: "var(--font-body)",
       color: "var(--text-primary)",
     }}>
+      <Suspense fallback={null}>
+        <OAuthDoneInner />
+      </Suspense>
       <div style={{
         width: "40px", height: "40px", borderRadius: "50%",
         border: "3px solid var(--border-default)",

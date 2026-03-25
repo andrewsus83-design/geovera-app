@@ -1,11 +1,11 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 const SUPABASE_URL = "https://vozjwptzutolvkvfpknk.supabase.co";
-const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZvemp3cHR6dXRvbHZrdmZwa25rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk4ODI0NzcsImV4cCI6MjA4NTQ1ODQ3N30.p-RiTR1Iva9Y4KiZu8gnF2CZjvnMWNAHUVCbp57PDF8";
+const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 const EDGE_BASE = `${SUPABASE_URL}/functions/v1/social-connect`;
 
 type LateAccount = {
@@ -110,7 +110,7 @@ const PLATFORMS = [
   },
 ];
 
-export default function ConnectPage() {
+function ConnectPageInner() {
   const searchParams = useSearchParams();
   const [brandId, setBrandId] = useState<string | null>(null);
   const [accounts, setAccounts] = useState<LateAccount[]>([]);
@@ -442,4 +442,8 @@ export default function ConnectPage() {
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
+}
+
+export default function ConnectPage() {
+  return <Suspense fallback={null}><ConnectPageInner /></Suspense>;
 }

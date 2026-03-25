@@ -61,23 +61,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Brand not found" }, { status: 404, headers: CORS });
   }
 
-  // 2. Social connected count — try platform_connections, fallback social_connections
+  // 2. Social connected count
   let socialCount = 0;
   try {
     const { count, error } = await sb
       .from("platform_connections")
       .select("id", { count: "exact", head: true })
       .eq("brand_id", brand_id);
-    if (!error) {
-      socialCount = count ?? 0;
-    } else {
-      // Try social_connections fallback
-      const { count: c2, error: e2 } = await sb
-        .from("social_connections")
-        .select("id", { count: "exact", head: true })
-        .eq("brand_id", brand_id);
-      if (!e2) socialCount = c2 ?? 0;
-    }
+    if (!error) socialCount = count ?? 0;
   } catch {
     socialCount = 0;
   }

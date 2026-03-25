@@ -81,8 +81,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Build keywords for UI
-  const keywords = rawKeywords.map((r, idx) => {
-    const prev = idx + 1; // simulate no change if we have no historical
+  const keywords = rawKeywords.map((r) => {
     const change = r.current_rank != null && r.best_rank != null
       ? r.best_rank - r.current_rank
       : 0;

@@ -411,9 +411,9 @@ export default function StudioPage() {
         if (!res.ok) return;
         const json = await res.json();
 
-        const rawArticles: APIArticle[] = json.artikel ?? [];
-        const rawImages: APIImage[]   = json.image ?? [];
-        const rawVideos: APIVideo[]    = json.video ?? [];
+        const rawArticles: APIArticle[] = json.articles ?? [];
+        const rawImages: APIImage[]   = json.images ?? [];
+        const rawVideos: APIVideo[]    = json.videos ?? [];
 
         setArticles(rawArticles.map((a) => ({
           id: a.id,
@@ -569,7 +569,7 @@ export default function StudioPage() {
       )}
 
       {/* ── LIST — text card (X/Twitter, Threads, Artikel teks) ── */}
-      {!contentLoading && activeLayout === "list" && (
+      {!contentLoading && activeLayout === "list" && type !== "image" && (
         <div style={{
           padding: "4px 16px calc(80px + env(safe-area-inset-bottom))",
           display: "flex", flexDirection: "column", gap: "10px",
