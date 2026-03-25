@@ -154,15 +154,28 @@ async function buildArticleMenu(supabase: ReturnType<typeof createClient>, brand
     { label: 'Short (s/d 500 karakter, cocok untuk X/LinkedIn)', prompt: defaultTopic, length: 'short' },
     { label: 'Medium (s/d 800 kata)', prompt: defaultTopic, length: 'medium' },
     { label: 'Long (s/d 1500 kata)', prompt: defaultTopic, length: 'long' },
-    { label: 'Very Long (s/d 3000 kata)', prompt: defaultTopic, length: 'very_long' },
+    { label: 'Very Long (up to 3000 words)', prompt: defaultTopic, length: 'very_long' },
   ];
   const topicOpts: ContentOption[] = rawTopics.map(t => ({ ...t, label: `"${t.label}"` }));
   const sections: ContentSection[] = [
-    { num: 1, label: 'Pilih panjang artikel', opts: lengthOpts },
-    { num: 2, label: 'Pilih topik rekomendasi hari ini', opts: topicOpts },
+    { num: 1, label: 'Panjang konten', opts: lengthOpts },
+    { num: 2, label: 'Suggested Topic', opts: topicOpts },
   ];
   const sessionData: SessionData = { session_type: 'artikel', sections };
-  return { menu: buildMenuText('artikel', sections, `tips jualan online`, botPrefix), sessionData };
+
+  // Build artikel-specific menu format
+  const ALPHA_LOCAL = 'abcdefghijklmnopqrstuvwxyz';
+  const lines: string[] = [`Silahkan pilih opsi di bawah:`];
+  for (const sec of sections) {
+    lines.push(``, `*${sec.num}.* ${sec.label}:`);
+    sec.opts.forEach((o, i) => lines.push(`   ${ALPHA_LOCAL[i]}. ${o.label}`));
+  }
+  const manualNum = (sections[sections.length - 1]?.num ?? 0) + 1;
+  lines.push(``, `atau *${manualNum}.* Deskripsi/Topik manual — ketik: *${manualNum} [topik kamu]*`);
+  lines.push(``, `Silahkan jawab: *1(a/b/c/d), 2(a/b/c)* atau ketik *${manualNum} [deskripsi topikmu]*`);
+  lines.push(`_Contoh: 1b, 2a — Medium, topik pertama_`);
+
+  return { menu: lines.join('\n'), sessionData };
 }
 
 async function buildImageMenu(supabase: ReturnType<typeof createClient>, brandId: string, brandName: string, botPrefix = 'Geovera'): Promise<{ menu: string; sessionData: SessionData }> {
