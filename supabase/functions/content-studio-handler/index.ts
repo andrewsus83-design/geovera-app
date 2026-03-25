@@ -1525,10 +1525,47 @@ Return ONLY valid JSON:
           if (R2_ACCOUNT_ID && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY && R2_BUCKET_NAME && R2_PUBLIC_URL) {
             try {
               const r2Key = `articles/${brand_id}/${articleId}.html`;
-              const htmlContent = `<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${String(articleData.meta_title ?? enrichedTopic).replace(/</g, "&lt;")}</title><meta name="description" content="${String(articleData.meta_description ?? "").replace(/"/g, "&quot;")}"></head><body><article><h1>${String(articleData.meta_title ?? enrichedTopic).replace(/</g, "&lt;")}</h1>${articleContent}</article></body></html>`;
+              const title = String(articleData.meta_title ?? enrichedTopic).replace(/</g, "&lt;");
+              const desc = String(articleData.meta_description ?? "").replace(/"/g, "&quot;");
+              const htmlContent = `<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${title}</title>
+<meta name="description" content="${desc}">
+<meta property="og:title" content="${title}">
+<meta property="og:description" content="${desc}">
+<meta property="og:type" content="article">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0a0e14;color:#e2e8f0;min-height:100vh;padding:24px 16px 48px}
+article{max-width:720px;margin:0 auto}
+h1{font-size:clamp(22px,5vw,36px);font-weight:800;line-height:1.2;margin-bottom:16px;color:#f0f4f8}
+h2{font-size:clamp(17px,4vw,24px);font-weight:700;margin:32px 0 12px;color:#cbd5e0}
+h3{font-size:clamp(15px,3vw,20px);font-weight:600;margin:24px 0 10px;color:#a0aec0}
+p{font-size:15px;line-height:1.75;color:#94a3b8;margin-bottom:16px}
+ul,ol{padding-left:20px;margin-bottom:16px}
+li{font-size:15px;line-height:1.7;color:#94a3b8;margin-bottom:6px}
+strong{color:#e2e8f0}
+a{color:#60a5fa;text-decoration:none}
+.brand{display:flex;align-items:center;gap:6px;margin-bottom:28px;font-size:12px;color:#4a5568;text-transform:uppercase;letter-spacing:0.08em}
+</style>
+</head>
+<body>
+<article>
+<div class="brand">GeoVera · AI Content</div>
+<h1>${title}</h1>
+${articleContent}
+</article>
+</body>
+</html>`;
               await uploadToR2(R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, r2Key, htmlContent, "text/html; charset=utf-8");
-              await supabase.from("gv_article_generations").update({ article_url, r2_key: r2Key }).eq("id", articleId);
-              console.log(`[generate_article] R2 ✓ | viewer: ${article_url}`);
+              // Use CDN URL as primary article_url (publicly accessible via R2 + CDN)
+              const r2CdnUrl = `${R2_PUBLIC_URL.replace(/\/$/, "")}/articles/${brand_id}/${articleId}.html`;
+              article_url = r2CdnUrl;
+              await supabase.from("gv_article_generations").update({ article_url: r2CdnUrl, r2_key: r2Key }).eq("id", articleId);
+              console.log(`[generate_article] R2 CDN ✓ ${r2CdnUrl}`);
             } catch (r2Err) {
               console.error("[generate_article] R2 upload failed:", r2Err);
               await supabase.from("gv_article_generations").update({ article_url }).eq("id", articleId);
@@ -1539,9 +1576,12 @@ Return ONLY valid JSON:
 
           console.log(`[generate_article] Done: ${articleId} → ${article_url}`);
 
-          // Send WA callback with article URL
+          // Send WA callback with CDN article URL + key stats
           if (waCallback && waToken) {
-            await sendWACallback(waCallback, waToken, `📝 *Artikel berhasil di-generate!*\n\n🔗 ${article_url}`);
+            const wordCount = articleContent.replace(/<[^>]+>/g, "").trim().split(/\s+/).length;
+            const metaTitle = String(articleData.meta_title ?? enrichedTopic).slice(0, 80);
+            const waMsg = `📝 *Artikel berhasil di-generate!*\n\n*${metaTitle}*\n\n📊 ~${wordCount} kata | ${length.toUpperCase()}\n\n🔗 ${article_url}`;
+            await sendWACallback(waCallback, waToken, waMsg);
           }
         } catch (bgErr) {
           console.error("[generate_article] bg error:", bgErr);
