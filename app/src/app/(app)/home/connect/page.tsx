@@ -1,13 +1,27 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { supabase } from "@/lib/supabase";
+
+const SUPABASE_URL = "https://vozjwptzutolvkvfpknk.supabase.co";
+const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZvemp3cHR6dXRvbHZrdmZwa25rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk4ODI0NzcsImV4cCI6MjA4NTQ1ODQ3N30.p-RiTR1Iva9Y4KiZu8gnF2CZjvnMWNAHUVCbp57PDF8";
+const EDGE_BASE = `${SUPABASE_URL}/functions/v1/social-connect`;
+
+type LateAccount = {
+  id: string;
+  platform: string;
+  username?: string;
+  displayName?: string;
+  name?: string;
+  status?: string;
+};
 
 const PLATFORMS = [
   {
     id: "tiktok",
     name: "TikTok",
     desc: "Video & konten short-form",
-    color: "#010101",
     accent: "#FE2C55",
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
@@ -19,7 +33,6 @@ const PLATFORMS = [
     id: "instagram",
     name: "Instagram",
     desc: "Feed, Reels & Stories",
-    color: "#833AB4",
     accent: "#E1306C",
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -33,7 +46,6 @@ const PLATFORMS = [
     id: "facebook",
     name: "Facebook",
     desc: "Page, Ads & Audience",
-    color: "#1877F2",
     accent: "#1877F2",
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
@@ -45,7 +57,6 @@ const PLATFORMS = [
     id: "youtube",
     name: "YouTube",
     desc: "Video & channel analytics",
-    color: "#FF0000",
     accent: "#FF0000",
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
@@ -57,8 +68,7 @@ const PLATFORMS = [
     id: "threads",
     name: "Threads",
     desc: "Text & komunitas",
-    color: "#000000",
-    accent: "#ffffff",
+    accent: "var(--text-primary)",
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
         <path d="M12.186 24h-.007c-3.581-.024-6.334-1.205-8.184-3.509C2.35 18.44 1.5 15.586 1.472 12.01v-.017c.03-3.579.879-6.43 2.525-8.482C5.845 1.205 8.6.024 12.18 0h.014c2.746.02 5.043.725 6.826 2.098 1.677 1.29 2.858 3.13 3.509 5.467l-2.04.569c-1.104-3.96-3.898-5.984-8.304-6.015-2.91.022-5.11.936-6.54 2.717C4.307 6.504 3.616 8.914 3.589 12c.027 3.086.718 5.496 2.057 7.164 1.43 1.783 3.631 2.698 6.54 2.717 2.623-.02 4.358-.631 5.8-2.045 1.647-1.613 1.618-3.593 1.09-4.798-.31-.71-.873-1.3-1.634-1.75-.192 1.352-.622 2.446-1.284 3.272-.886 1.102-2.14 1.704-3.73 1.79-1.202.065-2.361-.218-3.259-.801-1.063-.689-1.685-1.74-1.752-2.964-.065-1.19.408-2.285 1.33-3.082.88-.76 2.119-1.207 3.583-1.291a13.853 13.853 0 012.2.068c-.068-.263-.15-.5-.247-.715-.358-.807-.977-1.245-1.928-1.271-1.123-.032-1.955.424-2.48 1.353l-1.71-1.18c.805-1.355 2.16-2.107 3.908-2.107.1 0 .2.002.3.007 1.904.058 3.233.878 3.948 2.435.257.56.436 1.184.535 1.875.71.198 1.36.495 1.937.884.995.677 1.738 1.578 2.164 2.608.716 1.73.64 4.546-1.673 6.797-1.904 1.841-4.168 2.627-7.4 2.649z"/>
@@ -69,8 +79,7 @@ const PLATFORMS = [
     id: "twitter",
     name: "X / Twitter",
     desc: "Tweet, trends & reach",
-    color: "#000000",
-    accent: "#ffffff",
+    accent: "var(--text-primary)",
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
         <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.261 5.635L18.243 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
@@ -78,10 +87,20 @@ const PLATFORMS = [
     ),
   },
   {
+    id: "linkedin",
+    name: "LinkedIn",
+    desc: "Profesional & B2B",
+    accent: "#0A66C2",
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+      </svg>
+    ),
+  },
+  {
     id: "pinterest",
     name: "Pinterest",
     desc: "Visual discovery & pins",
-    color: "#E60023",
     accent: "#E60023",
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
@@ -89,24 +108,132 @@ const PLATFORMS = [
       </svg>
     ),
   },
-  {
-    id: "web",
-    name: "Web URL",
-    desc: "Website & blog brand",
-    color: "var(--accent)",
-    accent: "var(--success)",
-    icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="10"/>
-        <line x1="2" y1="12" x2="22" y2="12"/>
-        <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/>
-      </svg>
-    ),
-  },
 ];
 
 export default function ConnectPage() {
-  const [connected, setConnected] = useState<Record<string, boolean>>({});
+  const searchParams = useSearchParams();
+  const [brandId, setBrandId] = useState<string | null>(null);
+  const [accounts, setAccounts] = useState<LateAccount[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [connecting, setConnecting] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const [toast, setToast] = useState("");
+
+  // Show toast from oauth-done redirect
+  useEffect(() => {
+    const connected = searchParams.get("connected");
+    const err = searchParams.get("error");
+    if (connected) setToast(`Platform berhasil terhubung!`);
+    if (err) setError(`OAuth gagal: ${err}`);
+  }, [searchParams]);
+
+  const refreshStatus = useCallback(async (bid: string, token: string) => {
+    try {
+      const res = await fetch(`${EDGE_BASE}/status?brand_id=${bid}`, {
+        headers: { "Authorization": `Bearer ${token}`, "apikey": ANON_KEY },
+      });
+      if (res.ok) {
+        const data = await res.json() as { accounts?: LateAccount[] };
+        setAccounts(data.accounts || []);
+      }
+    } catch {
+      // silently fail — just show empty state
+    }
+  }, []);
+
+  useEffect(() => {
+    async function init() {
+      setLoading(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token || ANON_KEY;
+
+        if (!session) {
+          setError("Sesi tidak ditemukan. Silakan masuk kembali.");
+          return;
+        }
+
+        const { data: brand } = await supabase
+          .from("brands")
+          .select("id")
+          .eq("user_id", session.user.id)
+          .single();
+
+        if (!brand) {
+          setError("Brand tidak ditemukan.");
+          return;
+        }
+
+        setBrandId(brand.id);
+        await refreshStatus(brand.id, token);
+      } catch {
+        setError("Gagal memuat data koneksi.");
+      } finally {
+        setLoading(false);
+      }
+    }
+    init();
+  }, [refreshStatus]);
+
+  async function handleConnect(platformId: string) {
+    if (!brandId || connecting) return;
+    setConnecting(platformId);
+    setError("");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || ANON_KEY;
+      const redirectUri = `${window.location.origin}/oauth-done`;
+
+      const res = await fetch(
+        `${EDGE_BASE}?platform=${platformId}&brand_id=${brandId}&redirect_uri=${encodeURIComponent(redirectUri)}`,
+        { headers: { "Authorization": `Bearer ${token}`, "apikey": ANON_KEY } }
+      );
+      const data = await res.json() as { auth_url?: string; error?: string };
+
+      if (data.auth_url) {
+        window.location.href = data.auth_url;
+      } else {
+        setError(data.error || "Gagal mendapatkan link koneksi.");
+        setConnecting(null);
+      }
+    } catch {
+      setError("Gagal terhubung ke server.");
+      setConnecting(null);
+    }
+  }
+
+  async function handleDisconnect(platformId: string, accountId: string) {
+    if (!brandId || connecting) return;
+    setConnecting(platformId);
+    setError("");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || ANON_KEY;
+
+      const res = await fetch(
+        `${EDGE_BASE}?platform=${platformId}&account_id=${accountId}`,
+        { method: "DELETE", headers: { "Authorization": `Bearer ${token}`, "apikey": ANON_KEY } }
+      );
+
+      if (res.ok) {
+        setAccounts(prev => prev.filter(a => a.id !== accountId));
+      } else {
+        const data = await res.json() as { error?: string };
+        setError(data.error || "Gagal memutuskan koneksi.");
+      }
+    } catch {
+      setError("Gagal terhubung ke server.");
+    } finally {
+      setConnecting(null);
+    }
+  }
+
+  function getAccount(platformId: string): LateAccount | undefined {
+    return accounts.find(a =>
+      a.platform === platformId ||
+      a.platform?.toLowerCase() === platformId.toLowerCase()
+    );
+  }
 
   return (
     <div style={{
@@ -118,13 +245,14 @@ export default function ConnectPage() {
       {/* Header */}
       <div style={{
         padding: "20px 16px 16px",
-        borderBottom: "1px solid var(--glass-border)",
+        borderBottom: "1px solid var(--border-subtle)",
         display: "flex",
         alignItems: "center",
         gap: "12px",
       }}>
         <Link href="/home" style={{
-          width: "34px", height: "34px", borderRadius: "50%",
+          width: "40px", height: "40px", minWidth: "40px", minHeight: "40px",
+          borderRadius: "50%", padding: 0, boxSizing: "border-box",
           background: "var(--bg-recessed)",
           border: "1px solid var(--border-strong)",
           display: "flex", alignItems: "center", justifyContent: "center",
@@ -132,7 +260,7 @@ export default function ConnectPage() {
           WebkitTapHighlightColor: "transparent",
           flexShrink: 0,
         }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
           </svg>
         </Link>
@@ -149,6 +277,42 @@ export default function ConnectPage() {
           </p>
         </div>
       </div>
+
+      {/* Toast success */}
+      {toast && (
+        <div style={{
+          margin: "12px 16px 0",
+          padding: "10px 14px",
+          background: "var(--success-subtle)",
+          border: "1px solid var(--success-subtle)",
+          borderRadius: "10px",
+          fontSize: "13px", color: "var(--success)",
+          display: "flex", alignItems: "center", gap: "8px",
+        }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+          {toast}
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div style={{
+          margin: "12px 16px 0",
+          padding: "10px 14px",
+          background: "var(--danger-subtle)",
+          border: "1px solid var(--danger-subtle)",
+          borderRadius: "10px",
+          fontSize: "13px", color: "var(--danger)",
+          display: "flex", alignItems: "center", gap: "8px",
+        }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          {error}
+        </div>
+      )}
 
       {/* Info banner */}
       <div style={{
@@ -171,73 +335,111 @@ export default function ConnectPage() {
       </div>
 
       {/* Platform list */}
-      <div style={{ padding: "4px 16px 24px", display: "flex", flexDirection: "column", gap: "8px" }}>
-        {PLATFORMS.map((p) => {
-          const isConnected = connected[p.id];
-          return (
-            <div key={p.id} style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "12px",
-              padding: "14px",
-              background: "var(--bg-recessed)",
-              border: `1px solid ${isConnected ? "var(--success-subtle)" : "var(--border-subtle)"}`,
-              borderRadius: "12px",
-            }}>
-              {/* Icon */}
-              <div style={{
-                width: "42px", height: "42px", borderRadius: "10px",
-                background: isConnected ? `${p.accent}18` : "var(--border-subtle)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                color: isConnected ? p.accent : "var(--text-disabled)",
-                flexShrink: 0,
+      {loading ? (
+        <div style={{ display: "flex", justifyContent: "center", padding: "40px 0" }}>
+          <div style={{
+            width: "28px", height: "28px", borderRadius: "50%",
+            border: "2px solid var(--border-default)",
+            borderTopColor: "var(--accent)",
+            animation: "spin 0.8s linear infinite",
+          }} />
+        </div>
+      ) : (
+        <div style={{ padding: "4px 16px calc(80px + env(safe-area-inset-bottom))", display: "flex", flexDirection: "column", gap: "8px" }}>
+          {PLATFORMS.map((p) => {
+            const account = getAccount(p.id);
+            const isConnected = !!account;
+            const isBusy = connecting === p.id;
+
+            return (
+              <div key={p.id} style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+                padding: "14px",
+                background: "var(--bg-recessed)",
+                border: `1px solid ${isConnected ? "var(--success-subtle)" : "var(--border-subtle)"}`,
+                borderRadius: "12px",
               }}>
-                {p.icon}
-              </div>
-
-              {/* Info */}
-              <div style={{ flex: 1, minWidth: 0 }}>
+                {/* Icon */}
                 <div style={{
-                  fontFamily: "var(--font-heading)",
-                  fontWeight: 700, fontSize: "14px", color: "var(--text-primary)",
-                  letterSpacing: "-0.01em",
-                }}>
-                  {p.name}
-                </div>
-                <div style={{ fontSize: "11px", color: "var(--text-disabled)", marginTop: "1px" }}>
-                  {isConnected ? (
-                    <span style={{ color: "var(--success)" }}>● Terhubung</span>
-                  ) : p.desc}
-                </div>
-              </div>
-
-              {/* Action */}
-              <button
-                onClick={() => setConnected(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
-                style={{
-                  height: "32px",
-                  padding: "0 14px",
-                  borderRadius: "8px",
-                  border: isConnected
-                    ? "1px solid var(--danger-subtle)"
-                    : "1px solid var(--border-strong)",
-                  background: isConnected ? "var(--danger-subtle)" : "var(--glass-border)",
-                  color: isConnected ? "var(--danger)" : "var(--accent)",
-                  fontSize: "12px",
-                  fontWeight: 600,
-                  fontFamily: "var(--font-body)",
-                  cursor: "pointer",
+                  width: "42px", height: "42px", borderRadius: "10px",
+                  background: isConnected ? `${p.accent}18` : "var(--border-subtle)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  color: isConnected ? p.accent : "var(--text-disabled)",
                   flexShrink: 0,
-                  WebkitTapHighlightColor: "transparent",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {isConnected ? "Putuskan" : "Connect"}
-              </button>
-            </div>
-          );
-        })}
-      </div>
+                }}>
+                  {p.icon}
+                </div>
+
+                {/* Info */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontFamily: "var(--font-heading)",
+                    fontWeight: 700, fontSize: "14px", color: "var(--text-primary)",
+                    letterSpacing: "-0.01em",
+                  }}>
+                    {p.name}
+                  </div>
+                  <div style={{ fontSize: "11px", color: "var(--text-disabled)", marginTop: "1px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {isConnected ? (
+                      <span style={{ color: "var(--success)" }}>
+                        ● {account.username || account.displayName || account.name || "Terhubung"}
+                      </span>
+                    ) : p.desc}
+                  </div>
+                </div>
+
+                {/* Action */}
+                <button
+                  onClick={() => {
+                    if (isConnected && account) {
+                      handleDisconnect(p.id, account.id);
+                    } else {
+                      handleConnect(p.id);
+                    }
+                  }}
+                  disabled={isBusy}
+                  style={{
+                    height: "32px",
+                    padding: "0 14px",
+                    borderRadius: "8px",
+                    border: isConnected
+                      ? "1px solid var(--danger-subtle)"
+                      : "1px solid var(--border-strong)",
+                    background: isConnected ? "var(--danger-subtle)" : "var(--glass-border)",
+                    color: isBusy ? "var(--text-disabled)" : isConnected ? "var(--danger)" : "var(--accent)",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    fontFamily: "var(--font-body)",
+                    cursor: isBusy ? "not-allowed" : "pointer",
+                    flexShrink: 0,
+                    WebkitTapHighlightColor: "transparent",
+                    whiteSpace: "nowrap",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    minWidth: "80px",
+                    justifyContent: "center",
+                  }}
+                >
+                  {isBusy ? (
+                    <div style={{
+                      width: "12px", height: "12px", borderRadius: "50%",
+                      border: "1.5px solid var(--border-default)",
+                      borderTopColor: "var(--accent)",
+                      animation: "spin 0.8s linear infinite",
+                    }} />
+                  ) : null}
+                  {isBusy ? "" : isConnected ? "Putuskan" : "Connect"}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
