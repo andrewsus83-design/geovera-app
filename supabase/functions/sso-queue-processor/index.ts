@@ -377,10 +377,10 @@ async function apifyScrapeCreator(creator: any) {
       };
       break;
     case 'youtube':
-      actorId = 'apify~youtube-scraper';
+      actorId = 'johnvc~youtube-shorts-api';
       inputConfig = {
-        channelIds: [creator.handle],
-        maxResults: 20,
+        channels: [creator.handle],
+        maxResultsShorts: 20,
       };
       break;
     default:
@@ -438,18 +438,19 @@ async function apifyScrapeCreator(creator: any) {
       })),
     };
   } else if (creator.platform === 'youtube') {
-    const channel = dataset[0];
+    // One row per Short, with the channel fields repeated on every row
+    const channel = dataset[0] || {};
     return {
       platform: 'youtube',
       handle: channel.channelId,
-      follower_count: channel.subscriberCount,
-      engagement_rate: calculateYouTubeEngagement(channel.videos),
-      recent_posts: channel.videos.slice(0, 10).map((v: any) => ({
+      follower_count: channel.numberOfSubscribers || creator.follower_count || 0,
+      engagement_rate: calculateYouTubeEngagement(dataset),
+      recent_posts: dataset.slice(0, 10).map((v: any) => ({
         text: v.title,
-        description: v.description,
+        description: v.text,
         views: v.viewCount,
-        likes: v.likeCount,
-        comments: v.commentCount,
+        likes: v.likes,
+        comments: v.commentsCount,
         url: v.url,
       })),
     };
@@ -501,8 +502,8 @@ function calculateTikTokEngagement(videos: any[]): number {
 
 function calculateYouTubeEngagement(videos: any[]): number {
   if (!videos || videos.length === 0) return 0;
-  const avgLikes = videos.reduce((sum, v) => sum + (v.likeCount || 0), 0) / videos.length;
-  const avgComments = videos.reduce((sum, v) => sum + (v.commentCount || 0), 0) / videos.length;
+  const avgLikes = videos.reduce((sum, v) => sum + (v.likeCount || v.likes || 0), 0) / videos.length;
+  const avgComments = videos.reduce((sum, v) => sum + (v.commentCount || v.commentsCount || 0), 0) / videos.length;
   const avgViews = videos.reduce((sum, v) => sum + (v.viewCount || 0), 0) / videos.length;
   return ((avgLikes + avgComments * 5) / avgViews) * 100;
 }

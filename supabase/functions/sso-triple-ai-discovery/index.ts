@@ -301,31 +301,42 @@ async function apifyScrapeProfiles(filteredAccounts: any[]): Promise<any[]> {
   // YouTube scraping
   if (youtubeChannels.length > 0) {
     console.log('[Apify] Scraping YouTube channels...');
-    const ytResponse = await fetch(`https://api.apify.com/v2/acts/apify~youtube-scraper/runs?token=${APIFY_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        channelIds: youtubeChannels,
-        maxResults: 20,
-      }),
-    });
+    const ytData: any[] = [];
+    // The Actor takes up to 20 channels per run
+    for (let i = 0; i < youtubeChannels.length; i += 20) {
+      const ytResponse = await fetch(`https://api.apify.com/v2/acts/johnvc~youtube-shorts-api/runs?token=${APIFY_API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          channels: youtubeChannels.slice(i, i + 20),
+          maxResultsShorts: 20,
+        }),
+      });
 
-    const ytRun = await ytResponse.json();
-    await waitForApifyRun(ytRun.data.id);
-    const ytData = await getApifyDataset(ytRun.data.defaultDatasetId);
+      const ytRun = await ytResponse.json();
+      await waitForApifyRun(ytRun.data.id);
+      ytData.push(...(await getApifyDataset(ytRun.data.defaultDatasetId)));
+    }
+
+    // One row per Short: group the rows into one entry per channel
+    const ytChannels: Record<string, any> = {};
+    for (const row of ytData) {
+      if (!ytChannels[row.channelId]) ytChannels[row.channelId] = { ...row, videos: [] };
+      ytChannels[row.channelId].videos.push(row);
+    }
 
     scrapedProfiles.push(
-      ...ytData.map((channel: any) => ({
+      ...Object.values(ytChannels).map((channel: any) => ({
         platform: 'youtube',
         handle: channel.channelId,
-        name: channel.title,
-        follower_count: channel.subscriberCount,
+        name: channel.channelName,
+        follower_count: channel.numberOfSubscribers,
         engagement_rate: calculateYouTubeEngagement(channel.videos),
         recent_posts: channel.videos.slice(0, 10).map((v: any) => ({
           text: v.title,
           views: v.viewCount,
-          likes: v.likeCount,
-          comments: v.commentCount,
+          likes: v.likes,
+          comments: v.commentsCount,
         })),
       }))
     );
@@ -368,8 +379,8 @@ function calculateTikTokEngagement(videos: any[]): number {
 
 function calculateYouTubeEngagement(videos: any[]): number {
   if (!videos || videos.length === 0) return 0;
-  const avgLikes = videos.reduce((sum, v) => sum + (v.likeCount || 0), 0) / videos.length;
-  const avgComments = videos.reduce((sum, v) => sum + (v.commentCount || 0), 0) / videos.length;
+  const avgLikes = videos.reduce((sum, v) => sum + (v.likeCount || v.likes || 0), 0) / videos.length;
+  const avgComments = videos.reduce((sum, v) => sum + (v.commentCount || v.commentsCount || 0), 0) / videos.length;
   const avgViews = videos.reduce((sum, v) => sum + (v.viewCount || 0), 0) / videos.length;
   return ((avgLikes + avgComments * 5) / avgViews) * 100;
 }
